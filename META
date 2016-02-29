@@ -1,0 +1,6 @@
+name = "conll"
+description = "Libcaml-conll"
+version = "&VERSION&"
+requires = ""
+archive(byte) = "conll.cma"
+archive(native) = "conll.cmxa"
