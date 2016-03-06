@@ -153,7 +153,19 @@ module Conll = struct
     loop (t.lines, t.multiwords);
     Buffer.contents buff
 
-  let get_sentid _ = None (* (Str.regexp "\\(# *\\)\\|\\( *: *\\)") *)
+  let get_sentid {meta; lines} =
+    let fs1 = (List.hd lines).feats in
+    try Some (List.assoc "sentid" fs1)
+    with Not_found ->
+    try Some (List.assoc "sent_id" fs1)
+    with Not_found ->
+    let rec loop = function
+    | [] -> None
+    | line::tail ->
+      match Str.full_split (Str.regexp "# sent_id:?[ \t]?") line with
+      | [Str.Delim _; Str.Text t] -> Some t
+      | _ -> loop tail in
+    loop meta
 end
 
 (* ======================================================================================================================== *)
@@ -189,7 +201,7 @@ module Corpus = struct
       Log.fwarning "[Conll, File %s] No blank line at the end of the file" file_name;
       save_one ()
     );
-   Array.of_list !res
+   Array.of_list (List.rev !res)
 
   let save file_name t =
     let out_ch = open_out file_name in
