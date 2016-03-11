@@ -51,6 +51,8 @@ module Conll = struct
 
   let root = { line_num = -1; id=0; form="ROOT"; lemma="__"; upos="_X"; xpos=""; feats=[]; deps=[] }
 
+  let compare l1 l2 = Pervasives.compare l1.id l2.id
+
   let line_to_string l =
     let (gov_list, lab_list) = List.split l.deps in
     sprintf "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t_\t_"
@@ -71,14 +73,19 @@ module Conll = struct
 
   (* ------------------------------------------------------------------------ *)
   type t = {
+    file: string option;
     meta: string list;
     lines: line list;
     multiwords: multiword list;
   }
 
-  let empty = { meta=[]; lines=[]; multiwords=[] }
+  let sof = function 
+    | Some f -> sprintf "File %s, " f 
+    | None -> ""
 
-  let parse_feats ~loc line_num = function
+  let empty file = { file;  meta=[]; lines=[]; multiwords=[] }
+
+  let parse_feats ~file line_num = function
     | "_" -> []
     | feats ->
       List.map
@@ -86,13 +93,13 @@ module Conll = struct
           match Str.split (Str.regexp "=") feat with
             | [feat_name] -> (feat_name, "true")
             | [feat_name; feat_value] -> (feat_name, feat_value)
-            | _ -> Log.fcritical "[Conll, %sline %d], cannot parse feats \"%s\"" loc line_num feats
+            | _ -> Log.fcritical "[Conll, %sline %d], cannot parse feats \"%s\"" (sof file) line_num feats
         ) (Str.split (Str.regexp "|") feats)
 
   let underscore s = if s = "" then "_" else s
 
   (* parse a list of line corresponding to one conll structure *)
-  let parse_rev ?(loc = "") lines =
+  let parse_rev ?file lines =
     List.fold_left
       (fun acc (line_num, line) ->
         if line.[0] = '#'
@@ -116,28 +123,27 @@ module Conll = struct
                     lemma = underscore lemma;
                     upos = underscore upos;
                     xpos = underscore xpos;
-                    feats = parse_feats ~loc line_num feats;
+                    feats = parse_feats ~file line_num feats;
                     deps = deps;
                     } in
                   {acc with lines = new_line :: acc.lines }
-                | _ -> Log.fcritical "[Conll, %sline %d], illegal field one \"%s\"" loc line_num f1
-              with exc -> Log.fcritical "[Conll, %sline %d], unexpected exception \"%s\" in line \"%s\"" loc line_num (Printexc.to_string exc) line
+                | _ -> Log.fcritical "[Conll, %sline %d], illegal field one \"%s\"" (sof file) line_num f1
+              with exc -> Log.fcritical "[Conll, %sline %d], unexpected exception \"%s\" in line \"%s\"" (sof file) line_num (Printexc.to_string exc) line
             end
-            | l -> Log.fcritical "[Conll, %sline %d], illegal line, %d fields (10 are expected)\n>>>>%s<<<<" loc line_num (List.length l) line
-      ) empty lines
+            | l -> Log.fcritical "[Conll, %sline %d], illegal line, %d fields (10 are expected)\n>>>>%s<<<<" (sof file) line_num (List.length l) line
+      ) (empty file) lines
 
-  let parse ?loc lines = parse_rev ?loc (List.rev lines)
+  let parse ?file lines = parse_rev ?file (List.rev lines)
 
   let from_string s =
     let lines = Str.split (Str.regexp "\n") s in
     let num_lines = List_.mapi (fun i l -> (i+1,l)) lines in
     parse num_lines
 
-  (* load conll structure from file: the file must contain only one strucute *)
-  let load file_name =
-    let loc = sprintf "File %s, " file_name in
-    let lines_rev = File.read_rev file_name in
-    parse_rev ~loc lines_rev
+  (* load conll structure from file: the file must contain only one structure *)
+  let load file =
+    let lines_rev = File.read_rev file in
+    parse_rev ~file lines_rev
 
   let to_string t =
     let buff = Buffer.create 32 in
@@ -162,46 +168,53 @@ module Conll = struct
     let rec loop = function
     | [] -> None
     | line::tail ->
-      match Str.full_split (Str.regexp "# sent_id:?[ \t]?") line with
+      match Str.full_split (Str.regexp "# sent_?id:?[ \t]?") line with
       | [Str.Delim _; Str.Text t] -> Some t
       | _ -> loop tail in
     loop meta
 end
 
 (* ======================================================================================================================== *)
-module Corpus = struct
+module Conll_corpus = struct
   type t = (string * Conll.t) array
 
-  let load file_name =
-    let loc = sprintf "File %s, " file_name in
+  let cpt = ref 0
+  let res = ref []
 
-    let lines = File.read file_name in
+  let reset () = cpt := 0; res := []
 
-    let cpt = ref 0 in
-    let res = ref [] in
+  (* add the current file to !res *)
+  let load_one file =
+    let lines = File.read file in
 
     let rev_locals = ref [] in
     let save_one () =
       incr cpt;
-      let conll = Conll.parse_rev ~loc !rev_locals in
-      let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" file_name !cpt in 
+      let conll = Conll.parse_rev ~file !rev_locals in
+      let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" file !cpt in 
       res := (sentid,conll) :: !res;
       rev_locals := [] in
 
     let _ =   
       List.iter
         (fun (line_num,line) -> match line with
-          | "" when !rev_locals = [] -> Log.fwarning "[Conll, File %s] Several blank lines around line %d" file_name line_num;
+          | "" when !rev_locals = [] -> Log.fwarning "[Conll, File %s] Several blank lines around line %d" file line_num;
           | "" -> save_one ()
           | _ -> rev_locals := (line_num,line) :: !rev_locals
       ) lines in
 
     if !rev_locals != []
     then (
-      Log.fwarning "[Conll, File %s] No blank line at the end of the file" file_name;
+      Log.fwarning "[Conll, File %s] No blank line at the end of the file" file;
       save_one ()
-    );
-   Array.of_list (List.rev !res)
+    )
+
+  let load_list file_list =
+    reset ();
+    List.iter load_one file_list;
+    Array.of_list (List.rev !res)
+
+  let load file = load_list [file]
 
   let save file_name t =
     let out_ch = open_out file_name in

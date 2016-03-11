@@ -11,6 +11,9 @@ module Conll : sig
     deps: (int * string ) list;
   }
 
+  val root: line
+  val compare: line -> line -> int
+
   type multiword = {
     first: int;
     last: int;
@@ -18,6 +21,7 @@ module Conll : sig
   }
 
   type t = {
+    file: string option;
     meta: string list;
     lines: line list;
     multiwords: multiword list;
@@ -27,10 +31,12 @@ module Conll : sig
   val from_string: string -> t
   val to_string: t -> string
   val load: string -> t
+  val get_sentid: t -> string option
 end
 
-module Corpus : sig
+module Conll_corpus : sig
   type t = (string * Conll.t) array
   val load: string -> t
+  val load_list: string list -> t
   val save: string -> t -> unit
 end
