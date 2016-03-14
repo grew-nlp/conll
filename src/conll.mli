@@ -15,6 +15,7 @@ module Conll : sig
   val compare: line -> line -> int
 
   type multiword = {
+    mw_line_num: int;
     first: int;
     last: int;
     fusion: string;

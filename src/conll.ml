@@ -63,6 +63,7 @@ module Conll = struct
 
   (* ------------------------------------------------------------------------ *)
   type multiword = {
+    mw_line_num: int;
     first: int;
     last: int;
     fusion: string;
@@ -102,15 +103,16 @@ module Conll = struct
   let parse_rev ?file lines =
     List.fold_left
       (fun acc (line_num, line) ->
-        if line.[0] = '#'
-        then {acc with meta = line :: acc.meta}
-        else
+        match line with
+        | "" -> acc
+        | _ when line.[0] = '#' -> { acc with meta = line :: acc.meta }
+        | _ ->
           match Str.split (Str.regexp "\t") line with
             | [ f1; form; lemma; upos; xpos; feats; govs; dep_labs; _; _ ] ->
             begin
               try
                 match Str.split (Str.regexp "-") f1 with
-                | [f;l] -> {acc with multiwords = {first=int_of_string f; last=int_of_string l; fusion=form}:: acc.multiwords}
+                | [f;l] -> {acc with multiwords = {mw_line_num = line_num; first=int_of_string f; last=int_of_string l; fusion=form}:: acc.multiwords}
                 | [string_id] ->
                   let gov_list = if govs = "_" then [] else List.map int_of_string (Str.split (Str.regexp "|") govs)
                   and lab_list = if dep_labs = "_" then [] else Str.split (Str.regexp "|") dep_labs in
