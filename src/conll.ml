@@ -116,17 +116,21 @@ module Conll = struct
                 | [string_id] ->
                   let gov_list = if govs = "_" then [] else List.map int_of_string (Str.split (Str.regexp "|") govs)
                   and lab_list = if dep_labs = "_" then [] else Str.split (Str.regexp "|") dep_labs in
-                  let deps = List.combine gov_list lab_list in
+                  let deps = match (gov_list, lab_list) with
+                    | ([0], []) -> [] (* handle Talismane output on tokens without gov *)
+                    | _ ->
+                      try List.combine gov_list lab_list 
+                      with Invalid_argument("List.combine") -> Log.fcritical "[Conll, %sline %d], inconsistent relation specification" (sof file) line_num in
                   let new_line =
                     {
-                    line_num = line_num;
+                    line_num;
                     id = int_of_string string_id;
                     form = underscore form;
                     lemma = underscore lemma;
                     upos = underscore upos;
                     xpos = underscore xpos;
                     feats = parse_feats ~file line_num feats;
-                    deps = deps;
+                    deps;
                     } in
                   {acc with lines = new_line :: acc.lines }
                 | _ -> Log.fcritical "[Conll, %sline %d], illegal field one \"%s\"" (sof file) line_num f1
@@ -193,7 +197,8 @@ module Conll_corpus = struct
     let save_one () =
       incr cpt;
       let conll = Conll.parse_rev ~file !rev_locals in
-      let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" file !cpt in 
+      let base = Filename.basename file in
+      let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in 
       res := (sentid,conll) :: !res;
       rev_locals := [] in
 
