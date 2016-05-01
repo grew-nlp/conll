@@ -148,7 +148,7 @@ module Conll = struct
                       | ([0], []) -> [] (* handle Talismane output on tokens without gov *)
                       | _ ->
                         try List.combine gov_list lab_list 
-                        with Invalid_argument("List.combine") -> Log.fcritical "[Conll, %sline %d], inconsistent relation specification" (sof file) line_num in
+                        with Invalid_argument _ -> Log.fcritical "[Conll, %sline %d], inconsistent relation specification" (sof file) line_num in
                     let new_line =
                       {
                       line_num;
