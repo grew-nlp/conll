@@ -1,5 +1,7 @@
 module Conll : sig
 
+  exception Error of string
+
   type line = {
     line_num: int;
     id: int;
@@ -28,11 +30,13 @@ module Conll : sig
     multiwords: multiword list;
   }
 
-  (* val parse: string -> (int * string) list -> t *)
   val from_string: string -> t
   val to_string: t -> string
   val load: string -> t
   val get_sentid: t -> string option
+
+  val build_sentence: t -> string
+  val get_sentence: t -> string option
 end
 
 module Conll_corpus : sig

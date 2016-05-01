@@ -36,7 +36,11 @@ end
 
 (* ======================================================================================================================== *)
 module Conll = struct
-  
+
+  exception Error of string
+
+  let error m = Printf.ksprintf (fun msg -> raise (Error msg)) m
+
   (* ------------------------------------------------------------------------ *)
   type line = {
     line_num: int;
@@ -84,6 +88,29 @@ module Conll = struct
     | Some f -> sprintf "File %s, " f 
     | None -> ""
 
+  let check t =
+    (* check consecutive ids *)
+    let rec loop i = function
+    | [] -> ()
+    | {id}::tail when i=id -> loop (id+1) tail
+    | {line_num;id}::tail ->
+      Log.fwarning "[Conll, %sline %d], idenfier %d is different from expected %d" (sof t.file) line_num id i;
+      loop (id+1) tail
+    in loop 1 t.lines;
+
+    (* check dependency and loops *)
+    let id_list = List.map (fun {id} -> id) t.lines in
+    List.iter (
+      fun {id; line_num; deps} ->
+      List.iter (
+        fun (i,_) ->
+          if i>0 && not (List.mem i id_list)
+          then Log.fcritical "[Conll, %sline %d], cannot find gov identifier %d" (sof t.file) line_num i;
+          if id = i
+          then error "[Conll, %sline %d], loop in dependency %d" (sof t.file) line_num i;
+      ) deps
+    ) t.lines
+
   let empty file = { file;  meta=[]; lines=[]; multiwords=[] }
 
   let parse_feats ~file line_num = function
@@ -101,43 +128,45 @@ module Conll = struct
 
   (* parse a list of line corresponding to one conll structure *)
   let parse_rev ?file lines =
-    List.fold_left
-      (fun acc (line_num, line) ->
-        match line with
-        | "" -> acc
-        | _ when line.[0] = '#' -> { acc with meta = line :: acc.meta }
-        | _ ->
-          match Str.split (Str.regexp "\t") line with
-            | [ f1; form; lemma; upos; xpos; feats; govs; dep_labs; _; _ ] ->
-            begin
-              try
-                match Str.split (Str.regexp "-") f1 with
-                | [f;l] -> {acc with multiwords = {mw_line_num = line_num; first=int_of_string f; last=int_of_string l; fusion=form}:: acc.multiwords}
-                | [string_id] ->
-                  let gov_list = if govs = "_" then [] else List.map int_of_string (Str.split (Str.regexp "|") govs)
-                  and lab_list = if dep_labs = "_" then [] else Str.split (Str.regexp "|") dep_labs in
-                  let deps = match (gov_list, lab_list) with
-                    | ([0], []) -> [] (* handle Talismane output on tokens without gov *)
-                    | _ ->
-                      try List.combine gov_list lab_list 
-                      with Invalid_argument("List.combine") -> Log.fcritical "[Conll, %sline %d], inconsistent relation specification" (sof file) line_num in
-                  let new_line =
-                    {
-                    line_num;
-                    id = int_of_string string_id;
-                    form = underscore form;
-                    lemma = underscore lemma;
-                    upos = underscore upos;
-                    xpos = underscore xpos;
-                    feats = parse_feats ~file line_num feats;
-                    deps;
-                    } in
-                  {acc with lines = new_line :: acc.lines }
-                | _ -> Log.fcritical "[Conll, %sline %d], illegal field one \"%s\"" (sof file) line_num f1
-              with exc -> Log.fcritical "[Conll, %sline %d], unexpected exception \"%s\" in line \"%s\"" (sof file) line_num (Printexc.to_string exc) line
-            end
-            | l -> Log.fcritical "[Conll, %sline %d], illegal line, %d fields (10 are expected)\n>>>>%s<<<<" (sof file) line_num (List.length l) line
-      ) (empty file) lines
+    let conll =
+      List.fold_left
+        (fun acc (line_num, line) ->
+          match line with
+          | "" -> acc
+          | _ when line.[0] = '#' -> { acc with meta = line :: acc.meta }
+          | _ ->
+            match Str.split (Str.regexp "\t") line with
+              | [ f1; form; lemma; upos; xpos; feats; govs; dep_labs; _; _ ] ->
+              begin
+                try
+                  match Str.split (Str.regexp "-") f1 with
+                  | [f;l] -> {acc with multiwords = {mw_line_num = line_num; first=int_of_string f; last=int_of_string l; fusion=form}:: acc.multiwords}
+                  | [string_id] ->
+                    let gov_list = if govs = "_" then [] else List.map int_of_string (Str.split (Str.regexp "|") govs)
+                    and lab_list = if dep_labs = "_" then [] else Str.split (Str.regexp "|") dep_labs in
+                    let deps = match (gov_list, lab_list) with
+                      | ([0], []) -> [] (* handle Talismane output on tokens without gov *)
+                      | _ ->
+                        try List.combine gov_list lab_list 
+                        with Invalid_argument("List.combine") -> Log.fcritical "[Conll, %sline %d], inconsistent relation specification" (sof file) line_num in
+                    let new_line =
+                      {
+                      line_num;
+                      id = int_of_string string_id;
+                      form = underscore form;
+                      lemma = underscore lemma;
+                      upos = underscore upos;
+                      xpos = underscore xpos;
+                      feats = parse_feats ~file line_num feats;
+                      deps;
+                      } in
+                    {acc with lines = new_line :: acc.lines }
+                  | _ -> Log.fcritical "[Conll, %sline %d], illegal field one \"%s\"" (sof file) line_num f1
+                with exc -> Log.fcritical "[Conll, %sline %d], unexpected exception \"%s\" in line \"%s\"" (sof file) line_num (Printexc.to_string exc) line
+              end
+              | l -> Log.fcritical "[Conll, %sline %d], illegal line, %d fields (10 are expected)\n>>>>%s<<<<" (sof file) line_num (List.length l) line
+        ) (empty file) lines in
+      check conll; conll
 
   let parse ?file lines = parse_rev ?file (List.rev lines)
 
@@ -175,6 +204,69 @@ module Conll = struct
     | [] -> None
     | line::tail ->
       match Str.full_split (Str.regexp "# sent_?id:?[ \t]?") line with
+      | [Str.Delim _; Str.Text t] -> Some t
+      | _ -> loop tail in
+    loop meta
+
+  let concat_words words =
+    List.fold_left
+      (fun acc (regexp,repl) ->
+        Str.global_replace regexp repl acc
+      )
+      (String.concat " " words)
+      [
+        Str.regexp_string " - ", " **DASH** ";
+        Str.regexp "^- ", " **DASH** ";
+        Str.regexp_string " -t-", "-t-";
+        Str.regexp_string "_-_", "-";
+        Str.regexp_string "_", " ";
+        Str.regexp_string "' ", "'";
+        Str.regexp_string " ,", ",";
+        Str.regexp_string " .", ".";
+        Str.regexp_string " %", "%";
+        Str.regexp_string "( ", "(";
+        Str.regexp_string " )", ")";
+        Str.regexp_string "[ ", "[";
+        Str.regexp_string " ]", "]";
+        Str.regexp_string "- ", "-";
+        Str.regexp_string " -", "-";
+        Str.regexp_string " %", "%";
+        Str.regexp_string " / ", "/";
+        Str.regexp_string "\\\"", "\"";
+
+        (* pairs of quotes *)
+        Str.regexp "\" \\([^\"]*\\) \"", "\"\\1\"";
+        Str.regexp " \" \\([a-zA-Z]\\)", " \"\\1";
+        Str.regexp "\\([a-zA-Z]\\) \"\\([ ,.]\\)", "\\1\"\\2";
+        Str.regexp " \"$", "\"";
+        Str.regexp "^\" ", "\"";
+
+        Str.regexp "\\([0-9]+\\) h \\([0-9]+\\)", "\\1h\\2";
+        Str.regexp "\\([0-9]+\\) h\\([^a-z]\\)", "\\1h\\2";
+        Str.regexp_string "**DASH**", "-";
+
+        Str.regexp " - \\(.*\\) - ", " -\\1- ";
+
+        Str.regexp "^ ", "";
+      ]
+
+  let build_sentence t =
+    let rec loop = function
+    | ([],[]) -> []
+    | (line::tail,[]) -> line.form :: (loop (tail,[]))
+    | (line::tail, ((mw::_) as multiwords)) when line.id < mw.first -> line.form :: (loop (tail,multiwords))
+    | (line::tail, ((mw::_) as multiwords)) when line.id = mw.first -> mw.fusion :: (loop (tail,multiwords))
+    | (line::tail, (mw::mw_tail)) when line.id > mw.last -> (loop (line::tail,mw_tail))
+    | (_::tail, multiwords) -> (loop (tail,multiwords))
+    | (_, mw::_) -> Log.fcritical "[Conll, %sline %d] Inconsistent multiwords" (sof t.file) mw.mw_line_num in
+    let form_list = loop (t.lines, t.multiwords) in
+    concat_words form_list
+
+  let get_sentence {meta; lines} =
+    let rec loop = function
+    | [] -> None
+    | line::tail ->
+      match Str.full_split (Str.regexp "# sentence-text:?[ \t]?") line with
       | [Str.Delim _; Str.Text t] -> Some t
       | _ -> loop tail in
     loop meta
