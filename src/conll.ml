@@ -195,18 +195,20 @@ module Conll = struct
     Buffer.contents buff
 
   let get_sentid {meta; lines} =
-    let fs1 = (List.hd lines).feats in
-    try Some (List.assoc "sentid" fs1)
-    with Not_found ->
-    try Some (List.assoc "sent_id" fs1)
-    with Not_found ->
-    let rec loop = function
+    let rec get_sentid_meta = function
     | [] -> None
     | line::tail ->
       match Str.full_split (Str.regexp "# sent_?id:?[ \t]?") line with
       | [Str.Delim _; Str.Text t] -> Some t
-      | _ -> loop tail in
-    loop meta
+      | _ -> get_sentid_meta tail in
+
+    match lines with
+      | [] -> get_sentid_meta meta
+      | {feats}::_ ->
+        try Some (List.assoc "sentid" feats)
+        with Not_found ->
+          try Some (List.assoc "sent_id" feats)
+          with Not_found -> get_sentid_meta meta
 
   let concat_words words =
     List.fold_left
@@ -294,7 +296,7 @@ module Conll_corpus = struct
       res := (sentid,conll) :: !res;
       rev_locals := [] in
 
-    let _ =   
+    let _ =
       List.iter
         (fun (line_num,line) -> match line with
           | "" when !rev_locals = [] -> Log.fwarning "[Conll, File %s] Several blank lines around line %d" file line_num;
