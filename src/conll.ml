@@ -18,12 +18,13 @@ end
 module File = struct
   let read_rev file =
     let in_ch = open_in file in
-    (* if the input file contains an UTF-8 byte order mark (EF BB BF), skip 3 bytes, else get back to 0 *)
-    (match input_byte in_ch with 0xEF -> seek_in in_ch 3 | _ -> seek_in in_ch 0);
-
     let line_num = ref 0 in
     let res = ref [] in
     try
+
+      (* if the input file contains an UTF-8 byte order mark (EF BB BF), skip 3 bytes, else get back to 0 *)
+      (match input_byte in_ch with 0xEF -> seek_in in_ch 3 | _ -> seek_in in_ch 0);
+
       while true do
         incr line_num;
         res := (!line_num, input_line in_ch) :: !res
