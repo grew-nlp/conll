@@ -52,9 +52,13 @@ module Conll = struct
     xpos: string;
     feats: (string * string) list;
     deps: (int * string ) list;
+    no_space_after: bool;
   }
 
-  let root = { line_num = -1; id=0; form="ROOT"; lemma="__"; upos="_X"; xpos=""; feats=[]; deps=[] }
+  let root = { line_num = -1; id=0; form="ROOT"; lemma="__"; upos="_X"; xpos=""; feats=[]; deps=[]; no_space_after=false }
+
+  let build_line ~id ~form ?(lemma="_") ?(upos="_") ?(xpos="_") ?(feats=[]) ?(deps=[]) () =
+    { line_num = -1; id; form; lemma; upos; xpos; feats; deps=[]; no_space_after=false }
 
   let compare l1 l2 = Pervasives.compare l1.id l2.id
 
@@ -137,7 +141,7 @@ module Conll = struct
           | _ when line.[0] = '#' -> { acc with meta = line :: acc.meta }
           | _ ->
             match Str.split (Str.regexp "\t") line with
-              | [ f1; form; lemma; upos; xpos; feats; govs; dep_labs; _; _ ] ->
+              | [ f1; form; lemma; upos; xpos; feats; govs; dep_labs; _; c10 ] ->
               begin
                 try
                   match Str.split (Str.regexp "-") f1 with
@@ -160,6 +164,7 @@ module Conll = struct
                       xpos = underscore xpos;
                       feats = parse_feats ~file line_num feats;
                       deps;
+                      no_space_after = (c10 = "SpaceAfter=No");
                       } in
                     {acc with lines = new_line :: acc.lines }
                   | _ -> Log.fcritical "[Conll, %sline %d], illegal field one \"%s\"" (sof file) line_num f1
@@ -216,7 +221,7 @@ module Conll = struct
       (fun acc (regexp,repl) ->
         Str.global_replace regexp repl acc
       )
-      (String.concat " " words)
+      (String.concat "" words)
       [
         Str.regexp_string " - ", " **DASH** ";
         Str.regexp "^- ", " **DASH** ";
@@ -253,11 +258,14 @@ module Conll = struct
         Str.regexp "^ ", "";
       ]
 
+  let final_space line = if line.no_space_after then "" else " "
+
   let build_sentence t =
     let rec loop = function
     | ([],[]) -> []
-    | (line::tail,[]) -> line.form :: (loop (tail,[]))
-    | (line::tail, ((mw::_) as multiwords)) when line.id < mw.first -> line.form :: (loop (tail,multiwords))
+    | ([line],[]) -> [line.form]
+    | (line::tail,[]) -> (line.form ^ (final_space line)) :: (loop (tail,[]))
+    | (line::tail, ((mw::_) as multiwords)) when line.id < mw.first -> (line.form ^ (final_space line)) :: (loop (tail,multiwords))
     | (line::tail, ((mw::_) as multiwords)) when line.id = mw.first -> mw.fusion :: (loop (tail,multiwords))
     | (line::tail, (mw::mw_tail)) when line.id > mw.last -> (loop (line::tail,mw_tail))
     | (_::tail, multiwords) -> (loop (tail,multiwords))

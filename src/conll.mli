@@ -11,7 +11,19 @@ module Conll : sig
     xpos: string;
     feats: (string * string) list;
     deps: (int * string ) list;
+    no_space_after: bool;
   }
+
+  val build_line:
+    id:int -> 
+    form: string -> 
+    ?lemma: string ->
+    ?upos: string ->
+    ?xpos: string ->
+    ?feats: (string * string) list ->
+    ?deps: (int * string ) list ->
+    unit ->
+    line
 
   val root: line
   val compare: line -> line -> int
