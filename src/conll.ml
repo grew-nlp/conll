@@ -12,6 +12,12 @@ module List_ = struct
       | [] -> []
       | h::t -> (fct i h) :: (loop (i+1) t)
     in loop 0
+
+  let rec opt_map f = function
+    | [] -> []
+    | x::t -> match f x with
+      | None -> opt_map f t
+      | Some r -> r :: (opt_map f t)
 end
 
 (* ======================================================================================================================== *)
@@ -118,18 +124,33 @@ module Conll = struct
 
   let empty file = { file;  meta=[]; lines=[]; multiwords=[] }
 
+  let encode_feat_name s = Str.global_replace (Str.regexp "\\[\\([0-9a-z]+\\)\\]") "__\\1" s
+  let decode_feat_name s = Str.global_replace (Str.regexp "__\\([0-9a-z]+\\)$") "[\\1]" s
+
   let parse_feats ~file line_num = function
     | "_" -> []
     | feats ->
       List.map
         (fun feat ->
           match Str.split (Str.regexp "=") feat with
-            | [feat_name] -> (feat_name, "true")
-            | [feat_name; feat_value] -> (feat_name, feat_value)
+            | [feat_name] -> (encode_feat_name feat_name, "true")
+            | [feat_name; feat_value] -> (encode_feat_name feat_name, feat_value)
             | _ -> Log.fcritical "[Conll, %sline %d], cannot parse feats \"%s\"" (sof file) line_num feats
         ) (Str.split (Str.regexp "|") feats)
 
   let underscore s = if s = "" then "_" else s
+
+  (* parsing of secodary deps encoded in column 9 in UD (only Finnish in version 1.3) *)
+  let parse_secondary_deps s = match s with
+    | "_" -> []
+    | s ->
+      let sd_list = Str.split (Str.regexp "|") s in
+      List_.opt_map (
+        fun sd -> match Str.bounded_split (Str.regexp ":") sd 2 with
+        | [gov;lab] -> Some (int_of_string gov, "D:"^lab)
+        | [_] -> None
+        | _ -> Log.fcritical "[Conll], cannot parse secondary dependency \"%s\"" sd 
+      ) sd_list
 
   (* parse a list of line corresponding to one conll structure *)
   let parse_rev ?file lines =
@@ -141,7 +162,7 @@ module Conll = struct
           | _ when line.[0] = '#' -> { acc with meta = line :: acc.meta }
           | _ ->
             match Str.split (Str.regexp "\t") line with
-              | [ f1; form; lemma; upos; xpos; feats; govs; dep_labs; _; c10 ] ->
+              | [ f1; form; lemma; upos; xpos; feats; govs; dep_labs; c9; c10 ] ->
               begin
                 try
                   match Str.split (Str.regexp "-") f1 with
@@ -149,11 +170,17 @@ module Conll = struct
                   | [string_id] ->
                     let gov_list = if govs = "_" then [] else List.map int_of_string (Str.split (Str.regexp "|") govs)
                     and lab_list = if dep_labs = "_" then [] else Str.split (Str.regexp "|") dep_labs in
-                    let deps = match (gov_list, lab_list) with
+
+                    let prim_deps = match (gov_list, lab_list) with
                       | ([0], []) -> [] (* handle Talismane output on tokens without gov *)
                       | _ ->
                         try List.combine gov_list lab_list 
                         with Invalid_argument _ -> Log.fcritical "[Conll, %sline %d], inconsistent relation specification" (sof file) line_num in
+
+                    let deps = match c9 with
+                    | "_" -> prim_deps
+                    | _ -> prim_deps @ (parse_secondary_deps c9) in
+
                     let new_line =
                       {
                       line_num;
