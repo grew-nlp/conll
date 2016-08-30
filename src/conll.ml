@@ -38,7 +38,50 @@ module File = struct
     with End_of_file -> close_in in_ch; !res
 
   let read file = List.rev (read_rev file)
+end
 
+module Sentence = struct
+  let fr_clean_spaces with_spaces =
+    List.fold_left
+      (fun acc (regexp,repl) ->
+        Str.global_replace regexp repl acc
+      )
+      with_spaces
+      [
+        Str.regexp_string " - ", " **DASH** ";
+        Str.regexp "^- ", " **DASH** ";
+        Str.regexp_string " -t-", "-t-";
+        Str.regexp_string "_-_", "-";
+        Str.regexp_string "_", " ";
+        Str.regexp_string "' ", "'";
+        Str.regexp_string " ,", ",";
+        Str.regexp_string " .", ".";
+        Str.regexp_string " %", "%";
+        Str.regexp_string "( ", "(";
+        Str.regexp_string " )", ")";
+        Str.regexp_string "[ ", "[";
+        Str.regexp_string " ]", "]";
+        Str.regexp_string "- ", "-";
+        Str.regexp_string " -", "-";
+        Str.regexp_string " %", "%";
+        Str.regexp_string " / ", "/";
+        Str.regexp_string "\\\"", "\"";
+
+        (* pairs of quotes *)
+        Str.regexp "\" \\([^\"]*\\) \"", "\"\\1\"";
+        Str.regexp " \" \\([a-zA-Z]\\)", " \"\\1";
+        Str.regexp "\\([a-zA-Z]\\) \"\\([ ,.]\\)", "\\1\"\\2";
+        Str.regexp " \"$", "\"";
+        Str.regexp "^\" ", "\"";
+
+        Str.regexp "\\([0-9]+\\) h \\([0-9]+\\)", "\\1h\\2";
+        Str.regexp "\\([0-9]+\\) h\\([^a-z]\\)", "\\1h\\2";
+        Str.regexp_string "**DASH**", "-";
+
+        Str.regexp " - \\(.*\\) - ", " -\\1- ";
+
+        Str.regexp "^ ", "";
+      ]
 end
 
 (* ======================================================================================================================== *)
@@ -243,47 +286,7 @@ module Conll = struct
           try Some (List.assoc "sent_id" feats)
           with Not_found -> get_sentid_meta meta
 
-  let concat_words words =
-    List.fold_left
-      (fun acc (regexp,repl) ->
-        Str.global_replace regexp repl acc
-      )
-      (String.concat "" words)
-      [
-        Str.regexp_string " - ", " **DASH** ";
-        Str.regexp "^- ", " **DASH** ";
-        Str.regexp_string " -t-", "-t-";
-        Str.regexp_string "_-_", "-";
-        Str.regexp_string "_", " ";
-        Str.regexp_string "' ", "'";
-        Str.regexp_string " ,", ",";
-        Str.regexp_string " .", ".";
-        Str.regexp_string " %", "%";
-        Str.regexp_string "( ", "(";
-        Str.regexp_string " )", ")";
-        Str.regexp_string "[ ", "[";
-        Str.regexp_string " ]", "]";
-        Str.regexp_string "- ", "-";
-        Str.regexp_string " -", "-";
-        Str.regexp_string " %", "%";
-        Str.regexp_string " / ", "/";
-        Str.regexp_string "\\\"", "\"";
-
-        (* pairs of quotes *)
-        Str.regexp "\" \\([^\"]*\\) \"", "\"\\1\"";
-        Str.regexp " \" \\([a-zA-Z]\\)", " \"\\1";
-        Str.regexp "\\([a-zA-Z]\\) \"\\([ ,.]\\)", "\\1\"\\2";
-        Str.regexp " \"$", "\"";
-        Str.regexp "^\" ", "\"";
-
-        Str.regexp "\\([0-9]+\\) h \\([0-9]+\\)", "\\1h\\2";
-        Str.regexp "\\([0-9]+\\) h\\([^a-z]\\)", "\\1h\\2";
-        Str.regexp_string "**DASH**", "-";
-
-        Str.regexp " - \\(.*\\) - ", " -\\1- ";
-
-        Str.regexp "^ ", "";
-      ]
+  let concat_words words = Sentence.fr_clean_spaces (String.concat "" words)
 
   let final_space line = if line.no_space_after then "" else " "
 

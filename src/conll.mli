@@ -1,3 +1,7 @@
+module Sentence : sig
+  val fr_clean_spaces: string -> string
+end
+
 module Conll : sig
 
   exception Error of string
