@@ -159,7 +159,7 @@ module Conll = struct
       List.iter (
         fun (i,_) ->
           if i>0 && not (List.mem i id_list)
-          then Log.fcritical "[Conll, %sline %d], cannot find gov identifier %d" (sof t.file) line_num i;
+          then error "[Conll, %sline %d], cannot find gov identifier %d" (sof t.file) line_num i;
           if id = i
           then error "[Conll, %sline %d], loop in dependency %d" (sof t.file) line_num i;
       ) deps
@@ -178,7 +178,7 @@ module Conll = struct
           match Str.split (Str.regexp "=") feat with
             | [feat_name] -> (encode_feat_name feat_name, "true")
             | [feat_name; feat_value] -> (encode_feat_name feat_name, feat_value)
-            | _ -> Log.fcritical "[Conll, %sline %d], cannot parse feats \"%s\"" (sof file) line_num feats
+            | _ -> error "[Conll, %sline %d], cannot parse feats \"%s\"" (sof file) line_num feats
         ) (Str.split (Str.regexp "|") feats)
 
   let underscore s = if s = "" then "_" else s
@@ -192,7 +192,7 @@ module Conll = struct
         fun sd -> match Str.bounded_split (Str.regexp ":") sd 2 with
         | [gov;lab] -> Some (int_of_string gov, "D:"^lab)
         | [_] -> None
-        | _ -> Log.fcritical "[Conll], cannot parse secondary dependency \"%s\"" sd 
+        | _ -> error "[Conll], cannot parse secondary dependency \"%s\"" sd 
       ) sd_list
 
   (* parse a list of line corresponding to one conll structure *)
@@ -218,7 +218,7 @@ module Conll = struct
                       | ([0], []) -> [] (* handle Talismane output on tokens without gov *)
                       | _ ->
                         try List.combine gov_list lab_list 
-                        with Invalid_argument _ -> Log.fcritical "[Conll, %sline %d], inconsistent relation specification" (sof file) line_num in
+                        with Invalid_argument _ -> error "[Conll, %sline %d], inconsistent relation specification" (sof file) line_num in
 
                     let deps = match c9 with
                     | "_" -> prim_deps
@@ -237,10 +237,12 @@ module Conll = struct
                       no_space_after = (c10 = "SpaceAfter=No");
                       } in
                     {acc with lines = new_line :: acc.lines }
-                  | _ -> Log.fcritical "[Conll, %sline %d], illegal field one \"%s\"" (sof file) line_num f1
-                with exc -> Log.fcritical "[Conll, %sline %d], unexpected exception \"%s\" in line \"%s\"" (sof file) line_num (Printexc.to_string exc) line
+                  | _ -> error "[Conll, %sline %d], illegal field one \"%s\"" (sof file) line_num f1
+                with
+                 | Error x -> error "%s" x
+                 | exc -> error "[Conll, %sline %d], unexpected exception \"%s\" in line \"%s\"" (sof file) line_num (Printexc.to_string exc) line
               end
-              | l -> Log.fcritical "[Conll, %sline %d], illegal line, %d fields (10 are expected)\n>>>>%s<<<<" (sof file) line_num (List.length l) line
+              | l -> error "[Conll, %sline %d], illegal line, %d fields (10 are expected)\n>>>>%s<<<<" (sof file) line_num (List.length l) line
         ) (empty file) lines in
       check conll; conll
 
@@ -299,7 +301,7 @@ module Conll = struct
     | (line::tail, ((mw::_) as multiwords)) when line.id = mw.first -> mw.fusion :: (loop (tail,multiwords))
     | (line::tail, (mw::mw_tail)) when line.id > mw.last -> (loop (line::tail,mw_tail))
     | (_::tail, multiwords) -> (loop (tail,multiwords))
-    | (_, mw::_) -> Log.fcritical "[Conll, %sline %d] Inconsistent multiwords" (sof t.file) mw.mw_line_num in
+    | (_, mw::_) -> error "[Conll, %sline %d] Inconsistent multiwords" (sof t.file) mw.mw_line_num in
     let form_list = loop (t.lines, t.multiwords) in
     concat_words form_list
 
