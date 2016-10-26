@@ -101,23 +101,28 @@ module Conll = struct
     xpos: string;
     feats: (string * string) list;
     deps: (int * string ) list;
-    no_space_after: bool;
+    efs: (string * string) list;
   }
 
-  let root = { line_num = -1; id=0; form="ROOT"; lemma="__"; upos="_X"; xpos=""; feats=[]; deps=[]; no_space_after=false }
+  let root = { line_num = -1; id=0; form="ROOT"; lemma="__"; upos="_X"; xpos=""; feats=[]; deps=[]; efs=[] }
 
   let build_line ~id ~form ?(lemma="_") ?(upos="_") ?(xpos="_") ?(feats=[]) ?(deps=[]) () =
-    { line_num = -1; id; form; lemma; upos; xpos; feats; deps=[]; no_space_after=false }
+    { line_num = -1; id; form; lemma; upos; xpos; feats; deps=[]; efs=[] }
 
   let compare l1 l2 = Pervasives.compare l1.id l2.id
 
+  let fs_to_string = function
+    | [] -> "_"
+    | list -> String.concat "|" (List.map (fun (f,v) -> sprintf "%s=%s" f v) list)
+
   let line_to_string l =
     let (gov_list, lab_list) = List.split l.deps in
-    sprintf "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t_\t_"
+    sprintf "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t_\t%s"
       l.id l.form l.lemma l.upos l.xpos
-      (match l.feats with [] -> "_" | list -> String.concat "|" (List.map (fun (f,v) -> sprintf "%s=%s" f v) list))
+      (fs_to_string l.feats)
       (List_.to_string string_of_int "|" gov_list)
       (String.concat "|" lab_list)
+      (fs_to_string l.efs)
 
   (* ------------------------------------------------------------------------ *)
   type multiword = {
@@ -234,7 +239,7 @@ module Conll = struct
                       xpos = underscore xpos;
                       feats = parse_feats ~file line_num feats;
                       deps;
-                      no_space_after = (c10 = "SpaceAfter=No");
+                      efs= parse_feats ~file line_num c10;
                       } in
                     {acc with lines = new_line :: acc.lines }
                   | _ -> error "[Conll, %sline %d], illegal field one \"%s\"" (sof file) line_num f1
@@ -290,7 +295,9 @@ module Conll = struct
 
   let concat_words words = Sentence.fr_clean_spaces (String.concat "" words)
 
-  let final_space line = if line.no_space_after then "" else " "
+  let final_space line =
+    try if List.assoc "SpaceAfter" line.efs = "No" then "" else " "
+    with Not_found -> " "
 
   let build_sentence t =
     let rec loop = function

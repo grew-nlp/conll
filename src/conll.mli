@@ -15,7 +15,7 @@ module Conll : sig
     xpos: string;
     feats: (string * string) list;
     deps: (int * string ) list;
-    no_space_after: bool;
+    efs: (string * string) list;
   }
 
   val build_line:
