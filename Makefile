@@ -15,7 +15,11 @@ install: build uninstall
 uninstall:
 	ocamlfind remove conll
 
+tool:
+	ocamlbuild -use-ocamlfind -pkg conll -I src_tool conll_tool.native
+
 .PHONY: all clean build
 
 clean:
 	$(OCB) -clean
+	rm -f conll_tool.native
