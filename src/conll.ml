@@ -1,24 +1,7 @@
 open Printf
 open Log
 
-(* ======================================================================================================================== *)
-module List_ = struct
-  let to_string string_of_item sep = function
-    | [] -> ""
-    | h::t -> List.fold_left (fun acc elt -> acc ^ sep ^ (string_of_item elt)) (string_of_item h) t
-  
-  let mapi fct =
-    let rec loop i = function
-      | [] -> []
-      | h::t -> (fct i h) :: (loop (i+1) t)
-    in loop 0
-
-  let rec opt_map f = function
-    | [] -> []
-    | x::t -> match f x with
-      | None -> opt_map f t
-      | Some r -> r :: (opt_map f t)
-end
+open Utils
 
 (* ======================================================================================================================== *)
 module File = struct
@@ -260,7 +243,7 @@ module Conll = struct
 
   let from_string s =
     let lines = Str.split (Str.regexp "\n") s in
-    let num_lines = List_.mapi (fun i l -> (i+1,l)) lines in
+    let num_lines = List.mapi (fun i l -> (i+1,l)) lines in
     parse num_lines
 
   (* load conll structure from file: the file must contain only one structure *)
