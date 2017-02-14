@@ -49,7 +49,10 @@ module Conll : sig
   val from_string: string -> t
   val to_string: t -> string
   val load: string -> t
+  val get_sentid_meta: t -> string option
   val get_sentid: t -> string option
+
+  val ensure_sentid_in_meta: t -> t 
 
   val build_sentence: t -> string
   val get_sentence: t -> string option
@@ -60,4 +63,5 @@ module Conll_corpus : sig
   val load: string -> t
   val load_list: string list -> t
   val save: string -> t -> unit
+  val dump: t -> unit
 end

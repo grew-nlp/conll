@@ -147,6 +147,11 @@ module Conll = struct
     | Some f -> sprintf "File %s, " f 
     | None -> ""
 
+  let get_line_num t =
+    match t.lines with
+    | [] -> ""
+    | first :: _ -> sprintf "Line %d, " first.line_num
+
   let check t =
     (* check consecutive ids *)
     let rec loop i = function
@@ -277,21 +282,50 @@ module Conll = struct
     loop (t.lines, t.multiwords);
     Buffer.contents buff
 
-  let get_sentid {meta; lines} =
-    let rec get_sentid_meta = function
-    | [] -> None
-    | line::tail ->
-      match Str.full_split (Str.regexp "# sent_?id:?[ \t]?") line with
-      | [Str.Delim _; Str.Text t] -> Some t
-      | _ -> get_sentid_meta tail in
+  let get_sentid_meta t = 
+    let rec loop = function
+      | [] -> None
+      | line::tail ->
+        match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
+        | [Str.Delim _; Str.Text t] -> Some t
+        | _ -> loop tail
+    in loop t.meta
 
-    match lines with
-      | [] -> get_sentid_meta meta
+  let get_sentid_feats t =
+    match t.lines with
+      | [] -> None
       | {feats}::_ ->
         try Some (List.assoc "sentid" feats)
         with Not_found ->
           try Some (List.assoc "sent_id" feats)
-          with Not_found -> get_sentid_meta meta
+          with Not_found -> None
+
+  let remove_sentid_feats = function
+    | [] -> []
+    | head::tail ->
+      let new_feats = 
+        try List.remove_assoc "sentid" head.feats
+        with Not_found ->
+          try List.remove_assoc "sent_id" head.feats
+          with Not_found -> head.feats in
+      ({head with feats=new_feats} :: tail)
+
+  let get_sentid t =
+    match (get_sentid_meta t, get_sentid_feats t) with
+    | (None, None) -> None
+    | (Some id, None) -> Some id
+    | (None, Some id) -> Some id
+    | (Some idm, Some idf) when idm = idf ->
+      Log.fwarning "[Conll, %ssentid %s], sentid declared both in meta and feats" (sof t.file) idm;
+      Some idm
+    | (Some idm, Some idf) ->
+      error "[Conll, %s], unconsistent sentid (\"%s\" in meta VS \"%s\" in feats)" (sof t.file) idm idf
+
+  let ensure_sentid_in_meta t =
+    match (get_sentid_meta t, get_sentid_feats t) with
+    | (None, None) -> error "[Conll, %s%s], no sentid" (sof t.file) (get_line_num t)
+    | (Some id, _) -> t
+    | (None, Some id) -> { t with meta = (sprintf "# sent_id = %s" id) :: t.meta; lines = remove_sentid_feats t.lines }
 
   let concat_words words = Sentence.fr_clean_spaces (String.concat "" words)
 
@@ -316,8 +350,9 @@ module Conll = struct
     let rec loop = function
     | [] -> None
     | line::tail ->
-      match Str.full_split (Str.regexp "# sentence-text:?[ \t]?") line with
-      | [Str.Delim _; Str.Text t] -> Some t
+      Printf.printf ">>>%s<<<\n%!" line;
+      match Str.full_split (Str.regexp "# ?\\(sentence-\\)?text ?[:=]?[ \t]?") line with
+      | [Str.Delim d; Str.Text t] -> Printf.printf ">d>%s<d<\n%!" d; Some t
       | _ -> loop tail in
     loop meta
 end
@@ -369,4 +404,8 @@ module Conll_corpus = struct
     let out_ch = open_out file_name in
     Array.iter (fun (_,conll) -> fprintf out_ch "%s\n" (Conll.to_string conll)) t;
     close_out out_ch
+
+  let dump t =
+    Array.iter (fun (_,conll) -> printf "%s\n" (Conll.to_string conll)) t;
+
 end
