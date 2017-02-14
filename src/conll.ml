@@ -188,6 +188,17 @@ module Conll = struct
 
   let underscore s = if s = "" then "_" else s
 
+  let set_label id new_label t =
+    { t with lines = List.map
+      (fun line ->
+        if line.id=id
+        then match line.deps with
+         | [(gov,lab)] -> {line with deps=[(gov,new_label)]}
+         | _ -> error "ambiguous set_label"
+        else line
+      ) t.lines
+      }
+
   (* parsing of secodary deps encoded in column 9 in UD (only Finnish in version 1.3) *)
   let parse_secondary_deps s = match s with
     | "_" -> []

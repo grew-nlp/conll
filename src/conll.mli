@@ -57,6 +57,8 @@ module Conll : sig
   val get_sentid_meta: t -> string option
   val get_sentid: t -> string option
 
+  val set_label: int -> string -> t -> t
+
   val ensure_sentid_in_meta: t -> t
 
   val normalize_multiwords: t -> t
