@@ -17,6 +17,11 @@ let sentid corpus =
 		) corpus in
 	Conll_corpus.dump new_corpus
 
+let fusion corpus =
+	let new_corpus = Array.map
+		(fun (id, conll) -> (id, Conll.normalize_multiwords conll)
+		) corpus in
+	Conll_corpus.dump new_corpus
 
 
 
@@ -30,6 +35,12 @@ let print_usage () =
 
 let _ =
 	match List.tl (Array.to_list Sys.argv) with
+
+	| ["fusion"; corpus_name] ->
+		let corpus = Conll_corpus.load corpus_name in
+		fusion corpus
+	| "fusion"::_ -> printf "ERROR: sub-command \"fusion\" expects one argument\n"; print_usage ()
+
 
 	| ["sentences"; corpus_name] -> 
 		let corpus = Conll_corpus.load corpus_name in

@@ -33,7 +33,7 @@ module Conll : sig
   val compare: line -> line -> int
 
   type multiword = {
-    mw_line_num: int;
+    mw_line_num: int option;
     first: int;
     last: int;
     fusion: string;
@@ -52,7 +52,9 @@ module Conll : sig
   val get_sentid_meta: t -> string option
   val get_sentid: t -> string option
 
-  val ensure_sentid_in_meta: t -> t 
+  val ensure_sentid_in_meta: t -> t
+
+  val normalize_multiwords: t -> t
 
   val build_sentence: t -> string
   val get_sentence: t -> string option

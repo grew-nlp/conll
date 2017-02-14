@@ -98,6 +98,16 @@ module Conll = struct
     | [] -> "_"
     | list -> String.concat "|" (List.map (fun (f,v) -> sprintf "%s=%s" f v) list)
 
+  let remove_feat feat_name t =
+    let new_feats =
+      try List.remove_assoc feat_name t.feats
+      with Not_found -> t.feats in
+    { t with feats = new_feats }
+
+  let get_feat feat_name t =
+    try Some (List.assoc feat_name t.feats)
+    with Not_found -> None
+
   let line_to_string l =
     let (gov_list, lab_list) = List.split l.deps in
     sprintf "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t_\t%s"
@@ -109,7 +119,7 @@ module Conll = struct
 
   (* ------------------------------------------------------------------------ *)
   type multiword = {
-    mw_line_num: int;
+    mw_line_num: int option;
     first: int;
     last: int;
     fusion: string;
@@ -202,7 +212,7 @@ module Conll = struct
               begin
                 try
                   match Str.split (Str.regexp "-") f1 with
-                  | [f;l] -> {acc with multiwords = {mw_line_num = line_num; first=int_of_string f; last=int_of_string l; fusion=form}:: acc.multiwords}
+                  | [f;l] -> {acc with multiwords = {mw_line_num = Some line_num; first=int_of_string f; last=int_of_string l; fusion=form}:: acc.multiwords}
                   | [string_id] ->
                     let gov_list = if govs = "_" then [] else List.map int_of_string (Str.split (Str.regexp "|") govs)
                     and lab_list = if dep_labs = "_" then [] else Str.split (Str.regexp "|") dep_labs in
@@ -265,6 +275,7 @@ module Conll = struct
     loop (t.lines, t.multiwords);
     Buffer.contents buff
 
+  (* ========== dealing with sentid information ========== *)
   let get_sentid_meta t = 
     let rec loop = function
       | [] -> None
@@ -277,21 +288,9 @@ module Conll = struct
   let get_sentid_feats t =
     match t.lines with
       | [] -> None
-      | {feats}::_ ->
-        try Some (List.assoc "sentid" feats)
-        with Not_found ->
-          try Some (List.assoc "sent_id" feats)
-          with Not_found -> None
-
-  let remove_sentid_feats = function
-    | [] -> []
-    | head::tail ->
-      let new_feats = 
-        try List.remove_assoc "sentid" head.feats
-        with Not_found ->
-          try List.remove_assoc "sent_id" head.feats
-          with Not_found -> head.feats in
-      ({head with feats=new_feats} :: tail)
+      | head::_ -> 
+        match get_feat "sent_id" head 
+        with None -> get_feat "sentid" head | x -> x
 
   let get_sentid t =
     match (get_sentid_meta t, get_sentid_feats t) with
@@ -304,12 +303,51 @@ module Conll = struct
     | (Some idm, Some idf) ->
       error "[Conll, %s], unconsistent sentid (\"%s\" in meta VS \"%s\" in feats)" (sof t.file) idm idf
 
+  let remove_sentid_feats = function
+    | [] -> []
+    | head::tail -> (head |> remove_feat "sentid" |> remove_feat "sent_id") :: tail
   let ensure_sentid_in_meta t =
     match (get_sentid_meta t, get_sentid_feats t) with
     | (None, None) -> error "[Conll, %s%s], no sentid" (sof t.file) (get_line_num t)
     | (Some id, _) -> t
-    | (None, Some id) -> { t with meta = (sprintf "# sent_id = %s" id) :: t.meta; lines = remove_sentid_feats t.lines }
+    | (None, Some id) ->
+      { t with 
+        meta = (sprintf "# sent_id = %s" id) :: t.meta;
+        lines = remove_sentid_feats t.lines }
+  (* ---------- dealing with sentid information ---------- *)
 
+
+
+  (* ========== adding multiwords lines from features ========== *)
+  let insert_multiword id span fusion multiwords =
+    let rec loop = function
+      | [] -> [{ mw_line_num=None; first=id; last= id+span-1; fusion }]
+      | h::t when id < h.first -> { mw_line_num=None; first=id; last= id+span-1; fusion } :: t
+      | h::t -> h::(loop t) in
+    loop multiwords
+
+  let normalize_multiwords t =
+    let new_multiwords = List.fold_left
+      (fun acc line ->
+        match (get_feat "mw_fusion" line, get_feat "mw_span" line) with
+        | (None, None) -> acc
+        | (Some fusion, Some string_span) ->
+          let span =
+            try int_of_string string_span
+            with Failure _ -> error "[Conll, %s%s], mw_span must be integer" (sof t.file) (get_line_num t) in
+          insert_multiword line.id span fusion acc
+        | _ -> error "[Conll, %s%s], inconsistent mw specification" (sof t.file) (get_line_num t)
+      )
+      t.multiwords t.lines in
+    { t with
+      multiwords = new_multiwords;
+      lines = List.map (fun l -> l |> remove_feat "mw_fusion" |> remove_feat "mw_span") t.lines
+    }
+  (* ---------- adding multiwords lines from features ---------- *)
+
+
+
+  (* ========== retrieving or building full text on a sentence ========== *)
   let concat_words words = Sentence.fr_clean_spaces (String.concat "" words)
 
   let final_space line =
@@ -325,7 +363,11 @@ module Conll = struct
     | (line::tail, ((mw::_) as multiwords)) when line.id = mw.first -> mw.fusion :: (loop (tail,multiwords))
     | (line::tail, (mw::mw_tail)) when line.id > mw.last -> (loop (line::tail,mw_tail))
     | (_::tail, multiwords) -> (loop (tail,multiwords))
-    | (_, mw::_) -> error "[Conll, %sline %d] Inconsistent multiwords" (sof t.file) mw.mw_line_num in
+    | (_, mw::_) ->
+      (match mw.mw_line_num with
+       | Some l -> error "[Conll, %sline %d] Inconsistent multiwords" (sof t.file) l
+       | None -> error "[Conll, %s] Inconsistent multiwords" (sof t.file)
+      ) in
     let form_list = loop (t.lines, t.multiwords) in
     concat_words form_list
 
@@ -338,7 +380,10 @@ module Conll = struct
       | [Str.Delim d; Str.Text t] -> Printf.printf ">d>%s<d<\n%!" d; Some t
       | _ -> loop tail in
     loop meta
+  (* ---------- retrieving or building full text on a sentence ---------- *)
 end
+
+
 
 (* ======================================================================================================================== *)
 module Conll_corpus = struct
