@@ -1,6 +1,13 @@
 open Printf
 open Conll
 
+module Array_ = struct
+  exception Found of int
+  let index fct a =
+    try Array.iteri (fun i elt -> if (fct elt) then raise (Found i)) a; None
+    with Found i -> Some (i,a.(i))
+end
+
 let rec list_extract n = function
 	| [] -> failwith "list_extract"
 	| h::t when n=0 -> (h,t)
@@ -38,13 +45,35 @@ let split corpus id_list =
 let print_usage () =
 	List.iter (fun x -> printf "%s\n" x)
 	[
-	"Usage:";
-	" * conll_tool.native sentences <file>       dump on stdout the list of \"id#sentence\"";
-	" * conll_tool.native sentid <file>          dump the input corpus with #sentid moved into metadata when necessary";
+	"Usage: conll_tool.native <subcommand> <args>";
+	"subcommand are:"
+	" * sentences <file>       dump on stdout the list of \"id#sentence\"";
+	" * sentid <file>          dump the input corpus with #sentid moved into metadata when necessary";
+	" * random <file> <num>    split input <file> corpus into a randomly selected subset on sentence large enough to have at least <num> tokens";
+	"                          output is stored in two files with extension _sub.conll (the extracted part) and _rem.conll (the remaining sentences)";
 	]
 
 let _ =
 	match List.tl (Array.to_list Sys.argv) with
+
+	(* pat stands for post annot_tool *)
+	| ["pat"; corpus_name; at_file] ->
+		let corpus = Conll_corpus.load corpus_name in
+		let at_list = List.map snd (File.read at_file) in
+		List.iter (fun at ->
+			match Str.split (Str.regexp "__\\|#\\|\\.svg#") at with
+			| [sentid; pos; lab] ->
+				begin
+					match Array_.index (fun (id,_) -> id=sentid) corpus with
+					| None -> printf "ERROR: sentid \"%s\" not found in corpus\n" sentid; exit 1
+					| Some (i,(_,conll)) ->
+						let new_conll = Conll.set_label (int_of_string pos) lab conll in
+						corpus.(i) <- (sentid,new_conll)
+				end
+			| _ -> printf "ERROR: cannot parse annot_tool output \"%s\"\n" at; exit 1
+		) at_list;
+		Conll_corpus.dump corpus
+	| "pat"::_ -> printf "ERROR: sub-command \"pat\" expects two arguments\n"; print_usage ()
 
 	| ["random"; corpus_name; min_tokens_string] ->
 		let basename = Filename.basename corpus_name in
@@ -66,7 +95,6 @@ let _ =
 		Conll_corpus.save (basename^"_sub.conll")
 			(Array.of_list (List.sort (fun (id1,_) (id2,_) -> Pervasives.compare id1 id2) sub));
 		Conll_corpus.save (basename^"_rem.conll") (Array.of_list rem)
-
 	| "random"::_ -> printf "ERROR: sub-command \"random\" expects two arguments\n"; print_usage ()
 
 	| ["split"; corpus_name; id_file] ->
