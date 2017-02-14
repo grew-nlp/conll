@@ -1,1 +1,1 @@
-true:	package(unix,str,ANSIterminal,log)
+true:	package(unix,str,ANSITerminal,log)
