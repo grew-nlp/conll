@@ -46,7 +46,7 @@ let print_usage () =
 	List.iter (fun x -> printf "%s\n" x)
 	[
 	"Usage: conll_tool.native <subcommand> <args>";
-	"subcommand are:"
+	"subcommand are:";
 	" * sentences <file>       dump on stdout the list of \"id#sentence\"";
 	" * sentid <file>          dump the input corpus with #sentid moved into metadata when necessary";
 	" * random <file> <num>    split input <file> corpus into a randomly selected subset on sentence large enough to have at least <num> tokens";
