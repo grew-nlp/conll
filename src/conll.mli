@@ -1,3 +1,7 @@
+module File : sig
+  val read: string -> (int * string) list
+end
+
 module Sentence : sig
   val fr_clean_spaces: string -> string
 end
@@ -67,4 +71,5 @@ module Conll_corpus : sig
   val load_list: string list -> t
   val save: string -> t -> unit
   val dump: t -> unit
+  val token_size: t -> int
 end

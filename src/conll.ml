@@ -140,6 +140,8 @@ module Conll = struct
     | Some f -> sprintf "File %s, " f 
     | None -> ""
 
+  let token_size t = List.length t.lines
+
   let get_line_num t =
     match t.lines with
     | [] -> ""
@@ -460,6 +462,8 @@ module Conll_corpus = struct
     close_out out_ch
 
   let dump t =
-    Array.iter (fun (_,conll) -> printf "%s\n" (Conll.to_string conll)) t;
+    Array.iter (fun (_,conll) -> printf "%s\n" (Conll.to_string conll)) t
 
+  let token_size t =
+    Array.fold_left (fun acc (_,conll) -> acc + (Conll.token_size conll)) 0 t
 end

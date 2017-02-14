@@ -1,6 +1,10 @@
 open Printf
 open Conll
 
+let rec list_extract n = function
+	| [] -> failwith "list_extract"
+	| h::t when n=0 -> (h,t)
+	| h::t -> let (x,r) = list_extract (n-1) t in (x,h::r)
 
 let dump_id_sentence corpus =
 	Array.iter
@@ -23,7 +27,13 @@ let fusion corpus =
 		) corpus in
 	Conll_corpus.dump new_corpus
 
-
+let split corpus id_list =
+	let (i,o) = List.partition 
+		(function
+		| (id,conll) when List.mem id id_list -> true
+		| _ -> false
+		) (Array.to_list corpus) in
+	(Array.of_list i, Array.of_list o)
 
 let print_usage () =
 	List.iter (fun x -> printf "%s\n" x)
@@ -35,6 +45,43 @@ let print_usage () =
 
 let _ =
 	match List.tl (Array.to_list Sys.argv) with
+
+	| ["random"; corpus_name; min_tokens_string] ->
+		let basename = Filename.basename corpus_name in
+		let corpus = Conll_corpus.load corpus_name in
+		Random.self_init ();
+		let min_tokens =
+			try int_of_string min_tokens_string
+			with Failure _ -> printf "ERROR: sub-command \"random\" second arg must be int\n"; print_usage (); exit 0 in
+		let full_size = Array.length corpus in
+		let full_list = Array.to_list corpus in
+		let rec loop size bound (sub, rem) =
+			if bound < 0
+			then (sub, rem)
+			else
+				let n = Random.int size in
+				let ((id,conll),new_rem) = list_extract n rem in
+				loop (size-1) (bound - (List.length conll.Conll.lines)) ((id,conll)::sub, new_rem) in
+		let (sub,rem) = loop full_size min_tokens ([],full_list) in
+		Conll_corpus.save (basename^"_sub.conll")
+			(Array.of_list (List.sort (fun (id1,_) (id2,_) -> Pervasives.compare id1 id2) sub));
+		Conll_corpus.save (basename^"_rem.conll") (Array.of_list rem)
+
+	| "random"::_ -> printf "ERROR: sub-command \"random\" expects two arguments\n"; print_usage ()
+
+	| ["split"; corpus_name; id_file] ->
+		let basename = Filename.basename corpus_name in
+		let corpus = Conll_corpus.load corpus_name in
+		let id_list = List.map snd (File.read id_file) in
+		let (c_in, c_out) = split corpus id_list in
+		Conll_corpus.save (basename^"_in.conll") c_in;
+		Conll_corpus.save (basename^"_out.conll") c_out;
+		printf "Splitting; IN: %d sentences, %d tokens; OUT: %d sentences, %d tokens\n"
+			(Array.length c_in)
+			(Conll_corpus.token_size c_in)
+			(Array.length c_out)
+			(Conll_corpus.token_size c_out)
+	| "split"::_ -> printf "ERROR: sub-command \"split\" expects two arguments\n"; print_usage ()
 
 	| ["fusion"; corpus_name] ->
 		let corpus = Conll_corpus.load corpus_name in
