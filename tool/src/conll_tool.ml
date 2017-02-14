@@ -51,10 +51,10 @@ let _ =
 		sentid corpus
 	| "sentid"::_ -> printf "ERROR: sub-command \"sentid\" expects one argument\n"; print_usage ()
 
-	| ["dump"; corpus_name] ->
+	| ["dot"; corpus_name] ->
 		let corpus = Conll_corpus.load corpus_name in
-		Conll.dump (snd corpus.(0))
-	| "dump"::_ -> printf "ERROR: sub-command \"dump\" expects one argument\n"; print_usage ()
+		printf "%s" (Conll.to_dot (snd corpus.(0)))
+	| "dot"::_ -> printf "ERROR: sub-command \"dot\" expects one argument\n"; print_usage ()
 
 	| [] -> print_usage ()
 	| x :: _ ->

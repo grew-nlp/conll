@@ -275,6 +275,32 @@ module Conll = struct
     loop (t.lines, t.multiwords);
     Buffer.contents buff
 
+  let node_to_dot_label buff line =
+    bprintf buff "[label= <<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\">\n";
+    bprintf buff "<TR><TD COLSPAN=\"3\"><B>%s</B></TD></TR>\n" line.form;
+    bprintf buff "<TR><TD COLSPAN=\"3\"><B>%s</B></TD></TR>\n" line.lemma;
+    List.iter (fun (f,v) ->
+        bprintf buff "<TR><TD ALIGN=\"right\">%s</TD><TD>=</TD><TD ALIGN=\"left\">%s</TD></TR>\n" f v
+      ) line.feats;
+    bprintf buff "</TABLE>> ];\n"
+
+  let to_dot t =
+    let buff = Buffer.create 32 in
+    bprintf buff "digraph G {\n";
+    bprintf buff "  node [shape=box];\n";
+    List.iter
+      (fun line ->
+        bprintf buff "  N_%d " line.id;
+        node_to_dot_label buff line;
+        List.iter (fun (gov, lab) ->
+          bprintf buff "  N_%d -> N_%d [label=\"%s\"];\n" gov line.id lab
+        ) line.deps
+      ) t.lines;
+    bprintf buff "}\n";
+    Buffer.contents buff
+
+
+
   (* ========== dealing with sentid information ========== *)
   let get_sentid_meta t = 
     let rec loop = function
@@ -381,7 +407,7 @@ module Conll = struct
       | _ -> loop tail in
     loop meta
   (* ---------- retrieving or building full text on a sentence ---------- *)
-end
+end (* module Conll *)
 
 
 
