@@ -41,17 +41,21 @@ let _ =
 		fusion corpus
 	| "fusion"::_ -> printf "ERROR: sub-command \"fusion\" expects one argument\n"; print_usage ()
 
-
-	| ["sentences"; corpus_name] -> 
+	| ["sentences"; corpus_name] ->
 		let corpus = Conll_corpus.load corpus_name in
 		dump_id_sentence corpus
 	| "sentences"::_ -> printf "ERROR: sub-command \"sentences\" expects one argument\n"; print_usage ()
 
-	| ["sentid"; corpus_name] -> 
+	| ["sentid"; corpus_name] ->
 		let corpus = Conll_corpus.load corpus_name in
 		sentid corpus
 	| "sentid"::_ -> printf "ERROR: sub-command \"sentid\" expects one argument\n"; print_usage ()
 
+	| ["dump"; corpus_name] ->
+		let corpus = Conll_corpus.load corpus_name in
+		Conll.dump (snd corpus.(0))
+	| "dump"::_ -> printf "ERROR: sub-command \"dump\" expects one argument\n"; print_usage ()
+
 	| [] -> print_usage ()
-	| x :: _ -> 
+	| x :: _ ->
 		printf "ERROR: unknown sub-command \"%s\"\n" x; print_usage ()
