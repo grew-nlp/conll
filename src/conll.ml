@@ -3,6 +3,8 @@ open Log
 
 open Utils
 open Conll_types
+open Dep
+open Svg
 
 module Sentence = struct
   let fr_clean_spaces with_spaces =
@@ -48,14 +50,11 @@ module Sentence = struct
       ]
 end
 
+
 (* ======================================================================================================================== *)
 module Conll = struct
 
   module Id = Conll_types.Id
-
-  exception Error of string
-
-  let error m = Printf.ksprintf (fun msg -> raise (Error msg)) m
 
   (* ------------------------------------------------------------------------ *)
   type line = {
@@ -148,6 +147,31 @@ module Conll = struct
     multiwords: multiword list;
   }
 
+  let to_dep t =
+    let root = Dep_node.build (0,None) ["ROOT", 24] in
+    let nodes = root ::
+      (List.map
+        (fun l -> Dep_node.build l.id [(l.form,24);(l.lemma,20)]
+        ) t.lines
+      ) in
+    let init_edges = List.fold_left
+        (fun acc l ->
+          List.fold_left
+            (fun acc2 (src,label) ->
+              (Dep_edge.build src l.id label false) :: acc2
+            ) acc l.deps
+        ) [] t.lines in
+    let final_edges = Dep.compute_shifts nodes (Dep.compute_levels init_edges) in
+    { Dep.nodes = nodes; edges= final_edges; }
+
+
+  let dump t =
+    Svg.set_text_pad 1;
+    let dep = to_dep t in
+    Dep.dump dep;
+    Dep.to_svg "test.svg" dep;
+    ()
+
   let sof = function
     | Some f -> sprintf "File %s, " f
     | None -> ""
@@ -236,7 +260,6 @@ module Conll = struct
         | [_] -> None
         | _ -> error "[Conll], cannot parse extended dependency \"%s\"" sd
       ) sd_list
-
 
   let add_feat id (fn, fv) t =
     let new_lines = List.map (fun l -> if l.id = id then add_feat (fn, fv) l else l) t.lines in

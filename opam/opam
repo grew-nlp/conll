@@ -13,4 +13,6 @@ remove: [
 depends: [
   "ANSITerminal"
   "libcaml-log"
+  "containers"
+  "svg"
 ]

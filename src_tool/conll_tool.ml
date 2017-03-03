@@ -138,6 +138,11 @@ let _ =
     let corpus = Conll_corpus.load corpus_in in
     Conll_corpus.save corpus_out corpus
 
+	| ["dump"; corpus_name] ->
+		let corpus = Conll_corpus.load corpus_name in
+		Conll.dump (snd corpus.(0))
+	| "dump"::_ -> printf "ERROR: sub-command \"dump\" expects one argument\n"; print_usage ()
+
 	| [] -> print_usage ()
 	| x :: _ ->
 		printf "ERROR: unknown sub-command \"%s\"\n" x; print_usage ()

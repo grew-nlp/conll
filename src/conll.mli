@@ -1,11 +1,11 @@
+open Dep
+
 module Sentence : sig
   val fr_clean_spaces: string -> string
 end
 
 module Conll : sig
   module Id: Conll_types.Id_type
-
-  exception Error of string
 
   type line = {
     line_num: int;
@@ -47,6 +47,9 @@ module Conll : sig
     lines: line list;
     multiwords: multiword list;
   }
+
+  val to_dep: t -> Dep.t
+  val dump: t -> unit
 
   val from_string: string -> t
   val to_string: t -> string

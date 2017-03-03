@@ -1,2 +1,2 @@
-true:	package(containers,unix,str,ANSITerminal,log)
+true:	package(containers, unix,str,ANSITerminal,log,cairo2,svg)
 true: bin_annot
