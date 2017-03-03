@@ -1,1 +1,2 @@
 true:	package(unix,str,ANSITerminal,log)
+true: bin_annot
