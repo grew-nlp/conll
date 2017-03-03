@@ -136,8 +136,8 @@ module Conll = struct
     multiwords: multiword list;
   }
 
-  let sof = function 
-    | Some f -> sprintf "File %s, " f 
+  let sof = function
+    | Some f -> sprintf "File %s, " f
     | None -> ""
 
   let token_size t = List.length t.lines
@@ -208,7 +208,7 @@ module Conll = struct
         fun sd -> match Str.bounded_split (Str.regexp ":") sd 2 with
         | [gov;lab] -> Some (int_of_string gov, "D:"^lab)
         | [_] -> None
-        | _ -> error "[Conll], cannot parse secondary dependency \"%s\"" sd 
+        | _ -> error "[Conll], cannot parse secondary dependency \"%s\"" sd
       ) sd_list
 
   (* parse a list of line corresponding to one conll structure *)
@@ -233,7 +233,7 @@ module Conll = struct
                     let prim_deps = match (gov_list, lab_list) with
                       | ([0], []) -> [] (* handle Talismane output on tokens without gov *)
                       | _ ->
-                        try List.combine gov_list lab_list 
+                        try List.combine gov_list lab_list
                         with Invalid_argument _ -> error "[Conll, %sline %d], inconsistent relation specification" (sof file) line_num in
 
                     let deps = match c9 with
@@ -300,7 +300,7 @@ module Conll = struct
   let to_dot t =
     let buff = Buffer.create 32 in
     bprintf buff "digraph G {\n";
-    bprintf buff "  node [shape=box];\n";
+    bprintf buff "  node [shape=Mrecord];\n";
     List.iter
       (fun line ->
         bprintf buff "  N_%d " line.id;
@@ -312,10 +312,13 @@ module Conll = struct
     bprintf buff "}\n";
     Buffer.contents buff
 
-
+  let save_dot output_file t =
+    let in_ch = open_out output_file in
+    fprintf in_ch "%s" (to_dot t);
+    close_out in_ch
 
   (* ========== dealing with sentid information ========== *)
-  let get_sentid_meta t = 
+  let get_sentid_meta t =
     let rec loop = function
       | [] -> None
       | line::tail ->
@@ -327,8 +330,8 @@ module Conll = struct
   let get_sentid_feats t =
     match t.lines with
       | [] -> None
-      | head::_ -> 
-        match get_feat "sent_id" head 
+      | head::_ ->
+        match get_feat "sent_id" head
         with None -> get_feat "sentid" head | x -> x
 
   let get_sentid t =
@@ -350,7 +353,7 @@ module Conll = struct
     | (None, None) -> error "[Conll, %s%s], no sentid" (sof t.file) (get_line_num t)
     | (Some id, _) -> t
     | (None, Some id) ->
-      { t with 
+      { t with
         meta = (sprintf "# sent_id = %s" id) :: t.meta;
         lines = remove_sentid_feats t.lines }
   (* ---------- dealing with sentid information ---------- *)
@@ -442,7 +445,7 @@ module Conll_corpus = struct
       incr cpt;
       let conll = Conll.parse_rev ~file !rev_locals in
       let base = Filename.basename file in
-      let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in 
+      let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
       res := (sentid,conll) :: !res;
       rev_locals := [] in
 

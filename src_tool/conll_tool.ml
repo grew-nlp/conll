@@ -35,7 +35,7 @@ let fusion corpus =
 	Conll_corpus.dump new_corpus
 
 let split corpus id_list =
-	let (i,o) = List.partition 
+	let (i,o) = List.partition
 		(function
 		| (id,conll) when List.mem id id_list -> true
 		| _ -> false
@@ -129,6 +129,9 @@ let _ =
 	| ["dot"; corpus_name] ->
 		let corpus = Conll_corpus.load corpus_name in
 		printf "%s" (Conll.to_dot (snd corpus.(0)))
+  | ["dot"; corpus_name; output_file] ->
+  	let corpus = Conll_corpus.load corpus_name in
+  	Conll.save_dot output_file (snd corpus.(0))
 	| "dot"::_ -> printf "ERROR: sub-command \"dot\" expects one argument\n"; print_usage ()
 
 	| [] -> print_usage ()

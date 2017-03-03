@@ -23,8 +23,8 @@ module Conll : sig
   }
 
   val build_line:
-    id:int -> 
-    form: string -> 
+    id:int ->
+    form: string ->
     ?lemma: string ->
     ?upos: string ->
     ?xpos: string ->
@@ -53,6 +53,7 @@ module Conll : sig
   val from_string: string -> t
   val to_string: t -> string
   val to_dot: t -> string
+  val save_dot: string -> t -> unit
   val load: string -> t
   val get_sentid_meta: t -> string option
   val get_sentid: t -> string option
