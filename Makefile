@@ -18,6 +18,9 @@ uninstall:
 tool:
 	ocamlbuild -use-ocamlfind -pkg conll -I src_tool conll_tool.native
 
+install_tool: tool
+	cp conll_tool.native ~/.local/bin/conll_tool
+
 .PHONY: all clean build
 
 clean:
