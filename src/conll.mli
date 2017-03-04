@@ -41,6 +41,7 @@ module Conll : sig
     first: int;
     last: int;
     fusion: string;
+    mw_efs: (string * string) list;
   }
 
   type t = {

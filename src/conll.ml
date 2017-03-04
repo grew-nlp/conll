@@ -123,10 +123,11 @@ module Conll = struct
     first: int;
     last: int;
     fusion: string;
-  }
+    mw_efs: (string * string) list;
+}
 
   let multiword_to_string l =
-    sprintf "%d-%d\t%s\t_\t_\t_\t_\t_\t_\t_\t_" l.first l.last l.fusion
+    sprintf "%d-%d\t%s\t_\t_\t_\t_\t_\t_\t_\t%s" l.first l.last l.fusion (fs_to_string l.mw_efs)
 
   (* ------------------------------------------------------------------------ *)
   type t = {
@@ -225,7 +226,14 @@ module Conll = struct
               begin
                 try
                   match Str.split (Str.regexp "-") f1 with
-                  | [f;l] -> {acc with multiwords = {mw_line_num = Some line_num; first=int_of_string f; last=int_of_string l; fusion=form}:: acc.multiwords}
+                  | [f;l] -> {acc with multiwords = {
+                      mw_line_num = Some line_num;
+                      first=int_of_string f;
+                      last=int_of_string l;
+                      fusion=form;
+                      mw_efs= parse_feats ~file line_num c10;
+                      } :: acc.multiwords
+                    }
                   | [string_id] ->
                     let gov_list = if govs = "_" then [] else List.map int_of_string (Str.split (Str.regexp "|") govs)
                     and lab_list = if dep_labs = "_" then [] else Str.split (Str.regexp "|") dep_labs in
@@ -363,8 +371,8 @@ module Conll = struct
   (* ========== adding multiwords lines from features ========== *)
   let insert_multiword id span fusion multiwords =
     let rec loop = function
-      | [] -> [{ mw_line_num=None; first=id; last= id+span-1; fusion }]
-      | h::t when id < h.first -> { mw_line_num=None; first=id; last= id+span-1; fusion } :: t
+      | [] -> [{ mw_line_num=None; first=id; last= id+span-1; fusion; mw_efs=[] }]
+      | h::t when id < h.first -> { mw_line_num=None; first=id; last= id+span-1; fusion; mw_efs=[] } :: t
       | h::t -> h::(loop t) in
     loop multiwords
 

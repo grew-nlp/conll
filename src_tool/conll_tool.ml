@@ -134,6 +134,10 @@ let _ =
   	Conll.save_dot output_file (snd corpus.(0))
 	| "dot"::_ -> printf "ERROR: sub-command \"dot\" expects one argument\n"; print_usage ()
 
+  | ["normalize"; corpus_in; corpus_out] ->
+    let corpus = Conll_corpus.load corpus_in in
+    Conll_corpus.save corpus_out corpus
+
 	| [] -> print_usage ()
 	| x :: _ ->
 		printf "ERROR: unknown sub-command \"%s\"\n" x; print_usage ()
