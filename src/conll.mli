@@ -10,20 +10,27 @@ module Conll : sig
 
   exception Error of string
 
+  type id = int * int option (* 8.1 --> (8, Some 1) *)
+
+  val id_of_string: string -> id
+
+  (* give a string version of if usable in graphiz or dep2pict *)
+  val dot_of_id: id -> string
+
   type line = {
     line_num: int;
-    id: int;
+    id: id;
     form: string;
     lemma: string;
     upos: string;
     xpos: string;
     feats: (string * string) list;
-    deps: (int * string ) list;
+    deps: (id * string ) list;
     efs: (string * string) list;
   }
 
   val build_line:
-    id:int ->
+    id:id ->
     form: string ->
     ?lemma: string ->
     ?upos: string ->
@@ -59,7 +66,7 @@ module Conll : sig
   val get_sentid_meta: t -> string option
   val get_sentid: t -> string option
 
-  val set_label: int -> string -> t -> t
+  val set_label: id -> string -> t -> t
 
   val ensure_sentid_in_meta: t -> t
 

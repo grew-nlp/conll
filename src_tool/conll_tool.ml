@@ -67,7 +67,7 @@ let _ =
 					match Array_.index (fun (id,_) -> id=sentid) corpus with
 					| None -> printf "ERROR: sentid \"%s\" not found in corpus\n" sentid; exit 1
 					| Some (i,(_,conll)) ->
-						let new_conll = Conll.set_label (int_of_string pos) lab conll in
+						let new_conll = Conll.set_label (Conll.id_of_string pos) lab conll in
 						corpus.(i) <- (sentid,new_conll)
 				end
 			| _ -> printf "ERROR: cannot parse annot_tool output \"%s\"\n" at; exit 1

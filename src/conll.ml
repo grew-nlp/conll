@@ -74,25 +74,50 @@ module Conll = struct
 
   let error m = Printf.ksprintf (fun msg -> raise (Error msg)) m
 
+  type id = int * int option (* 8.1 --> (8, Some 1) *)
+
+  let string_of_id = function
+    | (i, None) -> sprintf "%d" i
+    | (i, Some j) -> sprintf "%d.%d" i j
+
+  let dot_of_id = function
+    | (i, None) -> sprintf "%d" i
+    | (i, Some j) -> sprintf "%d_%d" i j
+
+  exception Wrong_id of string
+  let id_of_string s =
+    try
+      match Str.split (Str.regexp "\\.") s with
+      | [i] -> (int_of_string i, None)
+      | [i;j] -> (int_of_string i, Some (int_of_string j))
+      | _ -> raise (Wrong_id s)
+    with Failure _ -> raise (Wrong_id s)
+
   (* ------------------------------------------------------------------------ *)
   type line = {
     line_num: int;
-    id: int;
+    id: id;
     form: string;
     lemma: string;
     upos: string;
     xpos: string;
     feats: (string * string) list;
-    deps: (int * string ) list;
+    deps: (id * string ) list;
     efs: (string * string) list;
   }
 
-  let root = { line_num = -1; id=0; form="ROOT"; lemma="__"; upos="_X"; xpos=""; feats=[]; deps=[]; efs=[] }
+  let root = { line_num = -1; id=(0,None); form="ROOT"; lemma="__"; upos="_X"; xpos=""; feats=[]; deps=[]; efs=[] }
 
   let build_line ~id ~form ?(lemma="_") ?(upos="_") ?(xpos="_") ?(feats=[]) ?(deps=[]) () =
     { line_num = -1; id; form; lemma; upos; xpos; feats; deps=[]; efs=[] }
 
-  let compare l1 l2 = Pervasives.compare l1.id l2.id
+  let compare l1 l2 =
+    match (l1.id, l2.id) with
+    | ((id1, _), (id2, _)) when id1 <> id2 -> Pervasives.compare id1 id2
+    | ((_,None), (_,Some _)) -> -1
+    | ((_,Some _), (_,None)) -> 1
+    | ((_,Some sub_id1), (_,Some sub_id2)) -> Pervasives.compare sub_id1 sub_id2
+    | ((id,None), (_,None)) -> error "[Conll, lines %d and %d], twice the same indentifier \"%d\"" l1.line_num l2.line_num id
 
   let fs_to_string = function
     | [] -> "_"
@@ -108,13 +133,25 @@ module Conll = struct
     try Some (List.assoc feat_name t.feats)
     with Not_found -> None
 
+  let is_extended (_,lab) = String.length lab > 2 && String.sub lab 0 2 = "E:"
+
+  let string_of_ext = function
+  | [] -> "_"
+  | ext -> String.concat "|" (List.map (fun (g,l) -> sprintf "%s:%s" (string_of_id g) (String.sub l 2 ((String.length l)-2))) ext)
+
   let line_to_string l =
-    let (gov_list, lab_list) = List.split l.deps in
-    sprintf "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t_\t%s"
-      l.id l.form l.lemma l.upos l.xpos
+    let (ext,not_ext) = List.partition is_extended l.deps in
+    let (gov_list, lab_list) = List.split not_ext in
+    sprintf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"
+      (string_of_id l.id)
+      l.form
+      l.lemma
+      l.upos
+      l.xpos
       (fs_to_string l.feats)
-      (List_.to_string string_of_int "|" gov_list)
-      (String.concat "|" lab_list)
+      (match gov_list with [] -> "_" | l -> List_.to_string string_of_id "|" l)
+      (match lab_list with [] -> "_" | l -> String.concat "|" l)
+      (string_of_ext ext)
       (fs_to_string l.efs)
 
   (* ------------------------------------------------------------------------ *)
@@ -150,13 +187,27 @@ module Conll = struct
 
   let check t =
     (* check consecutive ids *)
-    let rec loop i = function
-    | [] -> ()
-    | {id}::tail when i=id -> loop (id+1) tail
-    | {line_num;id}::tail ->
-      Log.fwarning "[Conll, %sline %d], idenfier %d is different from expected %d" (sof t.file) line_num id i;
-      loop (id+1) tail
-    in loop 1 t.lines;
+    let rec loop = function
+    | [] | [_] -> ()
+    | {id=(i1,None)}::({id=(i2,None);line_num}::_) as tail ->
+      if i2 <> i1 + 1
+      then Log.fwarning "[Conll, %sline %d], idenfier %d is different from expected %d" (sof t.file) line_num i2 (i1+1);
+      loop tail
+    | {id=(i1,Some _)}::({id=(i2,None);line_num}::_) as tail ->
+      if i2 <> i1 + 1
+      then Log.fwarning "[Conll, %sline %d], idenfier %d is different from expected %d" (sof t.file) line_num i2 (i1+1);
+      loop tail
+    | {id=(i1,None)}::({id=(i2,Some e2);line_num}::_) as tail ->
+      if i1 <> i2
+      then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.1" (sof t.file) line_num i2 e2 i1
+      else if e2 <> 1
+      then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.1" (sof t.file) line_num i2 e2 i1;
+      loop tail
+    | {id=(i1,Some e1)}::({id=(i2,Some e2);line_num}::_) as tail ->
+      if (i1 <> i2) || (e2 <> e1+1)
+      then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.%d" (sof t.file) line_num i2 e2 i1 (e1+1);
+      loop tail
+    in loop t.lines;
 
     (* check dependency and loops *)
     let id_list = List.map (fun {id} -> id) t.lines in
@@ -164,10 +215,10 @@ module Conll = struct
       fun {id; line_num; deps} ->
       List.iter (
         fun (i,_) ->
-          if i>0 && not (List.mem i id_list)
-          then error "[Conll, %sline %d], cannot find gov identifier %d" (sof t.file) line_num i;
+          if (fst i)>0 && not (List.mem i id_list)
+          then error "[Conll, %sline %d], cannot find gov identifier %s" (sof t.file) line_num (string_of_id i);
           if id = i
-          then error "[Conll, %sline %d], loop in dependency %d" (sof t.file) line_num i;
+          then error "[Conll, %sline %d], loop in dependency %s" (sof t.file) line_num (string_of_id i);
       ) deps
     ) t.lines
 
@@ -200,16 +251,16 @@ module Conll = struct
       ) t.lines
       }
 
-  (* parsing of secodary deps encoded in column 9 in UD (only Finnish in version 1.3) *)
-  let parse_secondary_deps s = match s with
+  (* parsing of extended deps encoded in column 9 in UD *)
+  let parse_extended_deps = function
     | "_" -> []
     | s ->
       let sd_list = Str.split (Str.regexp "|") s in
       List_.opt_map (
         fun sd -> match Str.bounded_split (Str.regexp ":") sd 2 with
-        | [gov;lab] -> Some (int_of_string gov, "D:"^lab)
+        | [gov;lab] -> Some (id_of_string gov, "E:"^lab)  (* E: is the prefix for extended relations *)
         | [_] -> None
-        | _ -> error "[Conll], cannot parse secondary dependency \"%s\"" sd
+        | _ -> error "[Conll], cannot parse extended dependency \"%s\"" sd
       ) sd_list
 
   (* parse a list of line corresponding to one conll structure *)
@@ -235,36 +286,42 @@ module Conll = struct
                       } :: acc.multiwords
                     }
                   | [string_id] ->
-                    let gov_list = if govs = "_" then [] else List.map int_of_string (Str.split (Str.regexp "|") govs)
+                    let gov_list = if govs = "_" then [] else List.map id_of_string (Str.split (Str.regexp "|") govs)
                     and lab_list = if dep_labs = "_" then [] else Str.split (Str.regexp "|") dep_labs in
 
                     let prim_deps = match (gov_list, lab_list) with
-                      | ([0], []) -> [] (* handle Talismane output on tokens without gov *)
+                      | ([(0,None)], []) -> [] (* handle Talismane output on tokens without gov *)
                       | _ ->
                         try List.combine gov_list lab_list
                         with Invalid_argument _ -> error "[Conll, %sline %d], inconsistent relation specification" (sof file) line_num in
 
                     let deps = match c9 with
                     | "_" -> prim_deps
-                    | _ -> prim_deps @ (parse_secondary_deps c9) in
+                    | _ -> prim_deps @ (parse_extended_deps c9) in
 
                     let new_line =
+                      let id = id_of_string (string_id) in
+                      let feats =
+                        match id with
+                        | (_,None) -> parse_feats ~file line_num feats
+                        | _ -> ("_UD_empty", "Yes") :: (parse_feats ~file line_num feats) in
                       {
                       line_num;
-                      id = int_of_string string_id;
+                      id;
                       form = underscore form;
                       lemma = underscore lemma;
                       upos = underscore upos;
                       xpos = underscore xpos;
-                      feats = parse_feats ~file line_num feats;
+                      feats;
                       deps;
                       efs= parse_feats ~file line_num c10;
                       } in
                     {acc with lines = new_line :: acc.lines }
                   | _ -> error "[Conll, %sline %d], illegal field one \"%s\"" (sof file) line_num f1
                 with
-                 | Error x -> error "%s" x
-                 | exc -> error "[Conll, %sline %d], unexpected exception \"%s\" in line \"%s\"" (sof file) line_num (Printexc.to_string exc) line
+                | Wrong_id id -> error "[Conll, %sline %d], illegal idenfier \"%s\"" (sof file) line_num id
+                | Error x -> error "%s" x
+                | exc -> error "[Conll, %sline %d], unexpected exception \"%s\" in line \"%s\"" (sof file) line_num (Printexc.to_string exc) line
               end
               | l -> error "[Conll, %sline %d], illegal line, %d fields (10 are expected)\n>>>>%s<<<<" (sof file) line_num (List.length l) line
         ) (empty file) lines in
@@ -289,7 +346,7 @@ module Conll = struct
       | ([],[]) -> ()
       | (line::tail,[]) ->
           bprintf buff "%s\n" (line_to_string line); loop (tail,[])
-      | (line::tail, {first}::_) when line.id < first ->
+      | (line::tail, {first}::_) when (fst line.id) < first ->
           bprintf buff "%s\n" (line_to_string line); loop (tail,multiwords)
       | (_, mw::tail) ->
           bprintf buff "%s\n" (multiword_to_string mw); loop (lines,tail) in
@@ -311,10 +368,10 @@ module Conll = struct
     bprintf buff "  node [shape=Mrecord];\n";
     List.iter
       (fun line ->
-        bprintf buff "  N_%d " line.id;
+        bprintf buff "  N_%s " (dot_of_id line.id);
         node_to_dot_label buff line;
         List.iter (fun (gov, lab) ->
-          bprintf buff "  N_%d -> N_%d [label=\"%s\"];\n" gov line.id lab
+          bprintf buff "  N_%s -> N_%s [label=\"%s\"];\n" (dot_of_id gov) (dot_of_id line.id) lab
         ) line.deps
       ) t.lines;
     bprintf buff "}\n";
@@ -385,7 +442,7 @@ module Conll = struct
           let span =
             try int_of_string string_span
             with Failure _ -> error "[Conll, %s%s], mw_span must be integer" (sof t.file) (get_line_num t) in
-          insert_multiword line.id span fusion acc
+          insert_multiword (fst line.id) span fusion acc
         | _ -> error "[Conll, %s%s], inconsistent mw specification" (sof t.file) (get_line_num t)
       )
       t.multiwords t.lines in
@@ -409,9 +466,9 @@ module Conll = struct
     | ([],[]) -> []
     | ([line],[]) -> [line.form]
     | (line::tail,[]) -> (line.form ^ (final_space line)) :: (loop (tail,[]))
-    | (line::tail, ((mw::_) as multiwords)) when line.id < mw.first -> (line.form ^ (final_space line)) :: (loop (tail,multiwords))
-    | (line::tail, ((mw::_) as multiwords)) when line.id = mw.first -> mw.fusion :: (loop (tail,multiwords))
-    | (line::tail, (mw::mw_tail)) when line.id > mw.last -> (loop (line::tail,mw_tail))
+    | (line::tail, ((mw::_) as multiwords)) when (fst line.id) < mw.first -> (line.form ^ (final_space line)) :: (loop (tail,multiwords))
+    | (line::tail, ((mw::_) as multiwords)) when (fst line.id) = mw.first -> mw.fusion :: (loop (tail,multiwords))
+    | (line::tail, (mw::mw_tail)) when (fst line.id) > mw.last -> (loop (line::tail,mw_tail))
     | (_::tail, multiwords) -> (loop (tail,multiwords))
     | (_, mw::_) ->
       (match mw.mw_line_num with
@@ -425,9 +482,8 @@ module Conll = struct
     let rec loop = function
     | [] -> None
     | line::tail ->
-      Printf.printf ">>>%s<<<\n%!" line;
       match Str.full_split (Str.regexp "# ?\\(sentence-\\)?text ?[:=]?[ \t]?") line with
-      | [Str.Delim d; Str.Text t] -> Printf.printf ">d>%s<d<\n%!" d; Some t
+      | [Str.Delim _; Str.Text t] -> Some t
       | _ -> loop tail in
     loop meta
   (* ---------- retrieving or building full text on a sentence ---------- *)
