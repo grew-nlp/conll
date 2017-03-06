@@ -133,13 +133,23 @@ module Conll = struct
     try Some (List.assoc feat_name t.feats)
     with Not_found -> None
 
+  let add_feat (fn,fv) t = {t with feats = (fn,fv) :: t.feats}
+
   let is_extended (_,lab) = String.length lab > 2 && String.sub lab 0 2 = "E:"
 
   let string_of_ext = function
   | [] -> "_"
   | ext -> String.concat "|" (List.map (fun (g,l) -> sprintf "%s:%s" (string_of_id g) (String.sub l 2 ((String.length l)-2))) ext)
 
+  let check_line line =
+    match (line.id, get_feat "_UD_empty" line) with
+    | ((_,None), None) -> ()
+    | ((_,Some _), Some _) -> ()
+    | ((_,None), Some _) -> error "[line %d], inconsistent emptyness: empty node and non empty identifier" line.line_num;
+    | ((_,Some _), None) -> error "[line %d], inconsistent emptyness: empty identifier and non empty node" line.line_num
+
   let line_to_string l =
+    check_line l;
     let (ext,not_ext) = List.partition is_extended l.deps in
     let (gov_list, lab_list) = List.split not_ext in
     sprintf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"
@@ -189,21 +199,21 @@ module Conll = struct
     (* check consecutive ids *)
     let rec loop = function
     | [] | [_] -> ()
-    | {id=(i1,None)}::({id=(i2,None);line_num}::_) as tail ->
+    | {id=(i1,None)}::({id=(i2,None);line_num}::_ as tail) ->
       if i2 <> i1 + 1
       then Log.fwarning "[Conll, %sline %d], idenfier %d is different from expected %d" (sof t.file) line_num i2 (i1+1);
       loop tail
-    | {id=(i1,Some _)}::({id=(i2,None);line_num}::_) as tail ->
+    | {id=(i1,Some _)}::({id=(i2,None);line_num}::_ as tail) ->
       if i2 <> i1 + 1
       then Log.fwarning "[Conll, %sline %d], idenfier %d is different from expected %d" (sof t.file) line_num i2 (i1+1);
       loop tail
-    | {id=(i1,None)}::({id=(i2,Some e2);line_num}::_) as tail ->
+    | {id=(i1,None)}::({id=(i2,Some e2);line_num}::_ as tail) ->
       if i1 <> i2
       then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.1" (sof t.file) line_num i2 e2 i1
       else if e2 <> 1
       then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.1" (sof t.file) line_num i2 e2 i1;
       loop tail
-    | {id=(i1,Some e1)}::({id=(i2,Some e2);line_num}::_) as tail ->
+    | {id=(i1,Some e1)}::({id=(i2,Some e2);line_num}::_ as tail) ->
       if (i1 <> i2) || (e2 <> e1+1)
       then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.%d" (sof t.file) line_num i2 e2 i1 (e1+1);
       loop tail
@@ -262,6 +272,19 @@ module Conll = struct
         | [_] -> None
         | _ -> error "[Conll], cannot parse extended dependency \"%s\"" sd
       ) sd_list
+
+
+  let add_feat id (fn, fv) t =
+    let new_lines = List.map (fun l -> if l.id = id then add_feat (fn, fv) l else l) t.lines in
+    {t with lines = new_lines}
+
+  let add_mw_feats t =
+    List.fold_left
+      (fun acc {first; last; fusion} ->
+        acc
+        |> (add_feat (first,None) ("_UD_mw_fusion", fusion))
+        |> (add_feat (first,None) ("_UD_mw_span", string_of_int (last-first+1)))
+      ) t t.multiwords
 
   (* parse a list of line corresponding to one conll structure *)
   let parse_rev ?file lines =
@@ -325,7 +348,7 @@ module Conll = struct
               end
               | l -> error "[Conll, %sline %d], illegal line, %d fields (10 are expected)\n>>>>%s<<<<" (sof file) line_num (List.length l) line
         ) (empty file) lines in
-      check conll; conll
+      check conll; add_mw_feats conll
 
   let parse ?file lines = parse_rev ?file (List.rev lines)
 
@@ -436,19 +459,24 @@ module Conll = struct
   let normalize_multiwords t =
     let new_multiwords = List.fold_left
       (fun acc line ->
-        match (get_feat "mw_fusion" line, get_feat "mw_span" line) with
+        match (get_feat "_UD_mw_fusion" line, get_feat "_UD_mw_span" line) with
         | (None, None) -> acc
         | (Some fusion, Some string_span) ->
           let span =
             try int_of_string string_span
-            with Failure _ -> error "[Conll, %s%s], mw_span must be integer" (sof t.file) (get_line_num t) in
+            with Failure _ -> error "[Conll, %s%s], _UD_mw_span must be integer" (sof t.file) (get_line_num t) in
           insert_multiword (fst line.id) span fusion acc
         | _ -> error "[Conll, %s%s], inconsistent mw specification" (sof t.file) (get_line_num t)
       )
       t.multiwords t.lines in
     { t with
       multiwords = new_multiwords;
-      lines = List.map (fun l -> l |> remove_feat "mw_fusion" |> remove_feat "mw_span") t.lines
+      lines = List.map
+        (fun l ->
+          l
+          |> remove_feat "_UD_mw_fusion"
+          |> remove_feat "_UD_mw_span"
+        ) t.lines
     }
   (* ---------- adding multiwords lines from features ---------- *)
 
