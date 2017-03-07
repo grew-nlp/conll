@@ -59,7 +59,7 @@ let _ =
 	(* pat stands for post annot_tool *)
 	| ["pat"; corpus_name; at_file] ->
 		let corpus = Conll_corpus.load corpus_name in
-		let at_list = List.map snd (File.read at_file) in
+    let at_list = CCIO.(with_in at_file read_lines_l) in
 		List.iter (fun at ->
 			match Str.split (Str.regexp "__\\|#\\|\\.svg#") at with
 			| [sentid; pos; lab] ->
@@ -67,7 +67,7 @@ let _ =
 					match Array_.index (fun (id,_) -> id=sentid) corpus with
 					| None -> printf "ERROR: sentid \"%s\" not found in corpus\n" sentid; exit 1
 					| Some (i,(_,conll)) ->
-						let new_conll = Conll.set_label (Conll.id_of_string pos) lab conll in
+						let new_conll = Conll.set_label (Conll.Id.of_string pos) lab conll in
 						corpus.(i) <- (sentid,new_conll)
 				end
 			| _ -> printf "ERROR: cannot parse annot_tool output \"%s\"\n" at; exit 1
@@ -100,7 +100,7 @@ let _ =
 	| ["split"; corpus_name; id_file] ->
 		let basename = Filename.basename corpus_name in
 		let corpus = Conll_corpus.load corpus_name in
-		let id_list = List.map snd (File.read id_file) in
+		let id_list = CCIO.(with_in id_file read_lines_l) in
 		let (c_in, c_out) = split corpus id_list in
 		Conll_corpus.save (basename^"_in.conll") c_in;
 		Conll_corpus.save (basename^"_out.conll") c_out;

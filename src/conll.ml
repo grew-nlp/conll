@@ -230,7 +230,7 @@ module Conll = struct
     | "_" -> []
     | s ->
       let sd_list = Str.split (Str.regexp "|") s in
-      List_.opt_map (
+      CCList.filter_map (
         fun sd -> match Str.bounded_split (Str.regexp ":") sd 2 with
         | [gov;lab] -> Some (Id.of_string gov, "E:"^lab)  (* E: is the prefix for extended relations *)
         | [_] -> None
