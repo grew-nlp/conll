@@ -1,36 +1,26 @@
-module File : sig
-  val read: string -> (int * string) list
-end
-
 module Sentence : sig
   val fr_clean_spaces: string -> string
 end
 
 module Conll : sig
+  module Id: Conll_types.Id_type
 
   exception Error of string
 
-  type id = int * int option (* 8.1 --> (8, Some 1) *)
-
-  val id_of_string: string -> id
-
-  (* give a string version of if usable in graphiz or dep2pict *)
-  val dot_of_id: id -> string
-
   type line = {
     line_num: int;
-    id: id;
+    id: Id.t;
     form: string;
     lemma: string;
     upos: string;
     xpos: string;
     feats: (string * string) list;
-    deps: (id * string ) list;
+    deps: (Id.t * string ) list;
     efs: (string * string) list;
   }
 
   val build_line:
-    id:id ->
+    id:Id.t ->
     form: string ->
     ?lemma: string ->
     ?upos: string ->
@@ -66,7 +56,7 @@ module Conll : sig
   val get_sentid_meta: t -> string option
   val get_sentid: t -> string option
 
-  val set_label: id -> string -> t -> t
+  val set_label: Id.t -> string -> t -> t
 
   val ensure_sentid_in_meta: t -> t
 

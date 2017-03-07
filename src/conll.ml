@@ -2,26 +2,7 @@ open Printf
 open Log
 
 open Utils
-
-(* ======================================================================================================================== *)
-module File = struct
-  let read_rev file =
-    let in_ch = open_in file in
-    let line_num = ref 0 in
-    let res = ref [] in
-    try
-
-      (* if the input file contains an UTF-8 byte order mark (EF BB BF), skip 3 bytes, else get back to 0 *)
-      (match input_byte in_ch with 0xEF -> seek_in in_ch 3 | _ -> seek_in in_ch 0);
-
-      while true do
-        incr line_num;
-        res := (!line_num, input_line in_ch) :: !res
-      done; assert false
-    with End_of_file -> close_in in_ch; !res
-
-  let read file = List.rev (read_rev file)
-end
+open Conll_types
 
 module Sentence = struct
   let fr_clean_spaces with_spaces =
@@ -70,39 +51,22 @@ end
 (* ======================================================================================================================== *)
 module Conll = struct
 
+  module Id = Conll_types.Id
+
   exception Error of string
 
   let error m = Printf.ksprintf (fun msg -> raise (Error msg)) m
 
-  type id = int * int option (* 8.1 --> (8, Some 1) *)
-
-  let string_of_id = function
-    | (i, None) -> sprintf "%d" i
-    | (i, Some j) -> sprintf "%d.%d" i j
-
-  let dot_of_id = function
-    | (i, None) -> sprintf "%d" i
-    | (i, Some j) -> sprintf "%d_%d" i j
-
-  exception Wrong_id of string
-  let id_of_string s =
-    try
-      match Str.split (Str.regexp "\\.") s with
-      | [i] -> (int_of_string i, None)
-      | [i;j] -> (int_of_string i, Some (int_of_string j))
-      | _ -> raise (Wrong_id s)
-    with Failure _ -> raise (Wrong_id s)
-
   (* ------------------------------------------------------------------------ *)
   type line = {
     line_num: int;
-    id: id;
+    id: Id.t;
     form: string;
     lemma: string;
     upos: string;
     xpos: string;
     feats: (string * string) list;
-    deps: (id * string ) list;
+    deps: (Id.t * string ) list;
     efs: (string * string) list;
   }
 
@@ -139,7 +103,7 @@ module Conll = struct
 
   let string_of_ext = function
   | [] -> "_"
-  | ext -> String.concat "|" (List.map (fun (g,l) -> sprintf "%s:%s" (string_of_id g) (String.sub l 2 ((String.length l)-2))) ext)
+  | ext -> String.concat "|" (List.map (fun (g,l) -> sprintf "%s:%s" (Id.to_string g) (String.sub l 2 ((String.length l)-2))) ext)
 
   let check_line line =
     match (line.id, get_feat "_UD_empty" line) with
@@ -153,13 +117,13 @@ module Conll = struct
     let (ext,not_ext) = List.partition is_extended l.deps in
     let (gov_list, lab_list) = List.split not_ext in
     sprintf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"
-      (string_of_id l.id)
+      (Id.to_string l.id)
       l.form
       l.lemma
       l.upos
       l.xpos
       (fs_to_string l.feats)
-      (match gov_list with [] -> "_" | l -> List_.to_string string_of_id "|" l)
+      (match gov_list with [] -> "_" | l -> List_.to_string Id.to_string "|" l)
       (match lab_list with [] -> "_" | l -> String.concat "|" l)
       (string_of_ext ext)
       (fs_to_string l.efs)
@@ -226,9 +190,9 @@ module Conll = struct
       List.iter (
         fun (i,_) ->
           if (fst i)>0 && not (List.mem i id_list)
-          then error "[Conll, %sline %d], cannot find gov identifier %s" (sof t.file) line_num (string_of_id i);
+          then error "[Conll, %sline %d], cannot find gov identifier %s" (sof t.file) line_num (Id.to_string i);
           if id = i
-          then error "[Conll, %sline %d], loop in dependency %s" (sof t.file) line_num (string_of_id i);
+          then error "[Conll, %sline %d], loop in dependency %s" (sof t.file) line_num (Id.to_string i);
       ) deps
     ) t.lines
 
@@ -268,7 +232,7 @@ module Conll = struct
       let sd_list = Str.split (Str.regexp "|") s in
       List_.opt_map (
         fun sd -> match Str.bounded_split (Str.regexp ":") sd 2 with
-        | [gov;lab] -> Some (id_of_string gov, "E:"^lab)  (* E: is the prefix for extended relations *)
+        | [gov;lab] -> Some (Id.of_string gov, "E:"^lab)  (* E: is the prefix for extended relations *)
         | [_] -> None
         | _ -> error "[Conll], cannot parse extended dependency \"%s\"" sd
       ) sd_list
@@ -309,7 +273,7 @@ module Conll = struct
                       } :: acc.multiwords
                     }
                   | [string_id] ->
-                    let gov_list = if govs = "_" then [] else List.map id_of_string (Str.split (Str.regexp "|") govs)
+                    let gov_list = if govs = "_" then [] else List.map Id.of_string (Str.split (Str.regexp "|") govs)
                     and lab_list = if dep_labs = "_" then [] else Str.split (Str.regexp "|") dep_labs in
 
                     let prim_deps = match (gov_list, lab_list) with
@@ -323,7 +287,7 @@ module Conll = struct
                     | _ -> prim_deps @ (parse_extended_deps c9) in
 
                     let new_line =
-                      let id = id_of_string (string_id) in
+                      let id = Id.of_string (string_id) in
                       let feats =
                         match id with
                         | (_,None) -> parse_feats ~file line_num feats
@@ -342,7 +306,7 @@ module Conll = struct
                     {acc with lines = new_line :: acc.lines }
                   | _ -> error "[Conll, %sline %d], illegal field one \"%s\"" (sof file) line_num f1
                 with
-                | Wrong_id id -> error "[Conll, %sline %d], illegal idenfier \"%s\"" (sof file) line_num id
+                | Id.Wrong_id id -> error "[Conll, %sline %d], illegal idenfier \"%s\"" (sof file) line_num id
                 | Error x -> error "%s" x
                 | exc -> error "[Conll, %sline %d], unexpected exception \"%s\" in line \"%s\"" (sof file) line_num (Printexc.to_string exc) line
               end
@@ -391,10 +355,10 @@ module Conll = struct
     bprintf buff "  node [shape=Mrecord];\n";
     List.iter
       (fun line ->
-        bprintf buff "  N_%s " (dot_of_id line.id);
+        bprintf buff "  N_%s " (Id.to_dot line.id);
         node_to_dot_label buff line;
         List.iter (fun (gov, lab) ->
-          bprintf buff "  N_%s -> N_%s [label=\"%s\"];\n" (dot_of_id gov) (dot_of_id line.id) lab
+          bprintf buff "  N_%s -> N_%s [label=\"%s\"];\n" (Id.to_dot gov) (Id.to_dot line.id) lab
         ) line.deps
       ) t.lines;
     bprintf buff "}\n";
