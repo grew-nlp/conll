@@ -1,13 +1,6 @@
 open Printf
 open Conll
 
-module Array_ = struct
-  exception Found of int
-  let index fct a =
-    try Array.iteri (fun i elt -> if (fct elt) then raise (Found i)) a; None
-    with Found i -> Some (i,a.(i))
-end
-
 let rec list_extract n = function
 	| [] -> failwith "list_extract"
 	| h::t when n=0 -> (h,t)
@@ -42,6 +35,13 @@ let split corpus id_list =
 		) (Array.to_list corpus) in
 	(Array.of_list i, Array.of_list o)
 
+let sub corpus id_list =
+  let sub_list = CCList.filter_map
+    (fun id ->
+      CCArray.find (fun (i,c) -> if i=id then Some (i,c) else None) corpus
+    ) id_list in
+  Array.of_list sub_list
+
 let print_usage () =
 	List.iter (fun x -> printf "%s\n" x)
 	[
@@ -64,7 +64,7 @@ let _ =
 			match Str.split (Str.regexp "__\\|#\\|\\.svg#") at with
 			| [sentid; pos; lab] ->
 				begin
-					match Array_.index (fun (id,_) -> id=sentid) corpus with
+					match CCArray.find_idx (fun (id,_) -> id=sentid) corpus with
 					| None -> printf "ERROR: sentid \"%s\" not found in corpus\n" sentid; exit 1
 					| Some (i,(_,conll)) ->
 						let new_conll = Conll.set_label (Conll.Id.of_string pos) lab conll in
@@ -109,7 +109,12 @@ let _ =
 			(Conll_corpus.token_size c_in)
 			(Array.length c_out)
 			(Conll_corpus.token_size c_out)
-	| "split"::_ -> printf "ERROR: sub-command \"split\" expects two arguments\n"; print_usage ()
+	| ["split"; corpus_name; id_file; corpus_in] ->
+		let corpus = Conll_corpus.load corpus_name in
+		let id_list = CCIO.(with_in id_file read_lines_l) in
+		let c_in = sub corpus id_list in
+		Conll_corpus.save (corpus_in) c_in
+	| "split"::_ -> printf "ERROR: sub-command \"split\" expects two or three arguments\n"; print_usage ()
 
 	| ["fusion"; corpus_name] ->
 		let corpus = Conll_corpus.load corpus_name in
