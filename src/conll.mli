@@ -77,3 +77,11 @@ module Conll_corpus : sig
   val dump: t -> unit
   val token_size: t -> int
 end
+
+module Stat : sig
+  type t
+
+  val build: Conll_corpus.t -> t
+
+  val dump: t -> unit
+end

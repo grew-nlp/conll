@@ -148,6 +148,12 @@ let _ =
 		Conll.dump (snd corpus.(0))
 	| "dump"::_ -> printf "ERROR: sub-command \"dump\" expects one argument\n"; print_usage ()
 
+	| ["stat"; corpus_name] ->
+		let corpus = Conll_corpus.load corpus_name in
+		Stat.dump (Stat.build corpus)
+	| "stat"::_ -> printf "ERROR: sub-command \"stat\" expects one argument\n"; print_usage ()
+
+
 	| [] -> print_usage ()
 	| x :: _ ->
 		printf "ERROR: unknown sub-command \"%s\"\n" x; print_usage ()
