@@ -46,11 +46,27 @@ let print_usage () =
 	List.iter (fun x -> printf "%s\n" x)
 	[
 	"Usage: conll_tool.native <subcommand> <args>";
-	"subcommand are:";
-	" * sentences <file>       dump on stdout the list of \"id#sentence\"";
-	" * sentid <file>          dump the input corpus with #sentid moved into metadata when necessary";
-	" * random <file> <num>    split input <file> corpus into a randomly selected subset on sentence large enough to have at least <num> tokens";
-	"                          output is stored in two files with extension _sub.conll (the extracted part) and _rem.conll (the remaining sentences)";
+	"subcommands are:";
+	" * normalize <input_corpus_file> <output_corpus_file>";
+	"      dump the input corpus in a normalized way (sorting of features, …)";
+	" * sentences <corpus_file>";
+	"      dump on stdout the list of \"id#sentence\" contained in the <corpus_file>";
+	" * sentid <corpus_file>";
+	"      dump the input <corpus_file> with #sentid moved from features into metadata when necessary";
+	" * random <corpus_file> <num>";
+	"      split input <corpus_file> into a randomly selected subset on sentence large enough to have at least <num> tokens";
+	"      output is stored in two files with extension _sub.conll (the extracted part) and _rem.conll (the remaining sentences)";
+  " * split <corpus_file> <id_file>";
+	"      split input <corpus_file> two files with extension _in.conll (the sentid belongs to <id_file>) and _out.conll (the remaining sentences)";
+	" * fusion <corpus_file>";
+	"      dump the input <corpus_file> with new lines for fusion words (data taken from _UD_mw_span and _UD_mw_fusion special features)";
+  " * web_anno <corpus_file#basename>";
+	"      split <corpus_file> into several set of 10 sentences for inclusion in web_anno. Output files are nammed basename_xx.conll";
+  " * stat <corpus_file>";
+	"      output the list of triple (xpos_gov, label, xpos_dep) with the number of occurences. Output is a list of lines like this one:";
+	"      PRON -[obl]-> NOUN ==> 10";
+	" * pat <corpus_file> <patch_file>";
+	"      apply a patch file produced by annot_tool (pat stands for Post Annot_Toll)"
 	]
 
 let _ =
@@ -142,6 +158,7 @@ let _ =
   | ["normalize"; corpus_in; corpus_out] ->
     let corpus = Conll_corpus.load corpus_in in
     Conll_corpus.save corpus_out corpus
+	| "normalize"::_ -> printf "ERROR: sub-command \"normalize\" expects two arguments\n"; print_usage ()
 
 	| ["dump"; corpus_name] ->
 		let corpus = Conll_corpus.load corpus_name in
@@ -152,6 +169,16 @@ let _ =
 		let corpus = Conll_corpus.load corpus_name in
 		Stat.dump (Stat.build corpus)
 	| "stat"::_ -> printf "ERROR: sub-command \"stat\" expects one argument\n"; print_usage ()
+
+
+  | ["web_anno"; data] ->
+	  (match Str.split (Str.regexp "#") data with
+		| [corpus_name; base_output] ->
+			let corpus = Conll_corpus.load corpus_name in
+			Conll_corpus.web_anno corpus base_output 10
+		| _ -> printf "ERROR: sub-command \"web_anno\" expext corpus#basename\n"; print_usage ()
+		)
+	| "web_anno"::_ -> printf "ERROR: sub-command \"web_anno\" expects one argument\n"; print_usage ()
 
 
 	| [] -> print_usage ()

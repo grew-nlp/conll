@@ -286,6 +286,7 @@ module Conll = struct
         |> (add_feat_id (first,None) ("_UD_mw_span", string_of_int (last-first+1)))
       ) t t.multiwords
 
+  exception Empty_conll
   (* parse a list of line corresponding to one conll structure *)
   let parse_rev ?file lines =
     let conll =
@@ -348,6 +349,7 @@ module Conll = struct
               end
               | l -> error "[Conll, %sline %d], illegal line, %d fields (10 are expected)\n>>>>%s<<<<" (sof file) line_num (List.length l) line
         ) (empty file) lines in
+      if List.length conll.lines = 0 then raise Empty_conll;
       check conll; add_mw_feats conll
 
   let parse ?file lines = parse_rev ?file (List.rev lines)
@@ -517,6 +519,27 @@ module Conll = struct
       | _ -> loop tail in
     loop meta
   (* ---------- retrieving or building full text on a sentence ---------- *)
+
+  let web_anno t =
+    let buff = Buffer.create 32 in
+    List.iter
+      (fun line ->
+        match line.deps with
+        | [] ->
+          let xpos = match line.xpos with "PONCT" -> "_" | x -> x in
+          bprintf buff "%s\t%s\t_\t%s\t%s\t_\t_\t_\t_\t_\n" (Id.to_string line.id) line.form xpos xpos
+        | [(gov_id,"ponct")] ->
+          bprintf buff "%s\t%s\t_\t_\t_\t_\t_\t_\t_\t_\n" (Id.to_string line.id) line.form
+        | [(gov_id,label)] ->
+          bprintf buff "%s\t%s\t_\t%s\t%s\t_\t%s\t%s\t_\t_\n"
+          (Id.to_string line.id)
+          line.form
+          line.xpos line.xpos
+          (Id.to_string gov_id) label
+        | _ -> error "[Conll.web_anno, line %d] multiple deps not handled" line.line_num
+      ) t.lines;
+    Buffer.contents buff
+
 end (* module Conll *)
 
 
@@ -536,11 +559,13 @@ module Conll_corpus = struct
 
     let rev_locals = ref [] in
     let save_one () =
-      incr cpt;
-      let conll = Conll.parse_rev ~file !rev_locals in
-      let base = Filename.basename file in
-      let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
-      res := (sentid,conll) :: !res;
+      (try
+        let conll = Conll.parse_rev ~file !rev_locals in
+        incr cpt;
+        let base = Filename.basename file in
+        let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
+        res := (sentid,conll) :: !res
+      with Conll.Empty_conll -> ());
       rev_locals := [] in
 
     let _ =
@@ -574,6 +599,25 @@ module Conll_corpus = struct
 
   let token_size t =
     Array.fold_left (fun acc (_,conll) -> acc + (Conll.token_size conll)) 0 t
+
+  let web_anno corpus base_output size =
+    let out_ch = ref None in
+    let close () = match !out_ch with Some oc -> close_out oc; out_ch := None | _ -> () in
+
+    Array.iteri
+      (fun i (_,conll) ->
+        if i mod size = 0
+        then
+          begin
+          close ();
+          out_ch := Some (open_out (sprintf "%s_%02d.conll" base_output (i/size+1)))
+          end;
+        match !out_ch with
+        | None -> failwith "BUG web_anno"
+        | Some oc -> fprintf oc "%s\n" (Conll.web_anno conll)
+      ) corpus;
+    close ()
+
 end
 
 module Stat = struct

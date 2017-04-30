@@ -76,6 +76,11 @@ module Conll_corpus : sig
   val save: string -> t -> unit
   val dump: t -> unit
   val token_size: t -> int
+
+  (* [web_anno corpus base_output size]
+    outputs a sequences of files of [size] sentences,
+    prepared for input in webanno  *)
+  val web_anno: t -> string -> int -> unit
 end
 
 module Stat : sig
