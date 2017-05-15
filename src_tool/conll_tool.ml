@@ -165,11 +165,21 @@ let _ =
 		Conll.dump (snd corpus.(0))
 	| "dump"::_ -> printf "ERROR: sub-command \"dump\" expects one argument\n"; print_usage ()
 
-	| ["stat"; corpus_name] ->
+	| ["ustat"; corpus_name] ->
 		let corpus = Conll_corpus.load corpus_name in
-		Stat.dump (Stat.build corpus)
-	| "stat"::_ -> printf "ERROR: sub-command \"stat\" expects one argument\n"; print_usage ()
+		let stat = Stat.build Stat.Upos corpus in
+		Stat.dump stat;
+		let html = Stat.to_html stat in
+		CCIO.with_out "ustat.html" (fun oc -> CCIO.write_line oc html)
+	| "ustat"::_ -> printf "ERROR: sub-command \"ustat\" expects one argument\n"; print_usage ()
 
+	| ["xstat"; corpus_name] ->
+		let corpus = Conll_corpus.load corpus_name in
+		let stat = Stat.build Stat.Xpos corpus in
+		Stat.dump stat;
+		let html = Stat.to_html stat in
+		CCIO.with_out "xstat.html" (fun oc -> CCIO.write_line oc html)
+	| "xstat"::_ -> printf "ERROR: sub-command \"xstat\" expects one argument\n"; print_usage ()
 
   | ["web_anno"; data] ->
 	  (match Str.split (Str.regexp "#") data with

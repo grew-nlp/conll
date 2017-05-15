@@ -622,8 +622,19 @@ end
 
 module Stat = struct
   module String_map = Map.Make (String)
+  module String_set = Set.Make (String)
 
-  type t = ((int String_map.t) String_map.t) String_map.t
+  type key = Upos | Xpos
+
+  type t = {
+    map: ((int String_map.t) String_map.t) String_map.t;   (* keys are label --> gov --> dep *)
+    labels: String_set.t;
+    tags: String_set.t;
+    key: key;
+  }
+
+  let empty = { map=String_map.empty; labels=String_set.empty; tags=String_set.empty; key=Upos }
+
 
   let add3 dep stat3 =
     let old = try String_map.find dep stat3 with Not_found -> 0 in
@@ -637,27 +648,33 @@ module Stat = struct
     let old = try String_map.find label stat with Not_found -> String_map.empty in
     String_map.add label (add2 gov dep old) stat
 
-  let add_conll conll stat =
+  let add_conll key conll stat =
     let lines = conll.Conll.lines in
     List.fold_left
       (fun acc line ->
-        let dep_upos = line.Conll.upos in
+        let dep_pos = match key with Upos -> line.Conll.upos | Xpos -> line.Conll.xpos in
+        let acc2 = {acc with tags = String_set.add dep_pos acc.tags} in
         List.fold_left
-          (fun acc2 (gov_id, label) ->
+          (fun acc3 (gov_id, label) ->
             match gov_id with
-              | (0, None) -> acc2
+              | (0, None) -> acc3
               | _ ->
               let gov = List.find (fun line -> line.Conll.id = gov_id) lines in
-              let gov_upos = gov.Conll.upos in
-              add label gov_upos dep_upos acc2
-          ) acc line.Conll.deps
+              let gov_pos = match key with Upos -> gov.Conll.upos | Xpos -> gov.Conll.xpos in
+              {
+                map = add label gov_pos dep_pos acc3.map;
+                labels = String_set.add label acc3.labels;
+                tags = String_set.add dep_pos acc3.tags;
+                key
+              }
+          ) acc2 line.Conll.deps
       ) stat lines
 
-  let build corpus =
+  let build key corpus =
     Array.fold_left
       (fun acc (_,conll) ->
-        add_conll conll acc
-      ) String_map.empty corpus
+        add_conll key conll acc
+      ) empty corpus
 
   let dump stat =
     String_map.iter
@@ -669,5 +686,70 @@ module Stat = struct
                 Printf.printf "%s -[%s]-> %s ==> %d\n" gov label dep value
               ) map3
           ) map2
-      ) stat
+      ) stat.map
+
+  let get stat gov label dep =
+    try Some (stat.map
+    |> (String_map.find label)
+    |> (String_map.find gov)
+    |> (String_map.find dep))
+    with Not_found -> None
+
+  let table buff stat label =
+    bprintf buff "    <table>\n";
+    bprintf buff "      <thead>\n";
+    bprintf buff "        <tr>\n";
+    bprintf buff "          <th/>\n";
+    String_set.iter (fun tag -> bprintf buff "            <th>%s</th>\n" tag) stat.tags;
+    bprintf buff "        </tr>\n";
+    bprintf buff "      </thead>\n";
+    bprintf buff "      <tbody>\n";
+    String_set.iter (fun gov ->
+      bprintf buff "        <tr>\n";
+      bprintf buff "          <th>%s</th>\n" gov;
+        String_set.iter (fun dep ->
+
+          bprintf buff "          <td>%s</td>\n"
+          (match get stat gov label dep with
+            | Some i -> sprintf
+            "                <button class=\"btn btn-primary\" onclick='javascript:%s(\"%s\",\"%s\",\"%s\")'>%d</button>\n"
+            (match stat.key with Upos -> "u_explore" | Xpos -> "x_explore") gov label dep i
+            | None -> "")
+        ) stat.tags;
+      bprintf buff "        </tr>\n";
+    ) stat.tags;
+    bprintf buff "      </tbody>\n";
+    bprintf buff "    </table>\n";
+    ()
+
+  let escape_dot s = Str.global_replace (Str.regexp "\\.") "__" s
+
+  let to_html stat =
+    let buff = Buffer.create 32 in
+    bprintf buff "<div class=\"navbar\" id=\"right-navbar\">\n";
+    bprintf buff "  <div class=\"navbar-inner\">\n";
+    bprintf buff "    <ul class=\"nav nav-pills\">\n";
+    String_set.iter
+      (fun label ->
+        bprintf buff
+        "      <li><a class=\"explore-label\" href=\"#%s\" data-toggle=\"tab\">%s</a></li>\n"
+        (escape_dot label) label
+      ) stat.labels;
+    bprintf buff "    </ul>\n";
+    bprintf buff "  </div>\n";
+    bprintf buff "</div>\n";
+
+    bprintf buff "<div class=\"tab-content\">\n";
+    String_set.iter
+      (fun label ->
+        bprintf buff "  <div class=\"tab-pane\" id=\"%s\">\n" (escape_dot label);
+        table buff stat label;
+        bprintf buff "  </div>\n";
+      ) stat.labels;
+    bprintf buff "</div>\n";
+
+    Buffer.contents buff
+
+
+
 end

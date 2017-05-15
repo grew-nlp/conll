@@ -86,7 +86,11 @@ end
 module Stat : sig
   type t
 
-  val build: Conll_corpus.t -> t
+  type key = Upos | Xpos
+
+  val build: key -> Conll_corpus.t -> t
 
   val dump: t -> unit
+
+  val to_html: t -> string
 end
