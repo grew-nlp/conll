@@ -1,8 +1,18 @@
 open Printf
 
-exception Error of string
+exception Error of Yojson.Basic.json
 
-let error m = Printf.ksprintf (fun msg -> raise (Error msg)) m
+let error ?file ?line ?fct ?data msg =
+  let opt_list = [
+    Some ("library", `String "Conll");
+    Some ("message", `String msg);
+    (CCOpt.map (fun x -> ("file", `String x)) file);
+    (CCOpt.map (fun x -> ("line", `Int x)) line);
+    (CCOpt.map (fun x -> ("function", `String x)) fct);
+    (CCOpt.map (fun x -> ("data", `String x)) data);
+  ] in
+  let json = `Assoc (CCList.filter_map (fun x->x) opt_list) in
+  raise (Error json)
 
 (* ======================================================================================================================== *)
 module type Id_type = sig
@@ -56,7 +66,7 @@ module Id = struct
     | ((_,None), (_,Some _)) -> -1
     | ((_,Some _), (_,None)) -> 1
     | ((_,Some sub_i1), (_,Some sub_i2)) -> Pervasives.compare sub_i1 sub_i2
-    | ((id,None), (_,None)) -> error "[Conll], twice the same indentifier \"%d\"" id
+    | ((id,None), (_,None)) -> error (sprintf "twice the same indentifier \"%d\"" id)
 
   let min id1 id2 = if compare id1 id2 < 0 then id1 else id2
   let max id1 id2 = if compare id1 id2 < 0 then id2 else id1

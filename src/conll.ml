@@ -80,7 +80,8 @@ module Conll = struct
     | ((_,None), (_,Some _)) -> -1
     | ((_,Some _), (_,None)) -> 1
     | ((_,Some sub_id1), (_,Some sub_id2)) -> Pervasives.compare sub_id1 sub_id2
-    | ((id,None), (_,None)) -> error "[Conll, lines %d and %d], twice the same indentifier \"%d\"" l1.line_num l2.line_num id
+    | ((id,None), (_,None)) ->
+      error ~line:l2.line_num ~fct:"Conll.compare" (sprintf "identifier \"%d\" already used " id)
 
   let fs_to_string = function
     | [] -> "_"
@@ -119,8 +120,8 @@ module Conll = struct
     match (line.id, get_feat "_UD_empty" line) with
     | ((_,None), None) -> ()
     | ((_,Some _), Some _) -> ()
-    | ((_,None), Some _) -> error "[line %d], inconsistent emptyness: empty node and non empty identifier" line.line_num;
-    | ((_,Some _), None) -> error "[line %d], inconsistent emptyness: empty identifier and non empty node" line.line_num
+    | ((_,None), Some _) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty node and non empty identifier";
+    | ((_,Some _), None) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty identifier and non empty node"
 
   let line_to_string l =
     check_line l;
@@ -193,8 +194,8 @@ module Conll = struct
 
   let get_line_num t =
     match t.lines with
-    | [] -> ""
-    | first :: _ -> sprintf "Line %d, " first.line_num
+    | [] -> error "empty"
+    | first :: _ -> first.line_num
 
   let check t =
     (* check consecutive ids *)
@@ -227,9 +228,9 @@ module Conll = struct
       List.iter (
         fun (i,_) ->
           if (fst i)>0 && not (List.mem i id_list)
-          then error "[Conll, %sline %d], cannot find gov identifier %s" (sof t.file) line_num (Id.to_string i);
+          then error ?file:t.file ~line:line_num (sprintf "cannot find gov identifier %s" (Id.to_string i));
           if id = i
-          then error "[Conll, %sline %d], loop in dependency %s" (sof t.file) line_num (Id.to_string i);
+          then error ?file:t.file ~line:line_num (sprintf "loop in dependency %s" (Id.to_string i));
       ) deps
     ) t.lines
 
@@ -271,7 +272,7 @@ module Conll = struct
         fun sd -> match Str.bounded_split (Str.regexp ":") sd 2 with
         | [gov;lab] -> Some (Id.of_string gov, "E:"^lab)  (* E: is the prefix for extended relations *)
         | [_] -> None
-        | _ -> error "[Conll], cannot parse extended dependency \"%s\"" sd
+        | _ -> error (sprintf "cannot parse extended dependency \"%s\"" sd)
       ) sd_list
 
   let add_feat_id id (fn, fv) t =
@@ -317,7 +318,7 @@ module Conll = struct
                       | ([(0,None)], []) -> [] (* handle Talismane output on tokens without gov *)
                       | _ ->
                         try List.combine gov_list lab_list
-                        with Invalid_argument _ -> error "[Conll, %sline %d], inconsistent relation specification" (sof file) line_num in
+                        with Invalid_argument _ -> error ?file ~line:line_num "inconsistent relation specification" in
 
                     let deps = match c9 with
                     | "_" -> prim_deps
@@ -341,13 +342,13 @@ module Conll = struct
                       efs= parse_feats ~file line_num c10;
                       } in
                     {acc with lines = new_line :: acc.lines }
-                  | _ -> error "[Conll, %sline %d], illegal field one \"%s\"" (sof file) line_num f1
+                  | _ -> error ?file ~line:line_num (sprintf "illegal field one \"%s\"" f1)
                 with
-                | Id.Wrong_id id -> error "[Conll, %sline %d], illegal idenfier \"%s\"" (sof file) line_num id
-                | Error x -> error "%s" x
-                | exc -> error "[Conll, %sline %d], unexpected exception \"%s\" in line \"%s\"" (sof file) line_num (Printexc.to_string exc) line
+                | Id.Wrong_id id -> error ?file ~line:line_num (sprintf "illegal idenfier \"%s\"" id)
+                | Error json -> raise (Error json)
+                | exc -> error ?file ~line:line_num ~data:line (sprintf "unexpected exception \"%s\"" (Printexc.to_string exc))
               end
-              | l -> error "[Conll, %sline %d], illegal line, %d fields (10 are expected)\n>>>>%s<<<<" (sof file) line_num (List.length l) line
+              | l -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10 are expected)" (List.length l))
         ) (empty file) lines in
       if List.length conll.lines = 0 then raise Empty_conll;
       check conll; add_mw_feats conll
@@ -433,14 +434,14 @@ module Conll = struct
       Log.fwarning "[Conll, %ssentid %s], sentid declared both in meta and feats" (sof t.file) idm;
       Some idm
     | (Some idm, Some idf) ->
-      error "[Conll, %s], unconsistent sentid (\"%s\" in meta VS \"%s\" in feats)" (sof t.file) idm idf
+      error ?file:t.file (sprintf "unconsistent sentid (\"%s\" in meta VS \"%s\" in feats)" idm idf)
 
   let remove_sentid_feats = function
     | [] -> []
     | head::tail -> (head |> remove_feat "sentid" |> remove_feat "sent_id") :: tail
   let ensure_sentid_in_meta t =
     match (get_sentid_meta t, get_sentid_feats t) with
-    | (None, None) -> error "[Conll, %s%s], no sentid" (sof t.file) (get_line_num t)
+    | (None, None) -> error ?file:t.file ~line:(get_line_num t) "no sentid"
     | (Some id, _) -> t
     | (None, Some id) ->
       { t with
@@ -468,9 +469,9 @@ module Conll = struct
         | (Some fusion, Some string_span) ->
           let span =
             try int_of_string string_span
-            with Failure _ -> error "[Conll, %s%s], _UD_mw_span must be integer" (sof t.file) (get_line_num t) in
+            with Failure _ -> error ?file:t.file ~line:(get_line_num t) "[Conll, %s%s], _UD_mw_span must be integer" in
           insert_multiword (fst line.id) span fusion acc
-        | _ -> error "[Conll, %s%s], inconsistent mw specification" (sof t.file) (get_line_num t)
+        | _ -> error ?file:t.file ~line:(get_line_num t) "[Conll, %s%s], inconsistent mw specification"
       )
       t.multiwords t.lines in
     { t with
@@ -502,11 +503,7 @@ module Conll = struct
     | (line::tail, ((mw::_) as multiwords)) when (fst line.id) = mw.first -> mw.fusion :: (loop (tail,multiwords))
     | (line::tail, (mw::mw_tail)) when (fst line.id) > mw.last -> (loop (line::tail,mw_tail))
     | (_::tail, multiwords) -> (loop (tail,multiwords))
-    | (_, mw::_) ->
-      (match mw.mw_line_num with
-       | Some l -> error "[Conll, %sline %d] Inconsistent multiwords" (sof t.file) l
-       | None -> error "[Conll, %s] Inconsistent multiwords" (sof t.file)
-      ) in
+    | (_, mw::_) -> error ?file:t.file ?line:mw.mw_line_num "Inconsistent multiwords" in
     let form_list = loop (t.lines, t.multiwords) in
     concat_words form_list
 
@@ -536,7 +533,7 @@ module Conll = struct
           line.form
           line.xpos line.xpos
           (Id.to_string gov_id) label
-        | _ -> error "[Conll.web_anno, line %d] multiple deps not handled" line.line_num
+        | _ -> error ~line:line.line_num "multiple deps not handled"
       ) t.lines;
     Buffer.contents buff
 
