@@ -96,7 +96,13 @@ module Conll = struct
     try Some (List.assoc feat_name t.feats)
     with Not_found -> None
 
-  let add_feat (fn,fv) t = {t with feats = (fn,fv) :: t.feats}
+  let add_feat (fn,fv) t =
+    let rec loop feats = match feats with
+    | [] -> [(fn,fv)]
+    | (hfn, _) :: tail when fn < hfn -> (fn,fv) :: feats
+    | (hfn, hfv) :: tail when fn > hfn -> (hfn, hfv) :: (loop tail)
+    | _ :: tail -> (fn,fv) :: tail
+    in { t with feats = loop t.feats }
 
   let is_extended (_,lab) = String.length lab > 2 && String.sub lab 0 2 = "E:"
 
@@ -135,6 +141,8 @@ module Conll = struct
     fusion: string;
     mw_efs: (string * string) list;
 }
+
+  let mw_equals t1 t2 = t1.first = t2.first && t1.last = t2.last && t1.fusion = t2.fusion
 
   let multiword_to_string l =
     sprintf "%d-%d\t%s\t_\t_\t_\t_\t_\t_\t_\t%s" l.first l.last l.fusion (fs_to_string l.mw_efs)
@@ -228,14 +236,15 @@ module Conll = struct
   let parse_feats ~file line_num = function
     | "_" -> []
     | feats ->
-      List.map
-        (fun feat ->
-          match Str.split (Str.regexp "=") feat with
-            | [feat_name] -> (encode_feat_name feat_name, "true")
-            | [feat_name; feat_value] -> (encode_feat_name feat_name, feat_value)
-            | _ -> error "[Conll, %sline %d], cannot parse feats \"%s\"" (sof file) line_num feats
-        ) (Str.split (Str.regexp "|") feats)
-
+      List.sort (fun (fn1,_) (fn2,_) -> Pervasives.compare fn1 fn2) (
+        List.map
+          (fun feat ->
+            match Str.split (Str.regexp "=") feat with
+              | [feat_name] -> (encode_feat_name feat_name, "true")
+              | [feat_name; feat_value] -> (encode_feat_name feat_name, feat_value)
+              | _ -> error "[Conll, %sline %d], cannot parse feats \"%s\"" (sof file) line_num feats
+          ) (Str.split (Str.regexp "|") feats)
+      )
   let underscore s = if s = "" then "_" else s
 
   let set_label id new_label t =
@@ -437,9 +446,11 @@ module Conll = struct
 
   (* ========== adding multiwords lines from features ========== *)
   let insert_multiword id span fusion multiwords =
+    let item = { mw_line_num=None; first=id; last= id+span-1; fusion; mw_efs=[] } in
     let rec loop = function
-      | [] -> [{ mw_line_num=None; first=id; last= id+span-1; fusion; mw_efs=[] }]
-      | h::t when id < h.first -> { mw_line_num=None; first=id; last= id+span-1; fusion; mw_efs=[] } :: t
+      | [] -> [item]
+      | h::t when mw_equals h item -> h::t
+      | h::t when id < h.first -> item :: t
       | h::t -> h::(loop t) in
     loop multiwords
 
