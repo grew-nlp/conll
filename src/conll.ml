@@ -96,13 +96,18 @@ module Conll = struct
     try Some (List.assoc feat_name t.feats)
     with Not_found -> None
 
-  let add_feat (fn,fv) t =
+  let add_feat line_num (fn,fv) feats =
     let rec loop feats = match feats with
     | [] -> [(fn,fv)]
     | (hfn, _) :: tail when fn < hfn -> (fn,fv) :: feats
     | (hfn, hfv) :: tail when fn > hfn -> (hfn, hfv) :: (loop tail)
-    | _ :: tail -> (fn,fv) :: tail
-    in { t with feats = loop t.feats }
+    | (_, hfv) :: tail when hfv = fv ->
+      Log.fwarning "[line %d], feature %s=%s is defined twice" line_num fn fv;
+      (fn,fv) :: tail
+    | (_, hfv) :: _ -> error "[line %d], inconsistent features: %s id defined twice with two different values" line_num fn in
+    loop feats
+
+  let add_feat_line (fn,fv) line = { line with feats = add_feat line.line_num (fn,fv) line.feats }
 
   let is_extended (_,lab) = String.length lab > 2 && String.sub lab 0 2 = "E:"
 
@@ -236,15 +241,14 @@ module Conll = struct
   let parse_feats ~file line_num = function
     | "_" -> []
     | feats ->
-      List.sort (fun (fn1,_) (fn2,_) -> Pervasives.compare fn1 fn2) (
-        List.map
-          (fun feat ->
-            match Str.split (Str.regexp "=") feat with
-              | [feat_name] -> (encode_feat_name feat_name, "true")
-              | [feat_name; feat_value] -> (encode_feat_name feat_name, feat_value)
-              | _ -> error "[Conll, %sline %d], cannot parse feats \"%s\"" (sof file) line_num feats
-          ) (Str.split (Str.regexp "|") feats)
-      )
+      List.fold_left
+        (fun acc feat ->
+          match Str.split (Str.regexp "=") feat with
+            | [feat_name] -> add_feat line_num (encode_feat_name feat_name, "true") acc
+            | [feat_name; feat_value] -> add_feat line_num (encode_feat_name feat_name, feat_value) acc
+            | _ -> error "[Conll, %sline %d], cannot parse feats \"%s\"" (sof file) line_num feats
+        ) [] (Str.split (Str.regexp "|") feats)
+
   let underscore s = if s = "" then "_" else s
 
   let set_label id new_label t =
@@ -270,16 +274,16 @@ module Conll = struct
         | _ -> error "[Conll], cannot parse extended dependency \"%s\"" sd
       ) sd_list
 
-  let add_feat id (fn, fv) t =
-    let new_lines = List.map (fun l -> if l.id = id then add_feat (fn, fv) l else l) t.lines in
+  let add_feat_id id (fn, fv) t =
+    let new_lines = List.map (fun l -> if l.id = id then add_feat_line (fn, fv) l else l) t.lines in
     {t with lines = new_lines}
 
   let add_mw_feats t =
     List.fold_left
       (fun acc {first; last; fusion} ->
         acc
-        |> (add_feat (first,None) ("_UD_mw_fusion", fusion))
-        |> (add_feat (first,None) ("_UD_mw_span", string_of_int (last-first+1)))
+        |> (add_feat_id (first,None) ("_UD_mw_fusion", fusion))
+        |> (add_feat_id (first,None) ("_UD_mw_span", string_of_int (last-first+1)))
       ) t t.multiwords
 
   (* parse a list of line corresponding to one conll structure *)
