@@ -105,7 +105,7 @@ module Conll = struct
     | (_, hfv) :: tail when hfv = fv ->
       Log.fwarning "[line %d], feature %s=%s is defined twice" line_num fn fv;
       (fn,fv) :: tail
-    | (_, hfv) :: _ -> error "[line %d], inconsistent features: %s id defined twice with two different values" line_num fn in
+    | (_, hfv) :: _ -> error ~line:line_num (sprintf "inconsistent features: %s id defined twice with two different values" fn) in
     loop feats
 
   let add_feat_line (fn,fv) line = { line with feats = add_feat line.line_num (fn,fv) line.feats }
@@ -247,7 +247,7 @@ module Conll = struct
           match Str.split (Str.regexp "=") feat with
             | [feat_name] -> add_feat line_num (encode_feat_name feat_name, "true") acc
             | [feat_name; feat_value] -> add_feat line_num (encode_feat_name feat_name, feat_value) acc
-            | _ -> error "[Conll, %sline %d], cannot parse feats \"%s\"" (sof file) line_num feats
+            | _ -> error ~file:(sof file) ~line:line_num ~fct:"Conll.parse_feats" (sprintf "failed to parse \"%s\"" feats)
         ) [] (Str.split (Str.regexp "|") feats)
 
   let sort_feats feats =
