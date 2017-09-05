@@ -250,6 +250,11 @@ module Conll = struct
             | _ -> error "[Conll, %sline %d], cannot parse feats \"%s\"" (sof file) line_num feats
         ) [] (Str.split (Str.regexp "|") feats)
 
+  let sort_feats feats =
+    List.sort
+      (fun (id1,_) (id2,_) -> Pervasives.compare (String.lowercase_ascii id1) (String.lowercase_ascii id2))
+      feats
+
   let underscore s = if s = "" then "_" else s
 
   let set_label id new_label t =
@@ -307,7 +312,7 @@ module Conll = struct
                       first=int_of_string f;
                       last=int_of_string l;
                       fusion=form;
-                      mw_efs= parse_feats ~file line_num c10;
+                      mw_efs= sort_feats (parse_feats ~file line_num c10);
                       } :: acc.multiwords
                     }
                   | [string_id] ->
@@ -337,9 +342,9 @@ module Conll = struct
                       lemma = underscore lemma;
                       upos = underscore upos;
                       xpos = underscore xpos;
-                      feats;
+                      feats = sort_feats feats;
                       deps;
-                      efs= parse_feats ~file line_num c10;
+                      efs= sort_feats (parse_feats ~file line_num c10);
                       } in
                     {acc with lines = new_line :: acc.lines }
                   | _ -> error ?file ~line:line_num (sprintf "illegal field one \"%s\"" f1)
@@ -588,11 +593,12 @@ module Conll_corpus = struct
 
   let save file_name t =
     let out_ch = open_out file_name in
-    Array.iter (fun (_,conll) -> fprintf out_ch "%s\n" (Conll.to_string conll)) t;
+    Array.iter (fun (_,conll) ->
+      fprintf out_ch "%s\n" (Conll.to_string (Conll.normalize_multiwords conll))) t;
     close_out out_ch
 
   let dump t =
-    Array.iter (fun (_,conll) -> printf "%s\n" (Conll.to_string conll)) t
+    Array.iter (fun (_,conll) -> printf "%s\n" (Conll.to_string (Conll.normalize_multiwords conll))) t
 
   let token_size t =
     Array.fold_left (fun acc (_,conll) -> acc + (Conll.token_size conll)) 0 t
