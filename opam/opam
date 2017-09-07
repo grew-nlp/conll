@@ -15,4 +15,5 @@ depends: [
   "libcaml-log"
   "containers"
   "libcaml-svg"
+  "yojson"
 ]

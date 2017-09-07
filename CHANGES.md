@@ -1,3 +1,6 @@
+## 0.14.1 (2017/09/07)
+  * fix dependency to yojson in opam file
+
 # 0.14.0 (2017/09/05)
 
   * [**Break**] Change type of `Error` exception from `string` to `Yojson.Basic.json`
