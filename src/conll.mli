@@ -58,7 +58,7 @@ module Conll : sig
   val load: string -> t
   val get_sentid_meta: t -> string option
   val get_sentid: t -> string option
-
+  val set_sentid: string -> t -> t
   val set_label: Id.t -> string -> t -> t
 
   val ensure_sentid_in_meta: t -> t

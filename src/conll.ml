@@ -444,14 +444,29 @@ module Conll = struct
   let remove_sentid_feats = function
     | [] -> []
     | head::tail -> (head |> remove_feat "sentid" |> remove_feat "sent_id") :: tail
+
   let ensure_sentid_in_meta t =
     match (get_sentid_meta t, get_sentid_feats t) with
-    | (None, None) -> error ?file:t.file ~line:(get_line_num t) "no sentid"
+    | (None, None) ->
+      Log.fwarning "[Conll.ensure_sentid_in_meta%s, line %d] sentence without sentid"
+      (match t.file with None -> "" | Some f -> ", file "^f)
+      (get_line_num t); t
     | (Some id, _) -> t
     | (None, Some id) ->
       { t with
-        meta = (sprintf "# sent_id = %s" id) :: t.meta;
+        meta = (sprintf "# sentid: %s" id) :: t.meta;
         lines = remove_sentid_feats t.lines }
+
+  let set_sentid new_sentid t =
+    let meta_line = sprintf "# sentid: %s" new_sentid in
+    let rec loop = function
+      | [] -> [meta_line]
+      | line::tail ->
+        match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
+        | [Str.Delim _; Str.Text t] -> meta_line :: tail
+        | _ -> line :: (loop tail) in
+    { t with meta = loop t.meta}
+
   (* ---------- dealing with sentid information ---------- *)
 
 
