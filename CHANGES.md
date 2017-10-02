@@ -1,3 +1,6 @@
+# 0.15.0 (2017/10/02)
+  * add `set_sentid` function
+
 ## 0.14.1 (2017/09/07)
   * fix dependency to yojson in opam file
 
