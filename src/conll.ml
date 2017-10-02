@@ -454,11 +454,11 @@ module Conll = struct
     | (Some id, _) -> t
     | (None, Some id) ->
       { t with
-        meta = (sprintf "# sentid: %s" id) :: t.meta;
+        meta = (sprintf "# sent_id = %s" id) :: t.meta;
         lines = remove_sentid_feats t.lines }
 
   let set_sentid new_sentid t =
-    let meta_line = sprintf "# sentid: %s" new_sentid in
+    let meta_line = sprintf "# sent_id = %s" new_sentid in
     let rec loop = function
       | [] -> [meta_line]
       | line::tail ->
