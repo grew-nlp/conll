@@ -160,11 +160,6 @@ let _ =
     Conll_corpus.save corpus_out corpus
 	| "normalize"::_ -> printf "ERROR: sub-command \"normalize\" expects two arguments\n"; print_usage ()
 
-	| ["dump"; corpus_name] ->
-		let corpus = Conll_corpus.load corpus_name in
-		Conll.dump (snd corpus.(0))
-	| "dump"::_ -> printf "ERROR: sub-command \"dump\" expects one argument\n"; print_usage ()
-
 	| ["ustat"; corpus_name] ->
 		let corpus = Conll_corpus.load corpus_name in
 		let stat = Stat.build Stat.Upos corpus in
@@ -189,7 +184,6 @@ let _ =
 		| _ -> printf "ERROR: sub-command \"web_anno\" expext corpus#basename\n"; print_usage ()
 		)
 	| "web_anno"::_ -> printf "ERROR: sub-command \"web_anno\" expects one argument\n"; print_usage ()
-
 
 	| [] -> print_usage ()
 	| x :: _ ->

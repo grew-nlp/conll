@@ -1,4 +1,3 @@
-open Dep
 
 module Sentence : sig
   val fr_clean_spaces: string -> string
@@ -48,9 +47,6 @@ module Conll : sig
     multiwords: multiword list;
   }
 
-  val to_dep: t -> Dep.t
-  val dump: t -> unit
-
   val from_string: string -> t
   val to_string: t -> string
   val to_dot: t -> string
@@ -81,6 +77,8 @@ module Conll_corpus : sig
     outputs a sequences of files of [size] sentences,
     prepared for input in webanno  *)
   val web_anno: t -> string -> int -> unit
+
+  val get: string -> t -> Conll.t option
 end
 
 module Stat : sig

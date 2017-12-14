@@ -1,3 +1,6 @@
+# 0.16.0 (2017/12/14)
+  * rm dep.ml and dependency to cairo
+
 # 0.15.0 (2017/10/02)
   * add `set_sentid` function
 

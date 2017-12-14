@@ -3,8 +3,6 @@ open Log
 
 open Utils
 open Conll_types
-open Dep
-open Svg
 
 module Sentence = struct
   let fr_clean_spaces with_spaces =
@@ -161,31 +159,6 @@ module Conll = struct
     multiwords: multiword list;
   }
 
-  let to_dep t =
-    let root = Dep_node.build (0,None) ["ROOT", 24] in
-    let nodes = root ::
-      (List.map
-        (fun l -> Dep_node.build l.id [(l.form,24);(l.lemma,20)]
-        ) t.lines
-      ) in
-    let init_edges = List.fold_left
-        (fun acc l ->
-          List.fold_left
-            (fun acc2 (src,label) ->
-              (Dep_edge.build src l.id label false) :: acc2
-            ) acc l.deps
-        ) [] t.lines in
-    let final_edges = Dep.compute_shifts nodes (Dep.compute_levels init_edges) in
-    { Dep.nodes = nodes; edges= final_edges; }
-
-
-  let dump t =
-    Svg.set_text_pad 1;
-    let dep = to_dep t in
-    Dep.dump dep;
-    Dep.to_svg "test.svg" dep;
-    ()
-
   let sof = function
     | Some f -> sprintf "File %s, " f
     | None -> ""
@@ -292,6 +265,24 @@ module Conll = struct
         |> (add_feat_id (first,None) ("_UD_mw_span", string_of_int (last-first+1)))
       ) t t.multiwords
 
+  (* move MISC feats in feats with prefix _MISC_ *)
+  let line_misc_to_feats l =
+    let new_feats = List.fold_left (fun acc (n,v) -> ("_MISC_"^n,v)::acc) l.feats l.efs in
+    { l with feats = new_feats; efs=[] }
+
+  let misc_to_feats t = { t with lines = List.map line_misc_to_feats t.lines }
+
+  (* move feats with prefix _MISC_ in MISC feats *)
+  let line_feats_to_misc l =
+    let (pre_efs, feats) =
+    List.partition (
+      fun (n,v) -> String.length n > 6 && String.sub n 0 6 = "_MISC_"
+      ) l.feats in
+    let efs = List.map (fun (n,v) -> (String.sub n 6 ((String.length n) - 6),v)) pre_efs in
+    { l with efs; feats }
+
+  let feats_to_misc t = { t with lines = List.map line_feats_to_misc t.lines }
+
   exception Empty_conll
   (* parse a list of line corresponding to one conll structure *)
   let parse_rev ?file lines =
@@ -356,7 +347,8 @@ module Conll = struct
               | l -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10 are expected)" (List.length l))
         ) (empty file) lines in
       if List.length conll.lines = 0 then raise Empty_conll;
-      check conll; add_mw_feats conll
+      check conll;
+      add_mw_feats (misc_to_feats conll)
 
   let parse ?file lines = parse_rev ?file (List.rev lines)
 
@@ -371,6 +363,7 @@ module Conll = struct
     parse_rev ~file lines_rev
 
   let to_string t =
+    let t = feats_to_misc t in
     let buff = Buffer.create 32 in
     List.iter (bprintf buff "%s\n") t.meta;
     let rec loop (lines, multiwords) = match (lines, multiwords) with
@@ -606,14 +599,24 @@ module Conll_corpus = struct
 
   let load file = load_list [file]
 
+
+  let prepare_for_output conll =
+    conll
+    |> Conll.normalize_multiwords
+    |> Conll.feats_to_misc
+    |> Conll.to_string
+
   let save file_name t =
     let out_ch = open_out file_name in
     Array.iter (fun (_,conll) ->
-      fprintf out_ch "%s\n" (Conll.to_string (Conll.normalize_multiwords conll))) t;
+      fprintf out_ch "%s\n" (prepare_for_output conll)
+      ) t;
     close_out out_ch
 
   let dump t =
-    Array.iter (fun (_,conll) -> printf "%s\n" (Conll.to_string (Conll.normalize_multiwords conll))) t
+    Array.iter (fun (_,conll) ->
+      printf "%s\n" (prepare_for_output conll)
+      ) t
 
   let token_size t =
     Array.fold_left (fun acc (_,conll) -> acc + (Conll.token_size conll)) 0 t
@@ -636,6 +639,10 @@ module Conll_corpus = struct
       ) corpus;
     close ()
 
+  exception Found of Conll.t
+  let get id corpus =
+    try Array.iter (fun (i,c) -> if i=id then raise (Found c)) corpus; None
+    with Found c -> Some c
 end
 
 module Stat = struct
