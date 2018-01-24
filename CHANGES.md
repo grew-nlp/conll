@@ -1,3 +1,6 @@
+## 0.16.1 (2018/01/24)
+  * fix parsing of feats (failed to load Catalan UD corpus)
+
 # 0.16.0 (2017/12/14)
   * rm dep.ml and dependency to cairo
 

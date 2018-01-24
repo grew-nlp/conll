@@ -212,16 +212,24 @@ module Conll = struct
   let encode_feat_name s = Str.global_replace (Str.regexp "\\[\\([0-9a-z]+\\)\\]") "__\\1" s
   let decode_feat_name s = Str.global_replace (Str.regexp "__\\([0-9a-z]+\\)$") "[\\1]" s
 
-  let parse_feats ~file line_num = function
+  let intern_parse_feats ~file line_num = function
     | "_" -> []
     | feats ->
       List.fold_left
         (fun acc feat ->
-          match Str.split (Str.regexp "=") feat with
+          match Str.bounded_split (Str.regexp "=") feat 2 with
             | [feat_name] -> add_feat line_num (encode_feat_name feat_name, "true") acc
             | [feat_name; feat_value] -> add_feat line_num (encode_feat_name feat_name, feat_value) acc
-            | _ -> error ~file:(sof file) ~line:line_num ~fct:"Conll.parse_feats" (sprintf "failed to parse \"%s\"" feats)
+            | _ -> error ?file ~line:line_num ~fct:"Conll.parse_feats" (sprintf "failed to parse \"%s\"" feats)
         ) [] (Str.split (Str.regexp "|") feats)
+
+  let parse_feats ~file line_num s =
+    try intern_parse_feats ~file line_num s
+    with _ ->
+      let new_s = Str.global_replace (Str.regexp "=|") "=__PIPE__" s in
+      List.map
+        (fun (f,v) -> (f, Str.global_replace (Str.regexp "__PIPE__") "|" v))
+        (intern_parse_feats ~file line_num new_s)
 
   let sort_feats feats =
     List.sort

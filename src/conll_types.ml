@@ -4,10 +4,10 @@ exception Error of Yojson.Basic.json
 
 let error ?file ?line ?fct ?data msg =
   let opt_list = [
-    Some ("library", `String "Conll");
     Some ("message", `String msg);
     (CCOpt.map (fun x -> ("file", `String x)) file);
     (CCOpt.map (fun x -> ("line", `Int x)) line);
+    Some ("library", `String "Conll");
     (CCOpt.map (fun x -> ("function", `String x)) fct);
     (CCOpt.map (fun x -> ("data", `String x)) data);
   ] in
