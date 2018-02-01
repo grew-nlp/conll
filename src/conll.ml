@@ -387,8 +387,21 @@ module Conll = struct
 
   let node_to_dot_label buff line =
     bprintf buff "[label= <<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\">\n";
-    bprintf buff "<TR><TD COLSPAN=\"3\"><B>%s</B></TD></TR>\n" line.form;
-    bprintf buff "<TR><TD COLSPAN=\"3\"><B>%s</B></TD></TR>\n" line.lemma;
+    begin
+      match line.form with
+      | "_" -> ()
+      | form -> bprintf buff "<TR><TD COLSPAN=\"3\"><B>%s</B></TD></TR>\n" form
+    end;
+    begin
+      match line.lemma with
+      | "_" -> ()
+      | lemma -> bprintf buff "<TR><TD COLSPAN=\"3\"><B>%s</B></TD></TR>\n" lemma
+    end;
+    begin
+      match line.upos with
+      | "_" -> ()
+      | upos -> bprintf buff "<TR><TD COLSPAN=\"3\"><B>%s</B></TD></TR>\n" upos
+    end;
     List.iter (fun (f,v) ->
         bprintf buff "<TR><TD ALIGN=\"right\">%s</TD><TD>=</TD><TD ALIGN=\"left\">%s</TD></TR>\n" f v
       ) line.feats;
@@ -403,7 +416,10 @@ module Conll = struct
         bprintf buff "  N_%s " (Id.to_dot line.id);
         node_to_dot_label buff line;
         List.iter (fun (gov, lab) ->
-          bprintf buff "  N_%s -> N_%s [label=\"%s\"];\n" (Id.to_dot gov) (Id.to_dot line.id) lab
+          match lab with
+          (* in phrase structure tree, no reals label on edges *)
+          | "__SUB__" -> bprintf buff "  N_%s -> N_%s;\n" (Id.to_dot gov) (Id.to_dot line.id)
+          | _ -> bprintf buff "  N_%s -> N_%s [label=\"%s\"];\n" (Id.to_dot gov) (Id.to_dot line.id) lab
         ) line.deps
       ) t.lines;
     bprintf buff "}\n";
