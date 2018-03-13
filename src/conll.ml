@@ -91,9 +91,24 @@ module Conll = struct
       with Not_found -> t.feats in
     { t with feats = new_feats }
 
+  let remove_prefix prefix t =
+    let new_feats =
+      CCList.filter
+       (fun (f,v) -> not (String_.check_prefix prefix f)
+       ) t.feats in
+    { t with feats = new_feats }
+
   let get_feat feat_name t =
     try Some (List.assoc feat_name t.feats)
     with Not_found -> None
+
+  let filter_ud_misc t =
+    CCList.filter_map
+      (fun (f,v) ->
+        match String_.remove_prefix "_UD_MISC_" f with
+        | Some s -> Some (s,v)
+        | None -> None
+      ) t.feats
 
   let add_feat line_num (fn,fv) feats =
     let rec loop feats = match feats with
@@ -108,7 +123,7 @@ module Conll = struct
 
   let add_feat_line (fn,fv) line = { line with feats = add_feat line.line_num (fn,fv) line.feats }
 
-  let is_extended (_,lab) = String.length lab > 2 && String.sub lab 0 2 = "E:"
+  let is_extended (_,lab) = String_.check_prefix "E:" lab
 
   let string_of_ext = function
   | [] -> "_"
@@ -267,10 +282,11 @@ module Conll = struct
 
   let add_mw_feats t =
     List.fold_left
-      (fun acc {first; last; fusion} ->
+      (fun acc {first; last; fusion; mw_efs} ->
         acc
         |> (add_feat_id (first,None) ("_UD_mw_fusion", fusion))
         |> (add_feat_id (first,None) ("_UD_mw_span", string_of_int (last-first+1)))
+        |> (List.fold_right (fun (f,v) -> add_feat_id (first,None) ("_UD_MISC_"^f,v)) mw_efs)
       ) t t.multiwords
 
   (* move MISC feats in feats with prefix _MISC_ *)
@@ -489,8 +505,8 @@ module Conll = struct
 
 
   (* ========== adding multiwords lines from features ========== *)
-  let insert_multiword id span fusion multiwords =
-    let item = { mw_line_num=None; first=id; last= id+span-1; fusion; mw_efs=[] } in
+  let insert_multiword id span fusion mw_efs multiwords =
+    let item = { mw_line_num=None; first=id; last= id+span-1; fusion; mw_efs } in
     let rec loop = function
       | [] -> [item]
       | h::t when mw_equals h item -> h::t
@@ -501,24 +517,20 @@ module Conll = struct
   let normalize_multiwords t =
     let new_multiwords = List.fold_left
       (fun acc line ->
-        match (get_feat "_UD_mw_fusion" line, get_feat "_UD_mw_span" line) with
-        | (None, None) -> acc
-        | (Some fusion, Some string_span) ->
+        let ud_misc = filter_ud_misc line in
+        match (get_feat "_UD_mw_fusion" line, get_feat "_UD_mw_span" line, ud_misc) with
+        | (None, None, []) -> acc
+        | (Some fusion, Some string_span, efs) ->
           let span =
             try int_of_string string_span
             with Failure _ -> error ?file:t.file ~line:(get_line_num t) "[Conll, %s%s], _UD_mw_span must be integer" in
-          insert_multiword (fst line.id) span fusion acc
+          insert_multiword (fst line.id) span fusion efs acc
         | _ -> error ?file:t.file ~line:(get_line_num t) "[Conll, %s%s], inconsistent mw specification"
       )
       t.multiwords t.lines in
     { t with
       multiwords = new_multiwords;
-      lines = List.map
-        (fun l ->
-          l
-          |> remove_feat "_UD_mw_fusion"
-          |> remove_feat "_UD_mw_span"
-        ) t.lines
+      lines = List.map (remove_prefix "_UD_") t.lines
     }
   (* ---------- adding multiwords lines from features ---------- *)
 
@@ -531,18 +543,44 @@ module Conll = struct
     try if List.assoc "SpaceAfter" line.efs = "No" then "" else " "
     with Not_found -> " "
 
-  let build_sentence t =
+  let mw_final_space mw =
+    try if List.assoc "SpaceAfter" mw.mw_efs = "No" then "" else " "
+    with Not_found -> " "
+
+  let build highlight_fct t =
     let rec loop = function
     | ([],[]) -> []
-    | ([line],[]) -> [line.form]
-    | (line::tail,[]) -> (line.form ^ (final_space line)) :: (loop (tail,[]))
-    | (line::tail, ((mw::_) as multiwords)) when (fst line.id) < mw.first -> (line.form ^ (final_space line)) :: (loop (tail,multiwords))
-    | (line::tail, ((mw::_) as multiwords)) when (fst line.id) = mw.first -> mw.fusion :: (loop (tail,multiwords))
-    | (line::tail, (mw::mw_tail)) when (fst line.id) > mw.last -> (loop (line::tail,mw_tail))
-    | (_::tail, multiwords) -> (loop (tail,multiwords))
-    | (_, mw::_) -> error ?file:t.file ?line:mw.mw_line_num "Inconsistent multiwords" in
+    (* skip empty words *)
+    | (line::tail, mw) when snd line.id <> None -> loop (tail, mw)
+    | ([line],[]) ->
+      let text = highlight_fct (fst line.id, fst line.id) line.form in
+        [text]
+    | (line::tail,[]) ->
+        let text = highlight_fct (fst line.id, fst line.id) line.form in
+        (text ^ (final_space line)) :: (loop (tail,[]))
+    | (line::tail, ((mw::_) as multiwords)) when (fst line.id) < mw.first ->
+        let text = highlight_fct (fst line.id, fst line.id) line.form in
+        (text ^ (final_space line)) :: (loop (tail,multiwords))
+    | (line::tail, ((mw::_) as multiwords)) when (fst line.id) = mw.first ->
+        let text = highlight_fct (mw.first, mw.last) mw.fusion in
+        (text ^(mw_final_space mw)) :: (loop (tail,multiwords))
+    | (line::tail, (mw::mw_tail)) when (fst line.id) > mw.last ->
+        (loop (line::tail,mw_tail))
+    | (_::tail, multiwords) ->
+        (loop (tail,multiwords))
+    | (_, mw::_) ->
+        error ?file:t.file ?line:mw.mw_line_num "Inconsistent multiwords" in
     let form_list = loop (t.lines, t.multiwords) in
     concat_words form_list
+
+  let build_sentence t = build (fun _ x -> x) t
+
+  let html_sentence ?(highlight=[]) t =
+    build (fun (first,last) x ->
+      if List.exists (fun id -> first <= id && id <= last) highlight
+      then sprintf "<span class=\"highlight\">%s</span>" x
+      else x
+      ) t
 
   let get_sentence {meta; lines} =
     let rec loop = function

@@ -8,6 +8,19 @@ module List_ = struct
 end
 
 (* ======================================================================================================================== *)
+module String_ = struct
+  let check_prefix prefix s =
+    let len = String.length prefix in
+    String.length s >= len && String.sub s 0 len = prefix
+
+  let remove_prefix prefix s =
+    let len = String.length prefix in
+    if String.length s >= len && String.sub s 0 len = prefix
+    then Some (String.sub s len ((String.length s)-len))
+    else None
+end
+
+(* ======================================================================================================================== *)
 module File = struct
   let read_rev file =
     let in_ch = open_in file in

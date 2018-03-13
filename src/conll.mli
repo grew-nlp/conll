@@ -63,6 +63,7 @@ module Conll : sig
 
   val build_sentence: t -> string
   val get_sentence: t -> string option
+  val html_sentence: ?highlight: int list -> t -> string
 end
 
 module Conll_corpus : sig
