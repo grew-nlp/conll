@@ -1,3 +1,7 @@
+# 0.17.0 (2018/03/13)
+  * handle combo fusion+MISC
+  * Fix dot output
+
 ## 0.16.1 (2018/01/24)
   * fix parsing of feats (failed to load Catalan UD corpus)
 
