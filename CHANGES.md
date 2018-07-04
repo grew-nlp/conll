@@ -1,3 +1,6 @@
+## 0.17.1 (2018/07/04)
+  * improve relation tables
+
 # 0.17.0 (2018/03/13)
   * handle combo fusion+MISC
   * Fix dot output

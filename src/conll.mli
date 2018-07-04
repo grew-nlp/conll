@@ -91,5 +91,6 @@ module Stat : sig
 
   val dump: t -> unit
 
-  val to_html: t -> string
+  (* build the table file. Args: corpus_id stat *)
+  val to_html: string -> t -> string
 end

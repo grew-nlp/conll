@@ -62,11 +62,14 @@ let print_usage () =
 	"      dump the input <corpus_file> with new lines for fusion words (data taken from _UD_mw_span and _UD_mw_fusion special features)";
   " * web_anno <corpus_file#basename>";
 	"      split <corpus_file> into several set of 10 sentences for inclusion in web_anno. Output files are nammed basename_xx.conll";
-  " * stat <corpus_file>";
+  " * ustat <corpus_id> <corpus_file>";
 	"      output the list of triple (xpos_gov, label, xpos_dep) with the number of occurences. Output is a list of lines like this one:";
 	"      PRON -[obl]-> NOUN ==> 10";
+	"      also build a local file <corpus_id>_utable.php with the html code for stat browsing";
+  " * xstat <corpus_id> <corpus_file>";
+	"      same as upos with XPOS stat insted of UPOS";
 	" * pat <corpus_file> <patch_file>";
-	"      apply a patch file produced by annot_tool (pat stands for Post Annot_Toll)"
+	"      apply a patch file produced by annot_tool (pat stands for \"Post Annot Tool\")"
 	]
 
 let _ =
@@ -160,21 +163,21 @@ let _ =
     Conll_corpus.save corpus_out corpus
 	| "normalize"::_ -> printf "ERROR: sub-command \"normalize\" expects two arguments\n"; print_usage ()
 
-	| ["ustat"; corpus_name] ->
-		let corpus = Conll_corpus.load corpus_name in
+	| "ustat" :: corpus_id :: corpus_files ->
+		let corpus = Conll_corpus.load_list corpus_files in
 		let stat = Stat.build Stat.Upos corpus in
 		Stat.dump stat;
-		let html = Stat.to_html stat in
-		CCIO.with_out "ustat.html" (fun oc -> CCIO.write_line oc html)
-	| "ustat"::_ -> printf "ERROR: sub-command \"ustat\" expects one argument\n"; print_usage ()
+		let html = Stat.to_html corpus_id stat in
+		CCIO.with_out (corpus_id ^ "_utable.php") (fun oc -> CCIO.write_line oc html)
+	| "ustat"::_ -> printf "ERROR: sub-command \"ustat\" expects at least two argument\n"; print_usage ()
 
-	| ["xstat"; corpus_name] ->
-		let corpus = Conll_corpus.load corpus_name in
+	| "xstat" :: corpus_id :: corpus_files ->
+		let corpus = Conll_corpus.load_list corpus_files in
 		let stat = Stat.build Stat.Xpos corpus in
 		Stat.dump stat;
-		let html = Stat.to_html stat in
-		CCIO.with_out "xstat.html" (fun oc -> CCIO.write_line oc html)
-	| "xstat"::_ -> printf "ERROR: sub-command \"xstat\" expects one argument\n"; print_usage ()
+		let html = Stat.to_html corpus_id stat in
+		CCIO.with_out (corpus_id ^ "_xtable.php") (fun oc -> CCIO.write_line oc html)
+	| "xstat"::_ -> printf "ERROR: sub-command \"xstat\" expects at least two argument\n"; print_usage ()
 
   | ["web_anno"; data] ->
 	  (match Str.split (Str.regexp "#") data with

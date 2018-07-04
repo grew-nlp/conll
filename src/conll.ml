@@ -520,12 +520,13 @@ module Conll = struct
         let ud_misc = filter_ud_misc line in
         match (get_feat "_UD_mw_fusion" line, get_feat "_UD_mw_span" line, ud_misc) with
         | (None, None, []) -> acc
+        | (None, None, _) -> Log.warning "features _UD_MISC_* cannot be interpreted here"; acc
         | (Some fusion, Some string_span, efs) ->
           let span =
             try int_of_string string_span
-            with Failure _ -> error ?file:t.file ~line:(get_line_num t) "[Conll, %s%s], _UD_mw_span must be integer" in
+            with Failure _ -> error ?file:t.file ~line:(get_line_num t) "_UD_mw_span must be integer" in
           insert_multiword (fst line.id) span fusion efs acc
-        | _ -> error ?file:t.file ~line:(get_line_num t) "[Conll, %s%s], inconsistent mw specification"
+        | _ -> error ?file:t.file ~line:(get_line_num t) "inconsistent mw specification"
       )
       t.multiwords t.lines in
     { t with
@@ -782,8 +783,10 @@ module Stat = struct
     |> (String_map.find dep))
     with Not_found -> None
 
-  let table buff stat label =
+  let table buff corpus_id stat label =
     bprintf buff "    <table>\n";
+    bprintf buff "            <colgroup/>\n";
+    String_set.iter (fun _ -> bprintf buff "            <colgroup/>\n") stat.tags;
     bprintf buff "      <thead>\n";
     bprintf buff "        <tr>\n";
     bprintf buff "          <th/>\n";
@@ -795,12 +798,11 @@ module Stat = struct
       bprintf buff "        <tr>\n";
       bprintf buff "          <th>%s</th>\n" gov;
         String_set.iter (fun dep ->
-
           bprintf buff "          <td>%s</td>\n"
           (match get stat gov label dep with
-            | Some i -> sprintf
-            "                <button class=\"btn btn-primary\" onclick='javascript:%s(\"%s\",\"%s\",\"%s\")'>%d</button>\n"
-            (match stat.key with Upos -> "u_explore" | Xpos -> "x_explore") gov label dep i
+            | Some i ->
+              let url = sprintf "http://match.grew.fr?corpus=%s&relation=%s&source=%s&target=%s" corpus_id label gov dep in
+              sprintf "<a href=\"%s\" class=\"btn btn-primary\" target=\"_blank\">%d</a>" url i
             | None -> "")
         ) stat.tags;
       bprintf buff "        </tr>\n";
@@ -809,10 +811,15 @@ module Stat = struct
     bprintf buff "    </table>\n";
     ()
 
-  let escape_dot s = Str.global_replace (Str.regexp "\\.") "__" s
+  let escape_dot s =
+    s
+    |> Str.global_replace (Str.regexp "\\.") "__"
+    |> Str.global_replace (Str.regexp ":") "__"
 
-  let to_html stat =
+  let to_html corpus_id stat =
     let buff = Buffer.create 32 in
+    bprintf buff "<?php include ('header.html'); ?>";
+    bprintf buff "<h2 style=\"text-align: center;\">%s</h2>" corpus_id;
     bprintf buff "<div class=\"navbar\" id=\"right-navbar\">\n";
     bprintf buff "  <div class=\"navbar-inner\">\n";
     bprintf buff "    <ul class=\"nav nav-pills\">\n";
@@ -830,10 +837,12 @@ module Stat = struct
     String_set.iter
       (fun label ->
         bprintf buff "  <div class=\"tab-pane\" id=\"%s\">\n" (escape_dot label);
-        table buff stat label;
+        table buff corpus_id stat label;
         bprintf buff "  </div>\n";
       ) stat.labels;
     bprintf buff "</div>\n";
+    bprintf buff "</body>\n";
+    bprintf buff "</html>\n";
 
     Buffer.contents buff
 
