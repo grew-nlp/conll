@@ -70,7 +70,7 @@ module Conll = struct
   let root = { line_num = -1; id=(0,None); form="ROOT"; lemma="__"; upos="_X"; xpos=""; feats=[]; deps=[]; efs=[] }
 
   let build_line ~id ~form ?(lemma="_") ?(upos="_") ?(xpos="_") ?(feats=[]) ?(deps=[]) () =
-    { line_num = -1; id; form; lemma; upos; xpos; feats; deps=[]; efs=[] }
+    { line_num = -1; id; form; lemma; upos; xpos; feats; deps; efs=[] }
 
   let compare l1 l2 =
     match (l1.id, l2.id) with

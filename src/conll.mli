@@ -25,7 +25,7 @@ module Conll : sig
     ?upos: string ->
     ?xpos: string ->
     ?feats: (string * string) list ->
-    ?deps: (int * string ) list ->
+    ?deps: (Id.t * string ) list ->
     unit ->
     line
 
