@@ -22,6 +22,8 @@ module type Id_type = sig
 
   val to_dot: t -> string
 
+  val to_int: t -> int option
+
   exception Wrong_id of string
 
   val of_string: string -> t
@@ -50,6 +52,10 @@ module Id = struct
     | (i, None) -> sprintf "%d" i
     | (i, Some j) -> sprintf "%d_%d" i j
 
+  let to_int = function
+    | (i, None) -> Some i
+    | (i, Some _) -> None
+
   exception Wrong_id of string
   let of_string s =
     try
@@ -73,4 +79,7 @@ module Id = struct
   let min_max id1 id2 = if compare id1 id2 < 0 then (id1, id2) else (id2, id1)
 end
 
+module Id_set = Set.Make (Id)
+
+module Int_map = Map.Make (struct type t = int let compare = Pervasives.compare end)
 

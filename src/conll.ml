@@ -49,6 +49,45 @@ module Sentence = struct
 end
 
 
+module Mwe_info = struct
+
+  let table = ref []
+  let resert () = table := []
+
+  type t =
+    | Begin of string
+    | In of (Id.t * string) (* identifier of the correpsonding Begin *)
+
+  let parse conll_id s =
+    match Str.bounded_split (Str.regexp ":") s 2 with
+    | [] -> error ~fct:"Mwe_info.parse" "Empty bounded split, please report"
+    | head :: tail ->
+      let mwe_id = match int_of_string_opt head with
+      | Some i -> i
+      | None -> error ~fct:"Mwe_info.parse" (sprintf "identifier \"%s\" must be an integer" head) in
+      match tail with
+      | [label] -> table := (mwe_id, (conll_id,label)) :: !table; Begin label
+      | [] ->
+        begin
+          match List.assoc_opt mwe_id !table with
+          | Some conll_id -> In conll_id
+          | None -> error ~fct:"Mwe_info.parse" (sprintf "undefined mwe identifier: %d" mwe_id)
+        end
+      | _ -> error ~fct:"Mwe_info.parse" "More than 2 fields, please report"
+
+  let parse_list conll_id = function
+    | "_" -> []
+    | s -> List.map (parse conll_id) (Str.split (Str.regexp ";") s)
+end
+
+module Mwe = struct
+  type t = {
+    label: string;
+    first: Id.t;
+    items: Id_set.t;
+  }
+end
+
 (* ======================================================================================================================== *)
 module Conll = struct
 
@@ -136,11 +175,19 @@ module Conll = struct
     | ((_,None), Some _) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty node and non empty identifier";
     | ((_,Some _), None) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty identifier and non empty node"
 
-  let line_to_string l =
+  let line_to_string mwe_line l =
     check_line l;
+    let mwe_info = match Id.to_int l.id with
+      | None -> "*"
+      | Some i ->
+        try
+          let l = Int_map.find i mwe_line in
+          String.concat ";" (List.sort Pervasives.compare l)
+        with Not_found -> "*" in
+
     let (ext,not_ext) = List.partition is_extended l.deps in
     let (gov_list, lab_list) = List.split not_ext in
-    sprintf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"
+    sprintf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"
       (Id.to_string l.id)
       l.form
       l.lemma
@@ -151,6 +198,7 @@ module Conll = struct
       (match lab_list with [] -> "_" | l -> String.concat "|" l)
       (string_of_ext ext)
       (fs_to_string l.efs)
+      mwe_info
 
   (* ------------------------------------------------------------------------ *)
   type multiword = {
@@ -164,7 +212,7 @@ module Conll = struct
   let mw_equals t1 t2 = t1.first = t2.first && t1.last = t2.last && t1.fusion = t2.fusion
 
   let multiword_to_string l =
-    sprintf "%d-%d\t%s\t_\t_\t_\t_\t_\t_\t_\t%s" l.first l.last l.fusion (fs_to_string l.mw_efs)
+    sprintf "%d-%d\t%s\t_\t_\t_\t_\t_\t_\t_\t%s\t*" l.first l.last l.fusion (fs_to_string l.mw_efs)
 
   (* ------------------------------------------------------------------------ *)
   type t = {
@@ -172,6 +220,7 @@ module Conll = struct
     meta: string list;
     lines: line list;
     multiwords: multiword list;
+    mwes: Mwe.t Int_map.t;
   }
 
   let sof = function
@@ -222,7 +271,7 @@ module Conll = struct
       ) deps
     ) t.lines
 
-  let empty file = { file;  meta=[]; lines=[]; multiwords=[] }
+  let empty file = { file;  meta=[]; lines=[]; multiwords=[]; mwes=Int_map.empty; }
 
   let encode_feat_name s = Str.global_replace (Str.regexp "\\[\\([0-9a-z]+\\)\\]") "__\\1" s
   let decode_feat_name s = Str.global_replace (Str.regexp "__\\([0-9a-z]+\\)$") "[\\1]" s
@@ -307,29 +356,54 @@ module Conll = struct
 
   let feats_to_misc t = { t with lines = List.map line_feats_to_misc t.lines }
 
+  let add_mwe_nodes ?file lines conll =
+    let mwes = List.fold_left
+      (fun acc (line_num, conll_id, mwe_field) ->
+        let items = Str.split (Str.regexp ";") mwe_field in
+        List.fold_left
+          (fun acc2 item ->
+            match Str.split (Str.regexp ":") item with
+            | [] -> error ?file ~line:line_num (sprintf "Cannot parse mwe item \"%s\"" item)
+            | mwe_id_string::tail ->
+              match int_of_string_opt mwe_id_string with
+              | None -> error ?file ~line:line_num (sprintf "mwe item \"%s\" begin with an integer" item)
+              | Some mwe_id ->
+                match tail with
+                | [label] -> Int_map.add mwe_id {Mwe.label; first=conll_id; items=Id_set.empty} acc2
+                | [] ->
+                  begin
+                    match Int_map.find_opt mwe_id acc2 with
+                    | None -> error ?file ~line:line_num (sprintf "Cannot find definition for mwe_id: \"%d\"" mwe_id)
+                    | Some x -> Int_map.add mwe_id {x with items = Id_set.add conll_id x.items} acc2
+                  end
+                | _ -> error ?file ~line:line_num (sprintf "Cannot parse mwe item \"%s\"" item)
+            ) acc items
+      ) Int_map.empty lines in
+      { conll with mwes }
+
   exception Empty_conll
   (* parse a list of line corresponding to one conll structure *)
   let parse_rev ?file lines =
-    let conll =
+    let (conll,mwe) = (* mwe contains the list of (line_num, id, mwe_field) to be processed later in add_mwe_nodes *)
       List.fold_left
-        (fun acc (line_num, line) ->
+        (fun (acc, acc_mwe) (line_num, line) ->
           match line with
-          | "" -> acc
-          | _ when line.[0] = '#' -> { acc with meta = line :: acc.meta }
+          | "" -> (acc, acc_mwe)
+          | _ when line.[0] = '#' -> ({ acc with meta = line :: acc.meta }, acc_mwe)
           | _ ->
             match Str.split (Str.regexp "\t") line with
-              | [ f1; form; lemma; upos; xpos; feats; govs; dep_labs; c9; c10 ] ->
+              | (f1 :: form :: lemma :: upos :: xpos :: feats :: govs :: dep_labs :: c9 :: c10 :: tail) as l ->
               begin
                 try
                   match Str.split (Str.regexp "-") f1 with
-                  | [f;l] -> {acc with multiwords = {
+                  | [f;l] -> ({acc with multiwords = {
                       mw_line_num = Some line_num;
                       first=int_of_string f;
                       last=int_of_string l;
                       fusion=form;
                       mw_efs= sort_feats (parse_feats ~file line_num c10);
                       } :: acc.multiwords
-                    }
+                    }, acc_mwe)
                   | [string_id] ->
                     let gov_list = if govs = "_" then [] else List.map Id.of_string (Str.split (Str.regexp "|") govs)
                     and lab_list = if dep_labs = "_" then [] else Str.split (Str.regexp "|") dep_labs in
@@ -344,8 +418,8 @@ module Conll = struct
                     | "_" -> prim_deps
                     | _ -> prim_deps @ (parse_extended_deps c9) in
 
+                    let id = Id.of_string (string_id) in
                     let new_line =
-                      let id = Id.of_string (string_id) in
                       let feats =
                         match id with
                         | (_,None) -> parse_feats ~file line_num feats
@@ -361,18 +435,28 @@ module Conll = struct
                       deps;
                       efs= sort_feats (parse_feats ~file line_num c10);
                       } in
-                    {acc with lines = new_line :: acc.lines }
+
+                    let new_acc_mwe = match tail with
+                    | [] | ["*"] -> acc_mwe
+                    | [x] -> (line_num, id, x) :: acc_mwe
+                    | _ -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10 or 11 are expected)" (List.length l))
+                     in
+
+                    ({acc with lines = new_line :: acc.lines }, new_acc_mwe)
                   | _ -> error ?file ~line:line_num (sprintf "illegal field one \"%s\"" f1)
                 with
                 | Id.Wrong_id id -> error ?file ~line:line_num (sprintf "illegal idenfier \"%s\"" id)
                 | Error json -> raise (Error json)
                 | exc -> error ?file ~line:line_num ~data:line (sprintf "unexpected exception \"%s\"" (Printexc.to_string exc))
               end
-              | l -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10 are expected)" (List.length l))
-        ) (empty file) lines in
+              | l -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10 or 11 are expected)" (List.length l))
+        ) (empty file,[]) lines in
       if List.length conll.lines = 0 then raise Empty_conll;
       check conll;
-      add_mw_feats (misc_to_feats conll)
+      conll
+       |> misc_to_feats (* add features _MISC_ *)
+       |> add_mw_feats  (* add features _UD_ *)
+       |> (add_mwe_nodes ?file mwe)
 
   let parse ?file lines = parse_rev ?file (List.rev lines)
 
@@ -390,12 +474,33 @@ module Conll = struct
     let t = feats_to_misc t in
     let buff = Buffer.create 32 in
     List.iter (bprintf buff "%s\n") t.meta;
+
+    let mwe_line =
+      Int_map.fold
+      (fun mwe_id mwe acc ->
+        let first_id = match Id.to_int mwe.Mwe.first with
+          | None -> error "inconsistent MWE info <1>"
+          | Some i -> i in
+        let old_ = try Int_map.find first_id acc with Not_found -> [] in
+        let new_ = (sprintf "%d:%s" mwe_id mwe.Mwe.label) :: old_ in
+        let acc_tmp = Int_map.add first_id new_ acc in
+        Id_set.fold
+          (fun elt acc2 ->
+            let item_id = match Id.to_int elt with
+              | None -> error "inconsistent MWE info <2>"
+              | Some i -> i in
+            let old_ = try Int_map.find item_id acc2 with Not_found -> [] in
+            let new_ = (sprintf "%d" mwe_id) :: old_ in
+            Int_map.add item_id new_ acc2
+          ) mwe.Mwe.items acc_tmp
+      ) t.mwes Int_map.empty in
+
     let rec loop (lines, multiwords) = match (lines, multiwords) with
       | ([],[]) -> ()
       | (line::tail,[]) ->
-          bprintf buff "%s\n" (line_to_string line); loop (tail,[])
+          bprintf buff "%s\n" (line_to_string mwe_line line); loop (tail,[])
       | (line::tail, {first}::_) when (fst line.id) < first ->
-          bprintf buff "%s\n" (line_to_string line); loop (tail,multiwords)
+          bprintf buff "%s\n" (line_to_string mwe_line line); loop (tail,multiwords)
       | (_, mw::tail) ->
           bprintf buff "%s\n" (multiword_to_string mw); loop (lines,tail) in
     loop (t.lines, t.multiwords);

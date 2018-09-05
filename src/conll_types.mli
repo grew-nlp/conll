@@ -14,6 +14,8 @@ module type Id_type = sig
 
   val to_dot: t -> string
 
+  val to_int: t -> int option
+
   exception Wrong_id of string
 
   val of_string: string -> t
@@ -31,3 +33,7 @@ module type Id_type = sig
 end
 
 module Id : Id_type
+
+module Id_set : Set.S with type elt = Id.t
+
+module Int_map : Map.S with type key = int

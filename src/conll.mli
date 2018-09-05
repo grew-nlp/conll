@@ -1,6 +1,15 @@
+open Conll_types
 
 module Sentence : sig
   val fr_clean_spaces: string -> string
+end
+
+module Mwe : sig
+  type t = {
+    label: string;
+    first: Id.t;
+    items: Id_set.t;
+  }
 end
 
 module Conll : sig
@@ -45,6 +54,7 @@ module Conll : sig
     meta: string list;
     lines: line list;
     multiwords: multiword list;
+    mwes: Mwe.t Int_map.t;
   }
 
   val from_string: string -> t
