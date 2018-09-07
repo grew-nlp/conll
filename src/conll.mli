@@ -5,8 +5,13 @@ module Sentence : sig
 end
 
 module Mwe : sig
+  type kind = Ne | Mwe
+
   type t = {
-    label: string;
+    mwepos: string option;
+    kind: kind;
+    label: string option;
+    criterion: string option;
     first: Id.t;
     items: Id_set.t;
   }

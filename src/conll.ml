@@ -81,11 +81,44 @@ module Mwe_info = struct
 end
 
 module Mwe = struct
+  type kind = Ne | Mwe
+
+  let string_of_kind = function
+  | Ne -> "NE"
+  | Mwe -> "MWE"
+
   type t = {
-    label: string;
+    mwepos: string option;
+    kind: kind;
+    label: string option;
+    criterion: string option;
     first: Id.t;
     items: Id_set.t;
   }
+
+  let to_string t =
+    let kind = string_of_kind t.kind in
+    let long_label = match t.label with
+    | None -> kind
+    | Some l -> sprintf "%s-%s" kind l in
+    sprintf "%s|%s|%s"
+      (match t.mwepos with None -> "_" | Some l -> l)
+      long_label
+      (match t.criterion with None -> "_" | Some c -> c)
+
+  let parse conll_id s =
+    match Str.split (Str.regexp "|") s with
+    | [p; kind_label; crit] ->
+      let mwepos = match p with "_" -> None | s -> Some s in
+      let criterion = match crit with "_" -> None | s -> Some s in
+      let (kind,label) =
+      match Str.split (Str.regexp "-") kind_label with
+      | ["MWE"] -> (Mwe, None)
+      | ["MWE"; l]-> (Mwe, Some l)
+      | ["NE"; l] -> (Ne, Some l)
+      | _ -> error (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s) in
+      {mwepos; kind; label; criterion; first=conll_id; items=Id_set.empty}
+    | _ -> error  (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s)
 end
 
 (* ======================================================================================================================== *)
@@ -369,7 +402,8 @@ module Conll = struct
               | None -> error ?file ~line:line_num (sprintf "mwe item \"%s\" begin with an integer" item)
               | Some mwe_id ->
                 match tail with
-                | [label] -> Int_map.add mwe_id {Mwe.label; first=conll_id; items=Id_set.empty} acc2
+                | [desc] -> let mwe = Mwe.parse conll_id desc in
+                  Int_map.add mwe_id mwe acc2
                 | [] ->
                   begin
                     match Int_map.find_opt mwe_id acc2 with
@@ -482,7 +516,7 @@ module Conll = struct
           | None -> error "inconsistent MWE info <1>"
           | Some i -> i in
         let old_ = try Int_map.find first_id acc with Not_found -> [] in
-        let new_ = (sprintf "%d:%s" mwe_id mwe.Mwe.label) :: old_ in
+        let new_ = (sprintf "%d:%s" mwe_id (Mwe.to_string mwe)) :: old_ in
         let acc_tmp = Int_map.add first_id new_ acc in
         Id_set.fold
           (fun elt acc2 ->

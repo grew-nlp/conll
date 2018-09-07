@@ -72,7 +72,7 @@ module Id = struct
     | ((_,None), (_,Some _)) -> -1
     | ((_,Some _), (_,None)) -> 1
     | ((_,Some sub_i1), (_,Some sub_i2)) -> Pervasives.compare sub_i1 sub_i2
-    | ((id,None), (_,None)) -> error (sprintf "twice the same indentifier \"%d\"" id)
+    | ((id,None), (_,None)) -> 1
 
   let min id1 id2 = if compare id1 id2 < 0 then id1 else id2
   let max id1 id2 = if compare id1 id2 < 0 then id2 else id1
