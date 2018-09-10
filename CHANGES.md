@@ -1,3 +1,6 @@
+# 1.0.0 (2018/09/10)
+  * Add handling of column 11 (Parseme info about MWE/NE)
+
 ## 0.17.1 (2018/07/04)
   * improve relation tables
 
