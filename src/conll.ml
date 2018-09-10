@@ -208,7 +208,7 @@ module Conll = struct
     | ((_,None), Some _) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty node and non empty identifier";
     | ((_,Some _), None) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty identifier and non empty node"
 
-  let line_to_string mwe_line l =
+  let line_to_string ~cupt mwe_line l =
     check_line l;
     let mwe_info = match Id.to_int l.id with
       | None -> "*"
@@ -220,7 +220,7 @@ module Conll = struct
 
     let (ext,not_ext) = List.partition is_extended l.deps in
     let (gov_list, lab_list) = List.split not_ext in
-    sprintf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"
+    sprintf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s%s"
       (Id.to_string l.id)
       l.form
       l.lemma
@@ -231,7 +231,7 @@ module Conll = struct
       (match lab_list with [] -> "_" | l -> String.concat "|" l)
       (string_of_ext ext)
       (fs_to_string l.efs)
-      mwe_info
+      (if cupt then "\t" ^ mwe_info else "")
 
   (* ------------------------------------------------------------------------ *)
   type multiword = {
@@ -244,8 +244,13 @@ module Conll = struct
 
   let mw_equals t1 t2 = t1.first = t2.first && t1.last = t2.last && t1.fusion = t2.fusion
 
-  let multiword_to_string l =
-    sprintf "%d-%d\t%s\t_\t_\t_\t_\t_\t_\t_\t%s\t*" l.first l.last l.fusion (fs_to_string l.mw_efs)
+  let multiword_to_string ~cupt l =
+    sprintf "%d-%d\t%s\t_\t_\t_\t_\t_\t_\t_\t%s%s"
+      l.first
+      l.last
+      l.fusion
+      (fs_to_string l.mw_efs)
+      (if cupt then "\t*" else "")
 
   (* ------------------------------------------------------------------------ *)
   type t = {
@@ -504,7 +509,7 @@ module Conll = struct
     let lines_rev = File.read_rev file in
     parse_rev ~file lines_rev
 
-  let to_string t =
+  let to_string ?(cupt=false) t =
     let t = feats_to_misc t in
     let buff = Buffer.create 32 in
     List.iter (bprintf buff "%s\n") t.meta;
@@ -532,11 +537,11 @@ module Conll = struct
     let rec loop (lines, multiwords) = match (lines, multiwords) with
       | ([],[]) -> ()
       | (line::tail,[]) ->
-          bprintf buff "%s\n" (line_to_string mwe_line line); loop (tail,[])
+          bprintf buff "%s\n" (line_to_string ~cupt mwe_line line); loop (tail,[])
       | (line::tail, {first}::_) when (fst line.id) < first ->
-          bprintf buff "%s\n" (line_to_string mwe_line line); loop (tail,multiwords)
+          bprintf buff "%s\n" (line_to_string ~cupt mwe_line line); loop (tail,multiwords)
       | (_, mw::tail) ->
-          bprintf buff "%s\n" (multiword_to_string mw); loop (lines,tail) in
+          bprintf buff "%s\n" (multiword_to_string ~cupt mw); loop (lines,tail) in
     loop (t.lines, t.multiwords);
     Buffer.contents buff
 

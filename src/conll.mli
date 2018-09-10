@@ -63,7 +63,7 @@ module Conll : sig
   }
 
   val from_string: string -> t
-  val to_string: t -> string
+  val to_string: ?cupt:bool -> t -> string
   val to_dot: t -> string
   val save_dot: string -> t -> unit
   val load: string -> t
