@@ -15,6 +15,14 @@ let dump_id_sentence corpus =
 			printf "%s#%s\n" id sentence
 		) corpus
 
+let add_text corpus =
+	Array.map
+		(fun (id,conll) ->
+			match Conll.get_sentence conll with
+			| Some _ -> (id,conll)
+			| None -> (id,{conll with meta = conll.Conll.meta @ [(sprintf "# text = %s" (Conll.build_sentence conll))] })
+		) corpus
+
 let sentid corpus =
 	let new_corpus = Array.map
 		(fun (id, conll) -> (id, Conll.normalize_multiwords (Conll.ensure_sentid_in_meta conll))
@@ -53,6 +61,8 @@ let print_usage () =
 	"      dump on stdout the list of \"id#sentence\" contained in the <corpus_file>";
 	" * sentid <corpus_file>";
 	"      dump the input <corpus_file> with #sentid moved from features into metadata when necessary";
+	" * add_text <input_corpus_file> <output_corpus_file>";
+	"      add the 'text' meta data build from conll line (for French)";
 	" * random <corpus_file> <num>";
 	"      split input <corpus_file> into a randomly selected subset on sentence large enough to have at least <num> tokens";
 	"      output is stored in two files with extension _sub.conll (the extracted part) and _rem.conll (the remaining sentences)";
@@ -60,8 +70,8 @@ let print_usage () =
 	"      split input <corpus_file> two files with extension _in.conll (the sentid belongs to <id_file>) and _out.conll (the remaining sentences)";
 	" * fusion <corpus_file>";
 	"      dump the input <corpus_file> with new lines for fusion words (data taken from _UD_mw_span and _UD_mw_fusion special features)";
-  " * web_anno <corpus_file#basename>";
-	"      split <corpus_file> into several set of 10 sentences for inclusion in web_anno. Output files are nammed basename_xx.conll";
+  " * web_anno <corpus_file> <basename> <size>";
+	"      split <corpus_file> into several set of <size> sentences for inclusion in web_anno. Output files are nammed <basename>_xx.conll";
   " * ustat <corpus_id> <corpus_file>";
 	"      output the list of triple (xpos_gov, label, xpos_dep) with the number of occurences. Output is a list of lines like this one:";
 	"      PRON -[obl]-> NOUN ==> 10";
@@ -69,7 +79,10 @@ let print_usage () =
   " * xstat <corpus_id> <corpus_file>";
 	"      same as upos with XPOS stat insted of UPOS";
 	" * pat <corpus_file> <patch_file>";
-	"      apply a patch file produced by annot_tool (pat stands for \"Post Annot Tool\")"
+	"      apply a patch file produced by annot_tool (pat stands for \"Post Annot Tool\")";
+	" * merge <sentid1> <sentid2> <new_sentid> <input_corpus_file> <output_corpus_file>";
+	"      merge two sentences in one";
+
 	]
 
 let _ =
@@ -163,6 +176,12 @@ let _ =
     Conll_corpus.save corpus_out corpus
 	| "normalize"::_ -> printf "ERROR: sub-command \"normalize\" expects two arguments\n"; print_usage ()
 
+  | ["add_text"; corpus_in; corpus_out] ->
+    let corpus = Conll_corpus.load corpus_in in
+		let new_corpus = add_text corpus in
+    Conll_corpus.save corpus_out new_corpus
+	| "add_text"::_ -> printf "ERROR: sub-command \"add_text\" expects two arguments\n"; print_usage ()
+
 	| "ustat" :: corpus_id :: corpus_files ->
 		let corpus = Conll_corpus.load_list corpus_files in
 		let stat = Stat.build Stat.Upos corpus in
@@ -179,15 +198,34 @@ let _ =
 		CCIO.with_out (corpus_id ^ "_xtable.php") (fun oc -> CCIO.write_line oc html)
 	| "xstat"::_ -> printf "ERROR: sub-command \"xstat\" expects at least two argument\n"; print_usage ()
 
-  | ["web_anno"; data] ->
-	  (match Str.split (Str.regexp "#") data with
-		| [corpus_name; base_output] ->
-			let corpus = Conll_corpus.load corpus_name in
-			Conll_corpus.web_anno corpus base_output 10
-		| _ -> printf "ERROR: sub-command \"web_anno\" expext corpus#basename\n"; print_usage ()
+  | ["web_anno"; corpus_name; base_output; size_string] ->
+		begin
+			match int_of_string_opt size_string with
+			| None -> printf "ERROR: sub-command \"web_anno\" third argument \"%s\" must be int \n" size_string; print_usage ()
+			| Some size ->
+				let corpus = Conll_corpus.load corpus_name in
+				Conll_corpus.web_anno corpus base_output size
+		end
+	| "web_anno"::_ -> printf "ERROR: sub-command \"web_anno\" expects 3 arguments\n"; print_usage ()
+
+	| ["merge"; sentid1; sentid2; new_sentid; corpus_in; corpus_out; ] ->
+		let corpus = Conll_corpus.load corpus_in in
+		(match (CCArray.find_idx (fun (id,_) -> id=sentid1) corpus, CCArray.find_idx (fun (id,_) -> id=sentid2) corpus) with
+		| (Some (pos1,(id1,c1)), Some (pos2,(id2,c2))) ->
+			if pos2 - pos1 <> 1
+			then printf "ERROR Not consecutive"
+			else
+				begin
+					let new_conll = Conll.merge new_sentid c1 c2 in
+					corpus.(pos1) <- (id1, new_conll);
+					corpus.(pos2) <- ("__REMOVE__", Conll.void);
+					Conll_corpus.save corpus_out corpus
+				end
+		| (None, _) -> printf "ERROR No index \"%s\"" sentid1
+		| (_,None) -> printf "ERROR No index \"%s\"" sentid1
 		)
-	| "web_anno"::_ -> printf "ERROR: sub-command \"web_anno\" expects one argument\n"; print_usage ()
+
+	| "merge"::_ -> printf "ERROR: sub-command \"merge\" expects 5 arguments\n"; print_usage ()
 
 	| [] -> print_usage ()
-	| x :: _ ->
-		printf "ERROR: unknown sub-command \"%s\"\n" x; print_usage ()
+	| x :: _ -> printf "ERROR: unknown sub-command \"%s\"\n" x; print_usage ()
