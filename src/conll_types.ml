@@ -38,6 +38,9 @@ module type Id_type = sig
 
   (* [min_max id1 id2] return (min,max) in a signle call *)
   val min_max: t -> t -> (t*t)
+
+  (* [shift delta id] increases the position by delta *)
+  val shift: int -> t -> t
 end
 
 (* ======================================================================================================================== *)
@@ -77,6 +80,8 @@ module Id = struct
   let min id1 id2 = if compare id1 id2 < 0 then id1 else id2
   let max id1 id2 = if compare id1 id2 < 0 then id2 else id1
   let min_max id1 id2 = if compare id1 id2 < 0 then (id1, id2) else (id2, id1)
+
+  let shift delta (i,j) = (i+delta,j)
 end
 
 module Id_set = Set.Make (Id)

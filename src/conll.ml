@@ -119,6 +119,11 @@ module Mwe = struct
       | _ -> error (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s) in
       {mwepos; kind; label; criterion; first=conll_id; items=Id_set.empty}
     | _ -> error  (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s)
+
+  let shift delta t = {t with
+    first = Id.shift delta t.first;
+    items = Id_set.map (fun id -> Id.shift delta id) t.items;
+  }
 end
 
 (* ======================================================================================================================== *)
@@ -240,7 +245,7 @@ module Conll = struct
     last: int;
     fusion: string;
     mw_efs: (string * string) list;
-}
+  }
 
   let mw_equals t1 t2 = t1.first = t2.first && t1.last = t2.last && t1.fusion = t2.fusion
 
@@ -260,6 +265,9 @@ module Conll = struct
     multiwords: multiword list;
     mwes: Mwe.t Int_map.t;
   }
+
+  let void = {file=None; meta=[]; lines=[]; multiwords=[]; mwes=Int_map.empty}
+  let is_void x = (x = void)
 
   let sof = function
     | Some f -> sprintf "File %s, " f
@@ -600,6 +608,13 @@ module Conll = struct
         | _ -> loop tail
     in loop t.meta
 
+  let rm_sentid_meta t =
+    List.fold_left (fun acc line ->
+      match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
+        | [Str.Delim _; Str.Text t] -> acc
+        | _ -> line :: acc
+      ) [] t
+
   let get_sentid_feats t =
     match t.lines with
       | [] -> None
@@ -727,14 +742,24 @@ module Conll = struct
       else x
       ) t
 
+  let text_regexp = Str.regexp "# ?\\(sentence-\\)?text ?[:=]?[ \t]?"
+
   let get_sentence {meta; lines} =
     let rec loop = function
     | [] -> None
     | line::tail ->
-      match Str.full_split (Str.regexp "# ?\\(sentence-\\)?text ?[:=]?[ \t]?") line with
+      match Str.full_split text_regexp line with
       | [Str.Delim _; Str.Text t] -> Some t
       | _ -> loop tail in
     loop meta
+
+  let rm_sentence_text t =
+    List.fold_left (fun acc line ->
+      match Str.full_split text_regexp line with
+        | [Str.Delim _; Str.Text t] -> acc
+        | _ -> line :: acc
+      ) [] t
+
   (* ---------- retrieving or building full text on a sentence ---------- *)
 
   let web_anno t =
@@ -742,6 +767,18 @@ module Conll = struct
     List.iter
       (fun line ->
         match line.deps with
+
+        (* UD_French-GSD / UD_French-Sequoia *)
+        | [] when line.xpos ="_" ->
+          bprintf buff "%s\t%s\t_\t_\t%s\t_\t_\t_\t_\t_\n" (Id.to_string line.id) line.form line.upos
+        | [(gov_id,label)] when line.xpos ="_" ->
+          bprintf buff "%s\t%s\t_\t_\t%s\t_\t%s\t%s\t_\t_\n"
+          (Id.to_string line.id)
+          line.form
+          line.upos
+          (Id.to_string gov_id) label
+
+
         | [] ->
           let xpos = match line.xpos with "PONCT" -> "_" | x -> x in
           bprintf buff "%s\t%s\t_\t%s\t%s\t_\t_\t_\t_\t_\n" (Id.to_string line.id) line.form xpos xpos
@@ -756,6 +793,48 @@ module Conll = struct
         | _ -> error ~line:line.line_num "multiple deps not handled"
       ) t.lines;
     Buffer.contents buff
+
+  let merge_mwes delta mwe1 mwe2 =
+    match Int_map.max_binding_opt mwe1 with
+    | None -> mwe2
+    | Some (largest,_) ->
+      Int_map.fold
+        (fun k mwe acc ->
+          Int_map.add (k+largest) (Mwe.shift delta mwe) acc
+        ) mwe2 mwe1
+
+  let shift delta t =
+    let new_lines = List.map
+      (fun line -> {line with
+        id=Id.shift delta line.id;
+        deps = List.map (fun (id,label) -> (Id.shift delta id, label)) line.deps;
+      }) t.lines in
+    let new_multiwords = List.map
+      (fun multiword -> {multiword with
+        mw_line_num = None;
+        first = multiword.first + delta;
+        last = multiword.last + delta;
+      }) t.multiwords in
+    {t with lines = new_lines; multiwords = new_multiwords }
+
+  let merge new_sentid t1 t2 =
+    let new_text = match (get_sentence t1, get_sentence t2) with
+    | Some s1, Some s2 -> Sentence.fr_clean_spaces (s1 ^ " " ^ s2)
+    | _ -> error "cannot merge without sentence" in
+    let new_meta =
+      (sprintf "# sent_id = %s" new_sentid) ::
+      (sprintf "# text = %s" new_text) ::
+      (t1.meta |> rm_sentid_meta |> rm_sentence_text) in
+    match CCList.last_opt t1.lines with
+    | None -> error "Empty t1 in merge"
+    | Some { id = (delta,_) } ->
+      let shifted_t2 = shift delta t2 in
+      {t1 with
+        meta = new_meta;
+        lines = t1.lines @ shifted_t2.lines;
+        multiwords = t1.multiwords @ shifted_t2.multiwords;
+        mwes = merge_mwes delta t1.mwes t2.mwes;
+      }
 
 end (* module Conll *)
 
@@ -815,8 +894,9 @@ module Conll_corpus = struct
 
   let save file_name t =
     let out_ch = open_out file_name in
-    Array.iter (fun (_,conll) ->
-      fprintf out_ch "%s\n" (prepare_for_output conll)
+    Array.iter (fun (id,conll) ->
+      fprintf out_ch "%s" (prepare_for_output conll);
+      if not (Conll.is_void conll) then fprintf out_ch "\n"
       ) t;
     close_out out_ch
 

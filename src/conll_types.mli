@@ -30,6 +30,9 @@ module type Id_type = sig
 
   (* [min_max id1 id2] return (min,max) in a signle call *)
   val min_max: t -> t -> (t*t)
+
+  (* [shift delta id] increases the position by delta *)
+  val shift: int -> t -> t
 end
 
 module Id : Id_type

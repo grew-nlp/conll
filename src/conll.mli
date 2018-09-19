@@ -62,6 +62,8 @@ module Conll : sig
     mwes: Mwe.t Int_map.t;
   }
 
+  val void: t
+  val is_void: t -> bool
   val from_string: string -> t
   val to_string: ?cupt:bool -> t -> string
   val to_dot: t -> string
@@ -79,6 +81,8 @@ module Conll : sig
   val build_sentence: t -> string
   val get_sentence: t -> string option
   val html_sentence: ?highlight: int list -> t -> string
+
+  val merge: string -> t -> t -> t
 end
 
 module Conll_corpus : sig
