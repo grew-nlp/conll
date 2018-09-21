@@ -397,7 +397,8 @@ module Conll = struct
     List.partition (
       fun (n,v) -> String.length n > 6 && String.sub n 0 6 = "_MISC_"
       ) l.feats in
-    let efs = List.map (fun (n,v) -> (String.sub n 6 ((String.length n) - 6),v)) pre_efs in
+    let new_efs = List.map (fun (n,v) -> (String.sub n 6 ((String.length n) - 6),v)) pre_efs in
+    let efs = List.sort Pervasives.compare (new_efs @ l.efs) in
     { l with efs; feats }
 
   let feats_to_misc t = { t with lines = List.map line_feats_to_misc t.lines }
@@ -471,6 +472,7 @@ module Conll = struct
                         match id with
                         | (_,None) -> parse_feats ~file line_num feats
                         | _ -> ("_UD_empty", "Yes") :: (parse_feats ~file line_num feats) in
+                      let efs = sort_feats (parse_feats ~file line_num c10) in
                       {
                       line_num;
                       id;
@@ -480,7 +482,7 @@ module Conll = struct
                       xpos = underscore xpos;
                       feats = sort_feats feats;
                       deps;
-                      efs= sort_feats (parse_feats ~file line_num c10);
+                      efs;
                       } in
 
                     let new_acc_mwe = match tail with

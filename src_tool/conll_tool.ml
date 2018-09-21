@@ -67,7 +67,7 @@ let print_usage () =
 	"      split input <corpus_file> into a randomly selected subset on sentence large enough to have at least <num> tokens";
 	"      output is stored in two files with extension _sub.conll (the extracted part) and _rem.conll (the remaining sentences)";
   " * split <corpus_file> <id_file>";
-	"      split input <corpus_file> two files with extension _in.conll (the sentid belongs to <id_file>) and _out.conll (the remaining sentences)";
+	"      split input <corpus_file> in two files with extension _in.conll (the sentid belongs to <id_file>) and _out.conll (the remaining sentences)";
 	" * fusion <corpus_file>";
 	"      dump the input <corpus_file> with new lines for fusion words (data taken from _UD_mw_span and _UD_mw_fusion special features)";
   " * web_anno <corpus_file> <basename> <size>";
