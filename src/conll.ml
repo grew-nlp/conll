@@ -49,36 +49,6 @@ module Sentence = struct
 end
 
 
-module Mwe_info = struct
-
-  let table = ref []
-  let resert () = table := []
-
-  type t =
-    | Begin of string
-    | In of (Id.t * string) (* identifier of the correpsonding Begin *)
-
-  let parse conll_id s =
-    match Str.bounded_split (Str.regexp ":") s 2 with
-    | [] -> error ~fct:"Mwe_info.parse" "Empty bounded split, please report"
-    | head :: tail ->
-      let mwe_id = match int_of_string_opt head with
-      | Some i -> i
-      | None -> error ~fct:"Mwe_info.parse" (sprintf "identifier \"%s\" must be an integer" head) in
-      match tail with
-      | [label] -> table := (mwe_id, (conll_id,label)) :: !table; Begin label
-      | [] ->
-        begin
-          match List.assoc_opt mwe_id !table with
-          | Some conll_id -> In conll_id
-          | None -> error ~fct:"Mwe_info.parse" (sprintf "undefined mwe identifier: %d" mwe_id)
-        end
-      | _ -> error ~fct:"Mwe_info.parse" "More than 2 fields, please report"
-
-  let parse_list conll_id = function
-    | "_" -> []
-    | s -> List.map (parse conll_id) (Str.split (Str.regexp ";") s)
-end
 
 module Mwe = struct
   type kind = Ne | Mwe
