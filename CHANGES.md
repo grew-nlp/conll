@@ -1,3 +1,10 @@
+# 1.2.0 (2018/11/22)
+  * add projection handling for MWE on multi-postag words
+
+# 1.1.0 (2018/09/21)
+  * add new sub-commands: “add_text” and “merge”
+  * Fix bug with MISC features
+
 # 1.0.0 (2018/09/10)
   * Add handling of column 11 (Parseme info about MWE/NE)
 
