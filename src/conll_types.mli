@@ -19,6 +19,7 @@ module type Id_type = sig
   exception Wrong_id of string
 
   val of_string: string -> t
+  val of_int: int -> t
 
   val compare: t -> t -> int
 
@@ -38,5 +39,6 @@ end
 module Id : Id_type
 
 module Id_set : Set.S with type elt = Id.t
+module Id_map : Map.S with type key = Id.t
 
 module Int_map : Map.S with type key = int

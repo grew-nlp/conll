@@ -4,6 +4,12 @@ module Sentence : sig
   val fr_clean_spaces: string -> string
 end
 
+module Id_with_proj: sig
+  type t = Id.t * int option
+end
+
+module Id_with_proj_set : Set.S with type elt = Id_with_proj.t
+
 module Mwe : sig
   type kind = Ne | Mwe
 
@@ -12,8 +18,8 @@ module Mwe : sig
     kind: kind;
     label: string option;
     criterion: string option;
-    first: Id.t;
-    items: Id_set.t;
+    first: Id_with_proj.t;
+    items: Id_with_proj_set.t;
   }
 end
 

@@ -27,6 +27,7 @@ module type Id_type = sig
   exception Wrong_id of string
 
   val of_string: string -> t
+  val of_int: int -> t
 
   val compare: t -> t -> int
 
@@ -68,6 +69,8 @@ module Id = struct
       | _ -> raise (Wrong_id s)
     with Failure _ -> raise (Wrong_id s)
 
+  let of_int i = (i,None)
+
   let compare id1 id2 =
     match (id1, id2) with
     | ((i1, _), (i2, _)) when i1 <> i2 -> Pervasives.compare i1 i2
@@ -75,7 +78,7 @@ module Id = struct
     | ((_,None), (_,Some _)) -> -1
     | ((_,Some _), (_,None)) -> 1
     | ((_,Some sub_i1), (_,Some sub_i2)) -> Pervasives.compare sub_i1 sub_i2
-    | ((id,None), (_,None)) -> 1
+    | ((_,None), (_,None)) -> 0
 
   let min id1 id2 = if compare id1 id2 < 0 then id1 else id2
   let max id1 id2 = if compare id1 id2 < 0 then id2 else id1
@@ -85,6 +88,7 @@ module Id = struct
 end
 
 module Id_set = Set.Make (Id)
+module Id_map = Map.Make (Id)
 
 module Int_map = Map.Make (struct type t = int let compare = Pervasives.compare end)
 

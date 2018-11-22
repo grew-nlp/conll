@@ -49,6 +49,16 @@ module Sentence = struct
 end
 
 
+module Id_with_proj = struct
+  (* t = (3, Some 1) <--> 3/1 conllid=3, partial_proj=1 *)
+  type t = Id.t * int option
+
+  let compare = Pervasives.compare
+
+  let shift delta (i,p) = (Id.shift delta i, p)
+end
+
+module Id_with_proj_set = Set.Make (Id_with_proj)
 
 module Mwe = struct
   type kind = Ne | Mwe
@@ -62,8 +72,8 @@ module Mwe = struct
     kind: kind;
     label: string option;
     criterion: string option;
-    first: Id.t;
-    items: Id_set.t;
+    first: Id_with_proj.t;
+    items: Id_with_proj_set.t;
   }
 
   let to_string t =
@@ -76,7 +86,7 @@ module Mwe = struct
       long_label
       (match t.criterion with None -> "_" | Some c -> c)
 
-  let parse conll_id s =
+  let parse conll_id proj_opt s =
     match Str.split (Str.regexp "|") s with
     | [p; kind_label; crit] ->
       let mwepos = match p with "_" -> None | s -> Some s in
@@ -87,12 +97,12 @@ module Mwe = struct
       | ["MWE"; l]-> (Mwe, Some l)
       | ["NE"; l] -> (Ne, Some l)
       | _ -> error (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s) in
-      {mwepos; kind; label; criterion; first=conll_id; items=Id_set.empty}
+      {mwepos; kind; label; criterion; first=(conll_id,proj_opt); items=Id_with_proj_set.empty}
     | _ -> error  (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s)
 
   let shift delta t = {t with
-    first = Id.shift delta t.first;
-    items = Id_set.map (fun id -> Id.shift delta id) t.items;
+    first = Id_with_proj.shift delta t.first;
+    items = Id_with_proj_set.map (fun id -> Id_with_proj.shift delta id) t.items;
   }
 end
 
@@ -170,6 +180,14 @@ module Conll = struct
 
   let add_feat_line (fn,fv) line = { line with feats = add_feat line.line_num (fn,fv) line.feats }
 
+  let add_feat_lines conll_id (fn,fv) lines =
+    List.map
+      (fun line ->
+          if line.id = conll_id
+          then add_feat_line (fn,fv) line
+          else line
+      )  lines
+
   let is_extended (_,lab) = String_.check_prefix "E:" lab
 
   let string_of_ext = function
@@ -184,14 +202,15 @@ module Conll = struct
     | ((_,Some _), None) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty identifier and non empty node"
 
   let line_to_string ~cupt mwe_line l =
+
+    (* Strange: the function Id_map.find does not work correctly in this context: maybe a order problem... *)
+    (* TODO: explore the problem *)
+    let assoc_list = Id_map.fold (fun k v acc -> (k,v)::acc) mwe_line [] in
+
     check_line l;
-    let mwe_info = match Id.to_int l.id with
-      | None -> "*"
-      | Some i ->
-        try
-          let l = Int_map.find i mwe_line in
-          String.concat ";" (List.sort Pervasives.compare l)
-        with Not_found -> "*" in
+    let mwe_info =
+      try String.concat ";" (List.sort Pervasives.compare (List.assoc l.id assoc_list))
+      with Not_found -> "*" in
 
     let (ext,not_ext) = List.partition is_extended l.deps in
     let (gov_list, lab_list) = List.split not_ext in
@@ -373,31 +392,50 @@ module Conll = struct
 
   let feats_to_misc t = { t with lines = List.map line_feats_to_misc t.lines }
 
+
+  (*
+    13 --> (13,None)
+    13/2 --> (13, Some 2)
+    _ --> fail
+  *)
+  let parse_mwe_id_proj_opt s =
+    match List.map int_of_string_opt (Str.split (Str.regexp "/") s) with
+    | [Some i] -> (i, None)
+    | [Some i; Some j] -> (i, Some j)
+    | _ -> error (sprintf "Cannot parse mwe_id \"%s\"" s)
+
   let add_mwe_nodes ?file lines conll =
-    let mwes = List.fold_left
-      (fun acc (line_num, conll_id, mwe_field) ->
+    let (new_lines, mwes) = List.fold_left
+      (fun (acc_lines, acc) (line_num, conll_id, mwe_field) ->
         let items = Str.split (Str.regexp ";") mwe_field in
         List.fold_left
-          (fun acc2 item ->
+          (fun (acc2_lines, acc2) item ->
             match Str.split (Str.regexp ":") item with
             | [] -> error ?file ~line:line_num (sprintf "Cannot parse mwe item \"%s\"" item)
             | mwe_id_string::tail ->
-              match int_of_string_opt mwe_id_string with
-              | None -> error ?file ~line:line_num (sprintf "mwe item \"%s\" begin with an integer" item)
-              | Some mwe_id ->
-                match tail with
-                | [desc] -> let mwe = Mwe.parse conll_id desc in
-                  Int_map.add mwe_id mwe acc2
+              let (mwe_id, proj_opt) = parse_mwe_id_proj_opt mwe_id_string in
+
+              let new_lines =
+              (* match snd mwe_id with
+              | None -> acc2_lines
+              | Some i -> add_feat_lines conll_id ("_MWE_partial_projection", (string_of_int i)) *)
+               acc2_lines in
+
+              (* /i *)
+
+              match tail with
+                | [desc] -> let mwe = Mwe.parse conll_id proj_opt desc in
+                  (new_lines, Int_map.add mwe_id mwe acc2)
                 | [] ->
                   begin
                     match Int_map.find_opt mwe_id acc2 with
                     | None -> error ?file ~line:line_num (sprintf "Cannot find definition for mwe_id: \"%d\"" mwe_id)
-                    | Some x -> Int_map.add mwe_id {x with items = Id_set.add conll_id x.items} acc2
+                    | Some x -> (new_lines, Int_map.add mwe_id {x with items = Id_with_proj_set.add (conll_id, proj_opt) x.items} acc2)
                   end
                 | _ -> error ?file ~line:line_num (sprintf "Cannot parse mwe item \"%s\"" item)
-            ) acc items
-      ) Int_map.empty lines in
-      { conll with mwes }
+            ) (acc_lines, acc) items
+      ) (conll.lines, Int_map.empty) lines in
+      { conll with lines = new_lines; mwes }
 
   exception Empty_conll
   (* parse a list of line corresponding to one conll structure *)
@@ -497,22 +535,21 @@ module Conll = struct
     let mwe_line =
       Int_map.fold
       (fun mwe_id mwe acc ->
-        let first_id = match Id.to_int mwe.Mwe.first with
-          | None -> error "inconsistent MWE info <1>"
-          | Some i -> i in
-        let old_ = try Int_map.find first_id acc with Not_found -> [] in
-        let new_ = (sprintf "%d:%s" mwe_id (Mwe.to_string mwe)) :: old_ in
-        let acc_tmp = Int_map.add first_id new_ acc in
-        Id_set.fold
-          (fun elt acc2 ->
-            let item_id = match Id.to_int elt with
-              | None -> error "inconsistent MWE info <2>"
-              | Some i -> i in
-            let old_ = try Int_map.find item_id acc2 with Not_found -> [] in
-            let new_ = (sprintf "%d" mwe_id) :: old_ in
-            Int_map.add item_id new_ acc2
+        let (id_first, proj_first) = mwe.Mwe.first in
+        let old_ = try Id_map.find id_first acc with Not_found -> [] in
+        let new_ = (sprintf "%d%s:%s"
+            mwe_id
+            (match proj_first with None -> "" | Some i -> sprintf "/%d" i)
+            (Mwe.to_string mwe)
+          ) :: old_ in
+        let acc_tmp = Id_map.add id_first new_ acc in
+        Id_with_proj_set.fold
+          (fun (conll_id, proj_opt) acc2 ->
+            let old_ = try Id_map.find conll_id acc2 with Not_found -> [] in
+            let new_ = (sprintf "%d%s" mwe_id (match proj_opt with None -> "" | Some i -> sprintf "/%d" i)) :: old_ in
+            Id_map.add conll_id new_ acc2
           ) mwe.Mwe.items acc_tmp
-      ) t.mwes Int_map.empty in
+      ) t.mwes Id_map.empty in
 
     let rec loop (lines, multiwords) = match (lines, multiwords) with
       | ([],[]) -> ()
