@@ -480,23 +480,26 @@ module Conll = struct
                         match id with
                         | (_,None) -> parse_feats ~file line_num feats
                         | _ -> ("_UD_empty", "Yes") :: (parse_feats ~file line_num feats) in
+                      let orfeo_feats = match tail with
+                        | [start; stop; speaker] -> [("_start",start); ("_stop",stop); ("_speaker",speaker); ]
+                        | _ -> [] in
                       let efs = sort_feats (parse_feats ~file line_num c10) in
                       {
                       line_num;
                       id;
-                      form = underscore form;
+                      form = if orfeo_feats = [] then underscore form else Str.global_replace (Str.regexp "#") "__SHARP__" form; (* Hack to replace '#' in forms *)
                       lemma = underscore lemma;
                       upos = underscore upos;
-                      xpos = underscore xpos;
-                      feats = sort_feats feats;
+                      xpos = if orfeo_feats = [] then underscore xpos else "_"; (* Hack to hide xpos in Orfea (always upos=xpos) *)
+                      feats = sort_feats (feats @ orfeo_feats);
                       deps;
                       efs;
                       } in
 
                     let new_acc_mwe = match tail with
-                    | [] | ["*"] -> acc_mwe
+                    | [] | ["*"] | [_;_;_]-> acc_mwe
                     | [x] -> (line_num, id, x) :: acc_mwe
-                    | _ -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10 or 11 are expected)" (List.length l))
+                    | _ -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l))
                      in
 
                     ({acc with lines = new_line :: acc.lines }, new_acc_mwe)
@@ -506,7 +509,7 @@ module Conll = struct
                 | Error json -> raise (Error json)
                 | exc -> error ?file ~line:line_num ~data:line (sprintf "unexpected exception \"%s\"" (Printexc.to_string exc))
               end
-              | l -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10 or 11 are expected)" (List.length l))
+              | l -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l))
         ) (empty file,[]) lines in
       if List.length conll.lines = 0 then raise Empty_conll;
       check conll;

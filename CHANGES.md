@@ -1,3 +1,6 @@
+# 1.3.0 (2019/01/10)
+  * handle orfeo data (13 column CONLL)
+
 # 1.2.0 (2018/11/22)
   * add projection handling for MWE on multi-postag words
 
