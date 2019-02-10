@@ -1,4 +1,4 @@
-exception Error of Yojson.Basic.json
+exception Error of Yojson.Basic.t
 
 val error :
   ?file:string ->
