@@ -1,3 +1,7 @@
+# 1.4.0 (2019/02/10)
+  * follow yojson type change
+  * add cmxs target
+
 # 1.3.0 (2019/01/10)
   * handle orfeo data (13 column CONLL)
 
