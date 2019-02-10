@@ -487,10 +487,13 @@ module Conll = struct
                       {
                       line_num;
                       id;
-                      form = if orfeo_feats = [] then underscore form else Str.global_replace (Str.regexp "#") "__SHARP__" form; (* Hack to replace '#' in forms *)
+                      form = underscore form;
                       lemma = underscore lemma;
                       upos = underscore upos;
-                      xpos = if orfeo_feats = [] then underscore xpos else "_"; (* Hack to hide xpos in Orfea (always upos=xpos) *)
+                      xpos =
+                        if orfeo_feats = []
+                        then underscore xpos
+                        else "_"; (* Hack to hide xpos in Orfeo (always upos=xpos) *)
                       feats = sort_feats (feats @ orfeo_feats);
                       deps;
                       efs;
