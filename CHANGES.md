@@ -1,3 +1,6 @@
+## 1.4.1 (2019/03/26)
+  * move to opam2
+
 # 1.4.0 (2019/02/10)
   * follow yojson type change
   * add cmxs target

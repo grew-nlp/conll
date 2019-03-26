@@ -1,4 +1,4 @@
-opam-version: "1.0"
+opam-version: "2.0"
 maintainer: "Bruno.Guillaume@loria.fr"
 homepage: "TODO"
 build: [
@@ -16,3 +16,7 @@ depends: [
   "containers"
   "yojson"
 ]
+synopsis: "An ocaml library to load conll corpus files"
+url {
+  src: "http://opam.grew.fr/tgz/libcaml-conll.##VERSION##.tgz"
+}
