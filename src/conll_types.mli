@@ -1,11 +1,3 @@
-exception Error of Yojson.Basic.t
-
-val error :
-  ?file:string ->
-  ?line:int ->
-  ?fct:string ->
-  ?data:string ->
-  string -> 'a
 
 module type Id_type = sig
   type t = int * int option (* 8.1 --> (8, Some 1) *)

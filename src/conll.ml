@@ -4,6 +4,22 @@ open Log
 open Utils
 open Conll_types
 
+(* ======================================================================================================================== *)
+exception Error of Yojson.Basic.t
+
+let error ?file ?line ?fct ?data msg =
+  let opt_list = [
+    Some ("message", `String msg);
+    (CCOpt.map (fun x -> ("file", `String x)) file);
+    (CCOpt.map (fun x -> ("line", `Int x)) line);
+    Some ("library", `String "Conll");
+    (CCOpt.map (fun x -> ("function", `String x)) fct);
+    (CCOpt.map (fun x -> ("data", `String x)) data);
+  ] in
+  let json = `Assoc (CCList.filter_map (fun x->x) opt_list) in
+  raise (Error json)
+
+(* ======================================================================================================================== *)
 module Sentence = struct
   let fr_clean_spaces with_spaces =
     List.fold_left
