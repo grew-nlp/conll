@@ -879,7 +879,10 @@ module Conll = struct
     let new_lines = List.map
       (fun line -> {line with
         id=Id.shift delta line.id;
-        deps = List.map (fun (id,label) -> (Id.shift delta id, label)) line.deps;
+        deps = List.map (function
+          | ((0,None),"root") -> ((0,None),"root")
+          | (id,label) -> (Id.shift delta id, label)
+        ) line.deps;
       }) t.lines in
     let new_multiwords = List.map
       (fun multiword -> {multiword with
@@ -970,7 +973,8 @@ module Conll_corpus = struct
     let out_ch = open_out file_name in
     Array.iter (fun (id,conll) ->
       fprintf out_ch "%s" (prepare_for_output conll);
-      if not (Conll.is_void conll) then fprintf out_ch "\n"
+        if not (Conll.is_void conll)
+        then fprintf out_ch "\n"
       ) t;
     close_out out_ch
 

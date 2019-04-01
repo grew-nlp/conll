@@ -214,7 +214,7 @@ let _ =
 		(match (CCArray.find_idx (fun (id,_) -> id=sentid1) corpus, CCArray.find_idx (fun (id,_) -> id=sentid2) corpus) with
 		| (Some (pos1,(id1,c1)), Some (pos2,(id2,c2))) ->
 			if pos2 - pos1 <> 1
-			then printf "ERROR Not consecutive"
+			then printf "ERROR Merge is possible only on consecutive sentences\n"
 			else
 				begin
 					let new_conll = Conll.merge new_sentid c1 c2 in
@@ -222,8 +222,8 @@ let _ =
 					corpus.(pos2) <- ("__REMOVE__", Conll.void);
 					Conll_corpus.save corpus_out corpus
 				end
-		| (None, _) -> printf "ERROR No index \"%s\"" sentid1
-		| (_,None) -> printf "ERROR No index \"%s\"" sentid1
+		| (None, _) -> printf "ERROR No index \"%s\"\n" sentid1
+		| (_,None) -> printf "ERROR No index \"%s\"\n" sentid1
 		)
 
 	| "merge"::_ -> printf "ERROR: sub-command \"merge\" expects 5 arguments\n"; print_usage ()
