@@ -73,6 +73,8 @@ let print_usage () =
 	"      dump the input <corpus_file> with new lines for fusion words (data taken from _UD_mw_span and _UD_mw_fusion special features)";
   " * web_anno <corpus_file> <basename> <size>";
 	"      split <corpus_file> into several set of <size> sentences for inclusion in web_anno. Output files are nammed <basename>_xx.conll";
+	" * cut <corpus_file> <basename> <size>";
+	"      split <corpus_file> into several set of <size> sentences (metadata are kept, unlike in web_anno subcommand). Output files are nammed <basename>_xx.conll";
   " * ustat <corpus_id> <corpus_file>";
 	"      output the list of triple (xpos_gov, label, xpos_dep) with the number of occurences. Output is a list of lines like this one:";
 	"      PRON -[obl]-> NOUN ==> 10";
@@ -227,6 +229,23 @@ let _ =
 		)
 
 	| "merge"::_ -> printf "ERROR: sub-command \"merge\" expects 5 arguments\n"; print_usage ()
+
+	| ["cut"; corpus_in; base_output; subsize; ] ->
+		begin
+			match int_of_string_opt subsize with
+			| None -> printf "ERROR: sub-command \"cut\" second argument \"%s\" must be int \n" subsize; print_usage ()
+			| Some size ->
+				let corpus = Conll_corpus.load corpus_in in
+				let len = Array.length corpus in
+				let last_ballot = (len-1) / size in
+				for i = 0 to last_ballot do
+					let out = sprintf "%s_%03d" base_output i in
+					Conll_corpus.save_sub out (i*size) (min ((i+1)*size-1) (len-1)) corpus
+				done
+		end
+
+
+	| "cut"::_ -> printf "ERROR: sub-command \"cut\" expects 3 arguments\n"; print_usage ()
 
 	| [] -> print_usage ()
 	| x :: _ -> printf "ERROR: unknown sub-command \"%s\"\n" x; print_usage ()

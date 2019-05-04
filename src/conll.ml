@@ -978,6 +978,15 @@ module Conll_corpus = struct
       ) t;
     close_out out_ch
 
+  let save_sub file_name first last t =
+    let out_ch = open_out file_name in
+    for i = first to last do
+      let (id,conll) = t.(i) in
+        fprintf out_ch "%s" (prepare_for_output conll);
+        if not (Conll.is_void conll) then fprintf out_ch "\n"
+    done;
+    close_out out_ch
+
   let dump t =
     Array.iter (fun (_,conll) ->
       printf "%s\n" (prepare_for_output conll)
