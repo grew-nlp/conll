@@ -126,8 +126,35 @@ module Conll = struct
 
   let root = { line_num = -1; id=(0,None); form="ROOT"; lemma="__"; upos="_X"; xpos=""; feats=[]; deps=[]; efs=[] }
 
+  type prefix = No | S | I | D | E
+  let get_prefix label =
+    if String.length label < 2
+    then No
+    else match String.sub label 0 2 with
+      | "S:" -> S | "I:" -> I | "D:" -> D | "E:" -> E
+      | _ -> No
+
+  let compare_pref pref1 pref2 =
+    if List.mem pref1 [No; S] && List.mem pref2 [I; D; E]
+    then -1
+    else
+      if List.mem pref1 [I; D; E] && List.mem pref2 [No; S]
+      then 1
+      else 0
+
+
+  let compare_dep (id1,lab1) (id2,lab2) =
+    match compare_pref (get_prefix lab1) (get_prefix lab2) with
+    | 0 ->
+      begin
+        match Id.compare id1 id2 with
+        | 0 -> Pervasives.compare lab1 lab2
+        | x -> x
+      end
+    | x -> x
+
   let build_line ~id ~form ?(lemma="_") ?(upos="_") ?(xpos="_") ?(feats=[]) ?(deps=[]) () =
-    { line_num = -1; id; form; lemma; upos; xpos; feats; deps; efs=[] }
+    { line_num = -1; id; form; lemma; upos; xpos; feats; deps=List.sort compare_dep deps; efs=[] }
 
   let compare l1 l2 =
     match (l1.id, l2.id) with
@@ -192,14 +219,18 @@ module Conll = struct
 
   let string_of_ext = function
   | [] -> "_"
-  | ext -> String.concat "|" (List.map (fun (g,l) -> sprintf "%s:%s" (Id.to_string g) (String.sub l 2 ((String.length l)-2))) ext)
+  | ext -> String.concat "|" (
+      List.map (fun (g,l) ->
+        sprintf "%s:%s" (Id.to_string g) (String.sub l 2 ((String.length l)-2))
+      ) ext
+    )
 
-  let check_line line =
-    match (line.id, get_feat "_UD_empty" line) with
+  let check_line line = ()
+    (* match (line.id, get_feat "_UD_empty" line) with
     | ((_,None), None) -> ()
     | ((_,Some _), Some _) -> ()
     | ((_,None), Some _) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty node and non empty identifier";
-    | ((_,Some _), None) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty identifier and non empty node"
+    | ((_,Some _), None) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty identifier and non empty node" *)
 
   let line_to_string ~cupt mwe_line l =
 
@@ -864,9 +895,7 @@ module Conll_corpus = struct
 
   let reset () = cpt := 0; res := []
 
-  (* add the current file to !res *)
-  let load_one file =
-    let lines = File.read file in
+  let add_lines file lines =
 
     let rev_locals = ref [] in
     let save_one () =
@@ -895,11 +924,15 @@ module Conll_corpus = struct
 
   let load_list file_list =
     reset ();
-    List.iter load_one file_list;
+    List.iter (fun file -> add_lines file (File.read file)) file_list;
     Array.of_list (List.rev !res)
 
   let load file = load_list [file]
 
+  let from_lines ?(basename="noname") lines =
+    reset ();
+    add_lines basename lines;
+    Array.of_list (List.rev !res)
 
   let prepare_for_output conll =
     conll

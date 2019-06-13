@@ -29,7 +29,7 @@ module type Id_type = sig
   (* [max id1 id2] return the biggest id (according to compare) *)
   val max: t -> t -> t
 
-  (* [min_max id1 id2] return (min,max) in a signle call *)
+  (* [min_max id1 id2] return (min,max) in a single call *)
   val min_max: t -> t -> (t*t)
 
   (* [shift delta id] increases the position by delta *)

@@ -95,6 +95,7 @@ module Conll_corpus : sig
   type t = (string * Conll.t) array
   val load: string -> t
   val load_list: string list -> t
+  val from_lines: ?basename: string -> (int * string) list -> t
   val save: string -> t -> unit
   val dump: t -> unit
   val token_size: t -> int
