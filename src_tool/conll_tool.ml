@@ -25,7 +25,8 @@ let add_text corpus =
 
 let sentid corpus =
 	let new_corpus = Array.map
-		(fun (id, conll) -> (id, Conll.normalize_multiwords (Conll.ensure_sentid_in_meta conll))
+		(fun (id, conll) ->
+			(id, Conll.normalize_multiwords (Conll.ensure_sentid_in_meta ~default:id conll))
 		) corpus in
 	Conll_corpus.dump new_corpus
 

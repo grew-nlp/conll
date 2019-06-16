@@ -80,7 +80,7 @@ module Conll : sig
   val set_sentid: string -> t -> t
   val set_label: Id.t -> string -> t -> t
 
-  val ensure_sentid_in_meta: t -> t
+  val ensure_sentid_in_meta: ?default:string -> t -> t
 
   val normalize_multiwords: t -> t
 

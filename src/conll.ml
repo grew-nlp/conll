@@ -494,9 +494,12 @@ module Conll = struct
                       } :: acc.multiwords
                     }, acc_mwe)
                   | [string_id] ->
-                    let gov_list = if govs = "_" then [] else List.map Id.of_string (Str.split (Str.regexp "|") govs)
-                    and lab_list = if dep_labs = "_" then [] else Str.split (Str.regexp "|") dep_labs in
-
+                    let gov_list = match govs with
+                    | "_" | "-" -> []
+                    | _ -> List.map Id.of_string (Str.split (Str.regexp "|") govs) in
+                    let lab_list = match dep_labs with
+                    | "_" | "-" -> []
+                    | _ -> Str.split (Str.regexp "|") dep_labs in
                     let prim_deps = match (gov_list, lab_list) with
                       | ([(0,None)], []) -> [] (* handle Talismane output on tokens without gov *)
                       | _ ->
@@ -541,7 +544,7 @@ module Conll = struct
                     ({acc with lines = new_line :: acc.lines }, new_acc_mwe)
                   | _ -> error ?file ~line:line_num (sprintf "illegal field one \"%s\"" f1)
                 with
-                | Id.Wrong_id id -> error ?file ~line:line_num (sprintf "illegal idenfier \"%s\"" id)
+                | Id.Wrong_id id -> error ?file ~line:line_num (sprintf "illegal identifier \"%s\"" id)
                 | Error json -> raise (Error json)
                 | exc -> error ?file ~line:line_num ~data:line (sprintf "unexpected exception \"%s\"" (Printexc.to_string exc))
               end
@@ -653,8 +656,12 @@ module Conll = struct
       | line::tail ->
         match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
         | [Str.Delim _; Str.Text t] -> Some t
-        | _ -> loop tail
-    in loop t.meta
+        | _ ->
+          match Str.split (Str.regexp " ") line with
+          (* deal with sent_id declaration of the PARSEME project *)
+          | ["#"; "source_sent_id"; "="; _; _; id ] -> Some id
+          | _ -> loop tail in
+    loop t.meta
 
   let rm_sentid_meta t =
     List.fold_left (fun acc line ->
@@ -685,14 +692,15 @@ module Conll = struct
     | [] -> []
     | head::tail -> (head |> remove_feat "sentid" |> remove_feat "sent_id") :: tail
 
-  let ensure_sentid_in_meta t =
-    match (get_sentid_meta t, get_sentid_feats t) with
-    | (None, None) ->
+  let ensure_sentid_in_meta ?default t =
+    match (get_sentid_meta t, get_sentid_feats t, default) with
+    | (None, None, None) ->
       Log.fwarning "[Conll.ensure_sentid_in_meta%s, line %d] sentence without sentid"
       (match t.file with None -> "" | Some f -> ", file "^f)
       (get_line_num t); t
-    | (Some id, _) -> t
-    | (None, Some id) ->
+    | (None, None, Some def) -> { t with meta = (sprintf "# sent_id = %s" def) :: t.meta; }
+    | (Some id, _,_) -> t
+    | (None, Some id,_) ->
       { t with
         meta = (sprintf "# sent_id = %s" id) :: t.meta;
         lines = remove_sentid_feats t.lines }
