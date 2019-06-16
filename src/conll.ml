@@ -98,6 +98,8 @@ module Mwe = struct
       | ["NE"; l] -> (Ne, Some l)
       | _ -> error (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s) in
       {mwepos; kind; label; criterion; first=(conll_id,proj_opt); items=Id_with_proj_set.empty}
+    | [l] ->
+      {mwepos=None; kind=Mwe; label=Some l; criterion=None; first=(conll_id,proj_opt); items=Id_with_proj_set.empty}
     | _ -> error  (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s)
 
   let shift delta t = {t with
