@@ -5,7 +5,7 @@ open Utils
 open Conll_types
 
 (* ======================================================================================================================== *)
-exception Error of Yojson.Basic.t
+exception Conll_error of Yojson.Basic.t
 
 let error ?file ?line ?fct ?data msg =
   let opt_list = [
@@ -17,7 +17,7 @@ let error ?file ?line ?fct ?data msg =
     (CCOpt.map (fun x -> ("data", `String x)) data);
   ] in
   let json = `Assoc (CCList.filter_map (fun x->x) opt_list) in
-  raise (Error json)
+  raise (Conll_error json)
 
 (* ======================================================================================================================== *)
 module Sentence = struct
@@ -116,7 +116,7 @@ module Mwe = struct
       {mwepos; kind; label; criterion; first=(conll_id,proj_opt); items=Id_with_proj_set.empty}
     | [l] ->
       {mwepos=None; kind=Mwe; label=Some l; criterion=None; first=(conll_id,proj_opt); items=Id_with_proj_set.empty}
-    | _ -> error  (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s)
+    | _ -> error (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s)
 
   let shift delta t = {t with
     first = Id_with_proj.shift delta t.first;
@@ -561,7 +561,6 @@ module Conll = struct
                   | _ -> error ?file ~line:line_num (sprintf "illegal field one \"%s\"" f1)
                 with
                 | Id.Wrong_id id -> error ?file ~line:line_num (sprintf "illegal identifier \"%s\"" id)
-                | Error json -> raise (Error json)
                 | exc -> error ?file ~line:line_num ~data:line (sprintf "unexpected exception \"%s\"" (Printexc.to_string exc))
               end
               | l -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l))

@@ -1,6 +1,6 @@
 open Conll_types
 
-exception Error of Yojson.Basic.t
+exception Conll_error of Yojson.Basic.t
 
 module Sentence : sig
   val fr_clean_spaces: string -> string
