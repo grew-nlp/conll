@@ -1,3 +1,6 @@
+## 1.5.0 (2016/06/24)
+  *  /!\ “Conll.Error” instead of “Conll_types.Error”
+
 ## 1.4.1 (2019/03/26)
   * move to opam2
 
