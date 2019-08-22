@@ -1125,6 +1125,7 @@ module Stat = struct
     s
     |> Str.global_replace (Str.regexp "\\.") "__"
     |> Str.global_replace (Str.regexp ":") "__"
+    |> Str.global_replace (Str.regexp "@") "___"
 
   let to_html corpus_id stat =
     let buff = Buffer.create 32 in
