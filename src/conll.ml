@@ -24,7 +24,7 @@ module Sentence = struct
   let fr_clean_spaces with_spaces =
     List.fold_left
       (fun acc (regexp,repl) ->
-        Str.global_replace regexp repl acc
+         Str.global_replace regexp repl acc
       )
       with_spaces
       [
@@ -65,6 +65,7 @@ module Sentence = struct
 end
 
 
+(* ======================================================================================================================== *)
 module Id_with_proj = struct
   (* t = (3, Some 1) <--> 3/1 conllid=3, partial_proj=1 *)
   type t = Id.t * int option
@@ -74,14 +75,16 @@ module Id_with_proj = struct
   let shift delta (i,p) = (Id.shift delta i, p)
 end
 
+(* ======================================================================================================================== *)
 module Id_with_proj_set = Set.Make (Id_with_proj)
 
+(* ======================================================================================================================== *)
 module Mwe = struct
   type kind = Ne | Mwe
 
   let string_of_kind = function
-  | Ne -> "NE"
-  | Mwe -> "MWE"
+    | Ne -> "NE"
+    | Mwe -> "MWE"
 
   type t = {
     mwepos: string option;
@@ -95,8 +98,8 @@ module Mwe = struct
   let to_string t =
     let kind = string_of_kind t.kind in
     let long_label = match t.label with
-    | None -> kind
-    | Some l -> sprintf "%s-%s" kind l in
+      | None -> kind
+      | Some l -> sprintf "%s-%s" kind l in
     sprintf "%s|%s|%s"
       (match t.mwepos with None -> "_" | Some l -> l)
       long_label
@@ -108,20 +111,20 @@ module Mwe = struct
       let mwepos = match p with "_" -> None | s -> Some s in
       let criterion = match crit with "_" -> None | s -> Some s in
       let (kind,label) =
-      match Str.split (Str.regexp "-") kind_label with
-      | ["MWE"] -> (Mwe, None)
-      | ["MWE"; l]-> (Mwe, Some l)
-      | ["NE"; l] -> (Ne, Some l)
-      | _ -> error (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s) in
+        match Str.split (Str.regexp "-") kind_label with
+        | ["MWE"] -> (Mwe, None)
+        | ["MWE"; l]-> (Mwe, Some l)
+        | ["NE"; l] -> (Ne, Some l)
+        | _ -> error (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s) in
       {mwepos; kind; label; criterion; first=(conll_id,proj_opt); items=Id_with_proj_set.empty}
     | [l] ->
       {mwepos=None; kind=Mwe; label=Some l; criterion=None; first=(conll_id,proj_opt); items=Id_with_proj_set.empty}
     | _ -> error (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s)
 
   let shift delta t = {t with
-    first = Id_with_proj.shift delta t.first;
-    items = Id_with_proj_set.map (fun id -> Id_with_proj.shift delta id) t.items;
-  }
+                       first = Id_with_proj.shift delta t.first;
+                       items = Id_with_proj_set.map (fun id -> Id_with_proj.shift delta id) t.items;
+                      }
 end
 
 (* ======================================================================================================================== *)
@@ -156,9 +159,9 @@ module Conll = struct
     if List.mem pref1 [No; S] && List.mem pref2 [I; D; E]
     then -1
     else
-      if List.mem pref1 [I; D; E] && List.mem pref2 [No; S]
-      then 1
-      else 0
+    if List.mem pref1 [I; D; E] && List.mem pref2 [No; S]
+    then 1
+    else 0
 
 
   let compare_dep (id1,lab1) (id2,lab2) =
@@ -196,8 +199,8 @@ module Conll = struct
   let remove_prefix prefix t =
     let new_feats =
       CCList.filter
-       (fun (f,v) -> not (String_.check_prefix prefix f)
-       ) t.feats in
+        (fun (f,v) -> not (String_.check_prefix prefix f)
+        ) t.feats in
     { t with feats = new_feats }
 
   let get_feat feat_name t =
@@ -207,20 +210,20 @@ module Conll = struct
   let filter_ud_misc t =
     CCList.filter_map
       (fun (f,v) ->
-        match String_.remove_prefix "_UD_MISC_" f with
-        | Some s -> Some (s,v)
-        | None -> None
+         match String_.remove_prefix "_UD_MISC_" f with
+         | Some s -> Some (s,v)
+         | None -> None
       ) t.feats
 
   let add_feat line_num (fn,fv) feats =
     let rec loop feats = match feats with
-    | [] -> [(fn,fv)]
-    | (hfn, _) :: tail when fn < hfn -> (fn,fv) :: feats
-    | (hfn, hfv) :: tail when fn > hfn -> (hfn, hfv) :: (loop tail)
-    | (_, hfv) :: tail when hfv = fv ->
-      Log.fwarning "[line %d], feature %s=%s is defined twice" line_num fn fv;
-      (fn,fv) :: tail
-    | (_, hfv) :: _ -> error ~line:line_num (sprintf "inconsistent features: %s id defined twice with two different values" fn) in
+      | [] -> [(fn,fv)]
+      | (hfn, _) :: tail when fn < hfn -> (fn,fv) :: feats
+      | (hfn, hfv) :: tail when fn > hfn -> (hfn, hfv) :: (loop tail)
+      | (_, hfv) :: tail when hfv = fv ->
+        Log.fwarning "[line %d], feature %s=%s is defined twice" line_num fn fv;
+        (fn,fv) :: tail
+      | (_, hfv) :: _ -> error ~line:line_num (sprintf "inconsistent features: %s id defined twice with two different values" fn) in
     loop feats
 
   let add_feat_line (fn,fv) line = { line with feats = add_feat line.line_num (fn,fv) line.feats }
@@ -228,27 +231,27 @@ module Conll = struct
   let add_feat_lines conll_id (fn,fv) lines =
     List.map
       (fun line ->
-          if line.id = conll_id
-          then add_feat_line (fn,fv) line
-          else line
+         if line.id = conll_id
+         then add_feat_line (fn,fv) line
+         else line
       )  lines
 
   let is_extended (_,lab) = String_.check_prefix "E:" lab
 
   let string_of_ext = function
-  | [] -> "_"
-  | ext -> String.concat "|" (
-      List.map (fun (g,l) ->
-        sprintf "%s:%s" (Id.to_string g) (String.sub l 2 ((String.length l)-2))
-      ) ext
-    )
+    | [] -> "_"
+    | ext -> String.concat "|" (
+        List.map (fun (g,l) ->
+            sprintf "%s:%s" (Id.to_string g) (String.sub l 2 ((String.length l)-2))
+          ) ext
+      )
 
   let check_line line = ()
-    (* match (line.id, get_feat "_UD_empty" line) with
-    | ((_,None), None) -> ()
-    | ((_,Some _), Some _) -> ()
-    | ((_,None), Some _) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty node and non empty identifier";
-    | ((_,Some _), None) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty identifier and non empty node" *)
+  (* match (line.id, get_feat "_UD_empty" line) with
+     | ((_,None), None) -> ()
+     | ((_,Some _), Some _) -> ()
+     | ((_,None), Some _) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty node and non empty identifier";
+     | ((_,Some _), None) -> error ~fct:"Conll.check_line" ~line:line.line_num "inconsistent emptyness: empty identifier and non empty node" *)
 
   let line_to_string ~cupt mwe_line l =
 
@@ -321,38 +324,38 @@ module Conll = struct
   let check t =
     (* check consecutive ids *)
     let rec loop = function
-    | [] | [_] -> ()
-    | {id=(i1,None)}::({id=(i2,None);line_num}::_ as tail) ->
-      if i2 <> i1 + 1
-      then Log.fwarning "[Conll, %sline %d], idenfier %d is different from expected %d" (sof t.file) line_num i2 (i1+1);
-      loop tail
-    | {id=(i1,Some _)}::({id=(i2,None);line_num}::_ as tail) ->
-      if i2 <> i1 + 1
-      then Log.fwarning "[Conll, %sline %d], idenfier %d is different from expected %d" (sof t.file) line_num i2 (i1+1);
-      loop tail
-    | {id=(i1,None)}::({id=(i2,Some e2);line_num}::_ as tail) ->
-      if i1 <> i2
-      then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.1" (sof t.file) line_num i2 e2 i1
-      else if e2 <> 1
-      then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.1" (sof t.file) line_num i2 e2 i1;
-      loop tail
-    | {id=(i1,Some e1)}::({id=(i2,Some e2);line_num}::_ as tail) ->
-      if (i1 <> i2) || (e2 <> e1+1)
-      then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.%d" (sof t.file) line_num i2 e2 i1 (e1+1);
-      loop tail
+      | [] | [_] -> ()
+      | {id=(i1,None)}::({id=(i2,None);line_num}::_ as tail) ->
+        if i2 <> i1 + 1
+        then Log.fwarning "[Conll, %sline %d], idenfier %d is different from expected %d" (sof t.file) line_num i2 (i1+1);
+        loop tail
+      | {id=(i1,Some _)}::({id=(i2,None);line_num}::_ as tail) ->
+        if i2 <> i1 + 1
+        then Log.fwarning "[Conll, %sline %d], idenfier %d is different from expected %d" (sof t.file) line_num i2 (i1+1);
+        loop tail
+      | {id=(i1,None)}::({id=(i2,Some e2);line_num}::_ as tail) ->
+        if i1 <> i2
+        then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.1" (sof t.file) line_num i2 e2 i1
+        else if e2 <> 1
+        then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.1" (sof t.file) line_num i2 e2 i1;
+        loop tail
+      | {id=(i1,Some e1)}::({id=(i2,Some e2);line_num}::_ as tail) ->
+        if (i1 <> i2) || (e2 <> e1+1)
+        then Log.fwarning "[Conll, %sline %d], idenfier %d.%d is different from expected %d.%d" (sof t.file) line_num i2 e2 i1 (e1+1);
+        loop tail
     in loop t.lines;
 
     (* check dependency and loops *)
     let id_list = List.map (fun {id} -> id) t.lines in
     List.iter (
       fun {id; line_num; deps} ->
-      List.iter (
-        fun (i,_) ->
-          if (fst i)>0 && not (List.mem i id_list)
-          then error ?file:t.file ~line:line_num (sprintf "cannot find gov identifier %s" (Id.to_string i));
-          if id = i
-          then error ?file:t.file ~line:line_num (sprintf "loop in dependency %s" (Id.to_string i));
-      ) deps
+        List.iter (
+          fun (i,_) ->
+            if (fst i)>0 && not (List.mem i id_list)
+            then error ?file:t.file ~line:line_num (sprintf "cannot find gov identifier %s" (Id.to_string i));
+            if id = i
+            then error ?file:t.file ~line:line_num (sprintf "loop in dependency %s" (Id.to_string i));
+        ) deps
     ) t.lines
 
   let empty file = { file;  meta=[]; lines=[]; multiwords=[]; mwes=Int_map.empty; }
@@ -365,10 +368,10 @@ module Conll = struct
     | feats ->
       List.fold_left
         (fun acc feat ->
-          match Str.bounded_split (Str.regexp "=") feat 2 with
-            | [feat_name] -> add_feat line_num (encode_feat_name feat_name, "true") acc
-            | [feat_name; feat_value] -> add_feat line_num (encode_feat_name feat_name, feat_value) acc
-            | _ -> error ?file ~line:line_num ~fct:"Conll.parse_feats" (sprintf "failed to parse \"%s\"" feats)
+           match Str.bounded_split (Str.regexp "=") feat 2 with
+           | [feat_name] -> add_feat line_num (encode_feat_name feat_name, "true") acc
+           | [feat_name; feat_value] -> add_feat line_num (encode_feat_name feat_name, feat_value) acc
+           | _ -> error ?file ~line:line_num ~fct:"Conll.parse_feats" (sprintf "failed to parse \"%s\"" feats)
         ) [] (Str.split (Str.regexp "|") feats)
 
   let parse_feats ~file line_num s =
@@ -388,14 +391,14 @@ module Conll = struct
 
   let set_label id new_label t =
     { t with lines = List.map
-      (fun line ->
-        if line.id=id
-        then match line.deps with
-         | [(gov,lab)] -> {line with deps=[(gov,new_label)]}
-         | _ -> error "ambiguous set_label"
-        else line
-      ) t.lines
-      }
+                 (fun line ->
+                    if line.id=id
+                    then match line.deps with
+                      | [(gov,lab)] -> {line with deps=[(gov,new_label)]}
+                      | _ -> error "ambiguous set_label"
+                    else line
+                 ) t.lines
+    }
 
   (* parsing of extended deps encoded in column 9 in UD *)
   let parse_extended_deps = function
@@ -404,9 +407,9 @@ module Conll = struct
       let sd_list = Str.split (Str.regexp "|") s in
       CCList.filter_map (
         fun sd -> match Str.bounded_split (Str.regexp ":") sd 2 with
-        | [gov;lab] -> Some (Id.of_string gov, "E:"^lab)  (* E: is the prefix for extended relations *)
-        | [_] -> None
-        | _ -> error (sprintf "cannot parse extended dependency \"%s\"" sd)
+          | [gov;lab] -> Some (Id.of_string gov, "E:"^lab)  (* E: is the prefix for extended relations *)
+          | [_] -> None
+          | _ -> error (sprintf "cannot parse extended dependency \"%s\"" sd)
       ) sd_list
 
   let add_feat_id id (fn, fv) t =
@@ -416,10 +419,10 @@ module Conll = struct
   let add_mw_feats t =
     List.fold_left
       (fun acc {first; last; fusion; mw_efs} ->
-        acc
-        |> (add_feat_id (first,None) ("_UD_mw_fusion", fusion))
-        |> (add_feat_id (first,None) ("_UD_mw_span", string_of_int (last-first+1)))
-        |> (List.fold_right (fun (f,v) -> add_feat_id (first,None) ("_UD_MISC_"^f,v)) mw_efs)
+         acc
+         |> (add_feat_id (first,None) ("_UD_mw_fusion", fusion))
+         |> (add_feat_id (first,None) ("_UD_mw_span", string_of_int (last-first+1)))
+         |> (List.fold_right (fun (f,v) -> add_feat_id (first,None) ("_UD_MISC_"^f,v)) mw_efs)
       ) t t.multiwords
 
   (* move MISC feats in feats with prefix _MISC_ *)
@@ -432,8 +435,8 @@ module Conll = struct
   (* move feats with prefix _MISC_ in MISC feats *)
   let line_feats_to_misc l =
     let (pre_efs, feats) =
-    List.partition (
-      fun (n,v) -> String.length n > 6 && String.sub n 0 6 = "_MISC_"
+      List.partition (
+        fun (n,v) -> String.length n > 6 && String.sub n 0 6 = "_MISC_"
       ) l.feats in
     let new_efs = List.map (fun (n,v) -> (String.sub n 6 ((String.length n) - 6),v)) pre_efs in
     let efs = List.sort Pervasives.compare (new_efs @ l.efs) in
@@ -455,36 +458,36 @@ module Conll = struct
 
   let add_mwe_nodes ?file lines conll =
     let (new_lines, mwes) = List.fold_left
-      (fun (acc_lines, acc) (line_num, conll_id, mwe_field) ->
-        let items = Str.split (Str.regexp ";") mwe_field in
-        List.fold_left
-          (fun (acc2_lines, acc2) item ->
-            match Str.split (Str.regexp ":") item with
-            | [] -> error ?file ~line:line_num (sprintf "Cannot parse mwe item \"%s\"" item)
-            | mwe_id_string::tail ->
-              let (mwe_id, proj_opt) = parse_mwe_id_proj_opt mwe_id_string in
+        (fun (acc_lines, acc) (line_num, conll_id, mwe_field) ->
+           let items = Str.split (Str.regexp ";") mwe_field in
+           List.fold_left
+             (fun (acc2_lines, acc2) item ->
+                match Str.split (Str.regexp ":") item with
+                | [] -> error ?file ~line:line_num (sprintf "Cannot parse mwe item \"%s\"" item)
+                | mwe_id_string::tail ->
+                  let (mwe_id, proj_opt) = parse_mwe_id_proj_opt mwe_id_string in
 
-              let new_lines =
-              (* match snd mwe_id with
-              | None -> acc2_lines
-              | Some i -> add_feat_lines conll_id ("_MWE_partial_projection", (string_of_int i)) *)
-               acc2_lines in
+                  let new_lines =
+                    (* match snd mwe_id with
+                       | None -> acc2_lines
+                       | Some i -> add_feat_lines conll_id ("_MWE_partial_projection", (string_of_int i)) *)
+                    acc2_lines in
 
-              (* /i *)
+                  (* /i *)
 
-              match tail with
-                | [desc] -> let mwe = Mwe.parse conll_id proj_opt desc in
-                  (new_lines, Int_map.add mwe_id mwe acc2)
-                | [] ->
-                  begin
-                    match Int_map.find_opt mwe_id acc2 with
-                    | None -> error ?file ~line:line_num (sprintf "Cannot find definition for mwe_id: \"%d\"" mwe_id)
-                    | Some x -> (new_lines, Int_map.add mwe_id {x with items = Id_with_proj_set.add (conll_id, proj_opt) x.items} acc2)
-                  end
-                | _ -> error ?file ~line:line_num (sprintf "Cannot parse mwe item \"%s\"" item)
-            ) (acc_lines, acc) items
-      ) (conll.lines, Int_map.empty) lines in
-      { conll with lines = new_lines; mwes }
+                  match tail with
+                  | [desc] -> let mwe = Mwe.parse conll_id proj_opt desc in
+                    (new_lines, Int_map.add mwe_id mwe acc2)
+                  | [] ->
+                    begin
+                      match Int_map.find_opt mwe_id acc2 with
+                      | None -> error ?file ~line:line_num (sprintf "Cannot find definition for mwe_id: \"%d\"" mwe_id)
+                      | Some x -> (new_lines, Int_map.add mwe_id {x with items = Id_with_proj_set.add (conll_id, proj_opt) x.items} acc2)
+                    end
+                  | _ -> error ?file ~line:line_num (sprintf "Cannot parse mwe item \"%s\"" item)
+             ) (acc_lines, acc) items
+        ) (conll.lines, Int_map.empty) lines in
+    { conll with lines = new_lines; mwes }
 
   exception Empty_conll
   (* parse a list of line corresponding to one conll structure *)
@@ -492,85 +495,85 @@ module Conll = struct
     let (conll,mwe) = (* mwe contains the list of (line_num, id, mwe_field) to be processed later in add_mwe_nodes *)
       List.fold_left
         (fun (acc, acc_mwe) (line_num, line) ->
-          match line with
-          | "" -> (acc, acc_mwe)
-          | _ when line.[0] = '#' -> ({ acc with meta = line :: acc.meta }, acc_mwe)
-          | _ ->
-            match Str.split (Str.regexp "\t") line with
-              | (f1 :: form :: lemma :: upos :: xpos :: feats :: govs :: dep_labs :: c9 :: c10 :: tail) as l ->
-              begin
-                try
-                  match Str.split (Str.regexp "-") f1 with
-                  | [f;l] -> ({acc with multiwords = {
-                      mw_line_num = Some line_num;
-                      first=int_of_string f;
-                      last=int_of_string l;
-                      fusion=form;
-                      mw_efs= sort_feats (parse_feats ~file line_num c10);
-                      } :: acc.multiwords
-                    }, acc_mwe)
-                  | [string_id] ->
-                    let gov_list = match govs with
-                    | "_" | "-" -> []
-                    | _ -> List.map Id.of_string (Str.split (Str.regexp "|") govs) in
-                    let lab_list = match dep_labs with
-                    | "_" | "-" -> []
-                    | _ -> Str.split (Str.regexp "|") dep_labs in
-                    let prim_deps = match (gov_list, lab_list) with
-                      | ([(0,None)], []) -> [] (* handle Talismane output on tokens without gov *)
-                      | _ ->
-                        try List.combine gov_list lab_list
-                        with Invalid_argument _ -> error ?file ~line:line_num "inconsistent relation specification" in
+           match line with
+           | "" -> (acc, acc_mwe)
+           | _ when line.[0] = '#' -> ({ acc with meta = line :: acc.meta }, acc_mwe)
+           | _ ->
+             match Str.split (Str.regexp "\t") line with
+             | (f1 :: form :: lemma :: upos :: xpos :: feats :: govs :: dep_labs :: c9 :: c10 :: tail) as l ->
+               begin
+                 try
+                   match Str.split (Str.regexp "-") f1 with
+                   | [f;l] -> ({acc with multiwords = {
+                       mw_line_num = Some line_num;
+                       first=int_of_string f;
+                       last=int_of_string l;
+                       fusion=form;
+                       mw_efs= sort_feats (parse_feats ~file line_num c10);
+                     } :: acc.multiwords
+                     }, acc_mwe)
+                   | [string_id] ->
+                     let gov_list = match govs with
+                       | "_" | "-" -> []
+                       | _ -> List.map Id.of_string (Str.split (Str.regexp "|") govs) in
+                     let lab_list = match dep_labs with
+                       | "_" | "-" -> []
+                       | _ -> Str.split (Str.regexp "|") dep_labs in
+                     let prim_deps = match (gov_list, lab_list) with
+                       | ([(0,None)], []) -> [] (* handle Talismane output on tokens without gov *)
+                       | _ ->
+                         try List.combine gov_list lab_list
+                         with Invalid_argument _ -> error ?file ~line:line_num "inconsistent relation specification" in
 
-                    let deps = match c9 with
-                    | "_" -> prim_deps
-                    | _ -> prim_deps @ (parse_extended_deps c9) in
+                     let deps = match c9 with
+                       | "_" -> prim_deps
+                       | _ -> prim_deps @ (parse_extended_deps c9) in
 
-                    let id = Id.of_string (string_id) in
-                    let new_line =
-                      let feats =
-                        match id with
-                        | (_,None) -> parse_feats ~file line_num feats
-                        | _ -> ("_UD_empty", "Yes") :: (parse_feats ~file line_num feats) in
-                      let orfeo_feats = match tail with
-                        | [start; stop; speaker] -> [("_start",start); ("_stop",stop); ("_speaker",speaker); ]
-                        | _ -> [] in
-                      let efs = sort_feats (parse_feats ~file line_num c10) in
-                      {
-                      line_num;
-                      id;
-                      form = underscore form;
-                      lemma = underscore lemma;
-                      upos = underscore upos;
-                      xpos =
-                        if orfeo_feats = []
-                        then underscore xpos
-                        else "_"; (* Hack to hide xpos in Orfeo (always upos=xpos) *)
-                      feats = sort_feats (feats @ orfeo_feats);
-                      deps;
-                      efs;
-                      } in
+                     let id = Id.of_string (string_id) in
+                     let new_line =
+                       let feats =
+                         match id with
+                         | (_,None) -> parse_feats ~file line_num feats
+                         | _ -> ("_UD_empty", "Yes") :: (parse_feats ~file line_num feats) in
+                       let orfeo_feats = match tail with
+                         | [start; stop; speaker] -> [("_start",start); ("_stop",stop); ("_speaker",speaker); ]
+                         | _ -> [] in
+                       let efs = sort_feats (parse_feats ~file line_num c10) in
+                       {
+                         line_num;
+                         id;
+                         form = underscore form;
+                         lemma = underscore lemma;
+                         upos = underscore upos;
+                         xpos =
+                           if orfeo_feats = []
+                           then underscore xpos
+                           else "_"; (* Hack to hide xpos in Orfeo (always upos=xpos) *)
+                         feats = sort_feats (feats @ orfeo_feats);
+                         deps;
+                         efs;
+                       } in
 
-                    let new_acc_mwe = match tail with
-                    | [] | ["*"] | [_;_;_]-> acc_mwe
-                    | [x] -> (line_num, id, x) :: acc_mwe
-                    | _ -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l))
+                     let new_acc_mwe = match tail with
+                       | [] | ["*"] | [_;_;_]-> acc_mwe
+                       | [x] -> (line_num, id, x) :: acc_mwe
+                       | _ -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l))
                      in
 
-                    ({acc with lines = new_line :: acc.lines }, new_acc_mwe)
-                  | _ -> error ?file ~line:line_num (sprintf "illegal field one \"%s\"" f1)
-                with
-                | Id.Wrong_id id -> error ?file ~line:line_num (sprintf "illegal identifier \"%s\"" id)
-                | exc -> error ?file ~line:line_num ~data:line (sprintf "unexpected exception \"%s\"" (Printexc.to_string exc))
-              end
-              | l -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l))
+                     ({acc with lines = new_line :: acc.lines }, new_acc_mwe)
+                   | _ -> error ?file ~line:line_num (sprintf "illegal field one \"%s\"" f1)
+                 with
+                 | Id.Wrong_id id -> error ?file ~line:line_num (sprintf "illegal identifier \"%s\"" id)
+                 | exc -> error ?file ~line:line_num ~data:line (sprintf "unexpected exception \"%s\"" (Printexc.to_string exc))
+               end
+             | l -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l))
         ) (empty file,[]) lines in
-      if List.length conll.lines = 0 then raise Empty_conll;
-      check conll;
-      conll
-       |> misc_to_feats (* add features _MISC_ *)
-       |> add_mw_feats  (* add features _UD_ *)
-       |> (add_mwe_nodes ?file mwe)
+    if List.length conll.lines = 0 then raise Empty_conll;
+    check conll;
+    conll
+    |> misc_to_feats (* add features _MISC_ *)
+    |> add_mw_feats  (* add features _UD_ *)
+    |> (add_mwe_nodes ?file mwe)
 
   let parse ?file lines = parse_rev ?file (List.rev lines)
 
@@ -591,31 +594,31 @@ module Conll = struct
 
     let mwe_line =
       Int_map.fold
-      (fun mwe_id mwe acc ->
-        let (id_first, proj_first) = mwe.Mwe.first in
-        let old_ = try Id_map.find id_first acc with Not_found -> [] in
-        let new_ = (sprintf "%d%s:%s"
-            mwe_id
-            (match proj_first with None -> "" | Some i -> sprintf "/%d" i)
-            (Mwe.to_string mwe)
-          ) :: old_ in
-        let acc_tmp = Id_map.add id_first new_ acc in
-        Id_with_proj_set.fold
-          (fun (conll_id, proj_opt) acc2 ->
-            let old_ = try Id_map.find conll_id acc2 with Not_found -> [] in
-            let new_ = (sprintf "%d%s" mwe_id (match proj_opt with None -> "" | Some i -> sprintf "/%d" i)) :: old_ in
-            Id_map.add conll_id new_ acc2
-          ) mwe.Mwe.items acc_tmp
-      ) t.mwes Id_map.empty in
+        (fun mwe_id mwe acc ->
+           let (id_first, proj_first) = mwe.Mwe.first in
+           let old_ = try Id_map.find id_first acc with Not_found -> [] in
+           let new_ = (sprintf "%d%s:%s"
+                         mwe_id
+                         (match proj_first with None -> "" | Some i -> sprintf "/%d" i)
+                         (Mwe.to_string mwe)
+                      ) :: old_ in
+           let acc_tmp = Id_map.add id_first new_ acc in
+           Id_with_proj_set.fold
+             (fun (conll_id, proj_opt) acc2 ->
+                let old_ = try Id_map.find conll_id acc2 with Not_found -> [] in
+                let new_ = (sprintf "%d%s" mwe_id (match proj_opt with None -> "" | Some i -> sprintf "/%d" i)) :: old_ in
+                Id_map.add conll_id new_ acc2
+             ) mwe.Mwe.items acc_tmp
+        ) t.mwes Id_map.empty in
 
     let rec loop (lines, multiwords) = match (lines, multiwords) with
       | ([],[]) -> ()
       | (line::tail,[]) ->
-          bprintf buff "%s\n" (line_to_string ~cupt mwe_line line); loop (tail,[])
+        bprintf buff "%s\n" (line_to_string ~cupt mwe_line line); loop (tail,[])
       | (line::tail, {first}::_) when (fst line.id) < first ->
-          bprintf buff "%s\n" (line_to_string ~cupt mwe_line line); loop (tail,multiwords)
+        bprintf buff "%s\n" (line_to_string ~cupt mwe_line line); loop (tail,multiwords)
       | (_, mw::tail) ->
-          bprintf buff "%s\n" (multiword_to_string ~cupt mw); loop (lines,tail) in
+        bprintf buff "%s\n" (multiword_to_string ~cupt mw); loop (lines,tail) in
     loop (t.lines, t.multiwords);
     Buffer.contents buff
 
@@ -647,14 +650,14 @@ module Conll = struct
     bprintf buff "  node [shape=Mrecord];\n";
     List.iter
       (fun line ->
-        bprintf buff "  N_%s " (Id.to_dot line.id);
-        node_to_dot_label buff line;
-        List.iter (fun (gov, lab) ->
-          match lab with
-          (* in phrase structure tree, no reals label on edges *)
-          | "__SUB__" -> bprintf buff "  N_%s -> N_%s;\n" (Id.to_dot gov) (Id.to_dot line.id)
-          | _ -> bprintf buff "  N_%s -> N_%s [label=\"%s\"];\n" (Id.to_dot gov) (Id.to_dot line.id) lab
-        ) line.deps
+         bprintf buff "  N_%s " (Id.to_dot line.id);
+         node_to_dot_label buff line;
+         List.iter (fun (gov, lab) ->
+             match lab with
+             (* in phrase structure tree, no reals label on edges *)
+             | "__SUB__" -> bprintf buff "  N_%s -> N_%s;\n" (Id.to_dot gov) (Id.to_dot line.id)
+             | _ -> bprintf buff "  N_%s -> N_%s [label=\"%s\"];\n" (Id.to_dot gov) (Id.to_dot line.id) lab
+           ) line.deps
       ) t.lines;
     bprintf buff "}\n";
     Buffer.contents buff
@@ -680,17 +683,17 @@ module Conll = struct
 
   let rm_sentid_meta t =
     List.fold_left (fun acc line ->
-      match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
+        match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
         | [Str.Delim _; Str.Text t] -> acc
         | _ -> line :: acc
       ) [] t
 
   let get_sentid_feats t =
     match t.lines with
-      | [] -> None
-      | head::_ ->
-        match get_feat "sent_id" head
-        with None -> get_feat "sentid" head | x -> x
+    | [] -> None
+    | head::_ ->
+      match get_feat "sent_id" head
+      with None -> get_feat "sentid" head | x -> x
 
   let get_sentid t =
     match (get_sentid_meta t, get_sentid_feats t) with
@@ -711,8 +714,8 @@ module Conll = struct
     match (get_sentid_meta t, get_sentid_feats t, default) with
     | (None, None, None) ->
       Log.fwarning "[Conll.ensure_sentid_in_meta%s, line %d] sentence without sentid"
-      (match t.file with None -> "" | Some f -> ", file "^f)
-      (get_line_num t); t
+        (match t.file with None -> "" | Some f -> ", file "^f)
+        (get_line_num t); t
     | (None, None, Some def) -> { t with meta = (sprintf "# sent_id = %s" def) :: t.meta; }
     | (Some id, _,_) -> t
     | (None, Some id,_) ->
@@ -746,19 +749,19 @@ module Conll = struct
 
   let normalize_multiwords t =
     let new_multiwords = List.fold_left
-      (fun acc line ->
-        let ud_misc = filter_ud_misc line in
-        match (get_feat "_UD_mw_fusion" line, get_feat "_UD_mw_span" line, ud_misc) with
-        | (None, None, []) -> acc
-        | (None, None, _) -> Log.warning "features _UD_MISC_* cannot be interpreted here"; acc
-        | (Some fusion, Some string_span, efs) ->
-          let span =
-            try int_of_string string_span
-            with Failure _ -> error ?file:t.file ~line:(get_line_num t) "_UD_mw_span must be integer" in
-          insert_multiword (fst line.id) span fusion efs acc
-        | _ -> error ?file:t.file ~line:(get_line_num t) "inconsistent mw specification"
-      )
-      t.multiwords t.lines in
+        (fun acc line ->
+           let ud_misc = filter_ud_misc line in
+           match (get_feat "_UD_mw_fusion" line, get_feat "_UD_mw_span" line, ud_misc) with
+           | (None, None, []) -> acc
+           | (None, None, _) -> Log.warning "features _UD_MISC_* cannot be interpreted here"; acc
+           | (Some fusion, Some string_span, efs) ->
+             let span =
+               try int_of_string string_span
+               with Failure _ -> error ?file:t.file ~line:(get_line_num t) "_UD_mw_span must be integer" in
+             insert_multiword (fst line.id) span fusion efs acc
+           | _ -> error ?file:t.file ~line:(get_line_num t) "inconsistent mw specification"
+        )
+        t.multiwords t.lines in
     { t with
       multiwords = new_multiwords;
       lines = List.map (remove_prefix "_UD_") t.lines
@@ -780,26 +783,26 @@ module Conll = struct
 
   let build highlight_fct t =
     let rec loop = function
-    | ([],[]) -> []
-    (* skip empty words *)
-    | (line::tail, mw) when snd line.id <> None -> loop (tail, mw)
-    | ([line],[]) ->
-      let text = highlight_fct (fst line.id, fst line.id) line.form in
+      | ([],[]) -> []
+      (* skip empty words *)
+      | (line::tail, mw) when snd line.id <> None -> loop (tail, mw)
+      | ([line],[]) ->
+        let text = highlight_fct (fst line.id, fst line.id) line.form in
         [text]
-    | (line::tail,[]) ->
+      | (line::tail,[]) ->
         let text = highlight_fct (fst line.id, fst line.id) line.form in
         (text ^ (final_space line)) :: (loop (tail,[]))
-    | (line::tail, ((mw::_) as multiwords)) when (fst line.id) < mw.first ->
+      | (line::tail, ((mw::_) as multiwords)) when (fst line.id) < mw.first ->
         let text = highlight_fct (fst line.id, fst line.id) line.form in
         (text ^ (final_space line)) :: (loop (tail,multiwords))
-    | (line::tail, ((mw::_) as multiwords)) when (fst line.id) = mw.first ->
+      | (line::tail, ((mw::_) as multiwords)) when (fst line.id) = mw.first ->
         let text = highlight_fct (mw.first, mw.last) mw.fusion in
         (text ^(mw_final_space mw)) :: (loop (tail,multiwords))
-    | (line::tail, (mw::mw_tail)) when (fst line.id) > mw.last ->
+      | (line::tail, (mw::mw_tail)) when (fst line.id) > mw.last ->
         (loop (line::tail,mw_tail))
-    | (_::tail, multiwords) ->
+      | (_::tail, multiwords) ->
         (loop (tail,multiwords))
-    | (_, mw::_) ->
+      | (_, mw::_) ->
         error ?file:t.file ?line:mw.mw_line_num "Inconsistent multiwords" in
     let form_list = loop (t.lines, t.multiwords) in
     concat_words form_list
@@ -808,25 +811,25 @@ module Conll = struct
 
   let html_sentence ?(highlight=[]) t =
     build (fun (first,last) x ->
-      if List.exists (fun id -> first <= id && id <= last) highlight
-      then sprintf "<span class=\"highlight\">%s</span>" x
-      else x
+        if List.exists (fun id -> first <= id && id <= last) highlight
+        then sprintf "<span class=\"highlight\">%s</span>" x
+        else x
       ) t
 
   let text_regexp = Str.regexp "# ?\\(sentence-\\)?text ?[:=]?[ \t]?"
 
   let get_sentence {meta; lines} =
     let rec loop = function
-    | [] -> None
-    | line::tail ->
-      match Str.full_split text_regexp line with
-      | [Str.Delim _; Str.Text t] -> Some t
-      | _ -> loop tail in
+      | [] -> None
+      | line::tail ->
+        match Str.full_split text_regexp line with
+        | [Str.Delim _; Str.Text t] -> Some t
+        | _ -> loop tail in
     loop meta
 
   let rm_sentence_text t =
     List.fold_left (fun acc line ->
-      match Str.full_split text_regexp line with
+        match Str.full_split text_regexp line with
         | [Str.Delim _; Str.Text t] -> acc
         | _ -> line :: acc
       ) [] t
@@ -837,31 +840,31 @@ module Conll = struct
     let buff = Buffer.create 32 in
     List.iter
       (fun line ->
-        match line.deps with
+         match line.deps with
 
-        (* UD_French-GSD / UD_French-Sequoia *)
-        | [] when line.xpos ="_" ->
-          bprintf buff "%s\t%s\t_\t_\t%s\t_\t_\t_\t_\t_\n" (Id.to_string line.id) line.form line.upos
-        | [(gov_id,label)] when line.xpos ="_" ->
-          bprintf buff "%s\t%s\t_\t_\t%s\t_\t%s\t%s\t_\t_\n"
-          (Id.to_string line.id)
-          line.form
-          line.upos
-          (Id.to_string gov_id) label
+         (* UD_French-GSD / UD_French-Sequoia *)
+         | [] when line.xpos ="_" ->
+           bprintf buff "%s\t%s\t_\t_\t%s\t_\t_\t_\t_\t_\n" (Id.to_string line.id) line.form line.upos
+         | [(gov_id,label)] when line.xpos ="_" ->
+           bprintf buff "%s\t%s\t_\t_\t%s\t_\t%s\t%s\t_\t_\n"
+             (Id.to_string line.id)
+             line.form
+             line.upos
+             (Id.to_string gov_id) label
 
 
-        | [] ->
-          let xpos = match line.xpos with "PONCT" -> "_" | x -> x in
-          bprintf buff "%s\t%s\t_\t%s\t%s\t_\t_\t_\t_\t_\n" (Id.to_string line.id) line.form xpos xpos
-        | [(gov_id,"ponct")] ->
-          bprintf buff "%s\t%s\t_\t_\t_\t_\t_\t_\t_\t_\n" (Id.to_string line.id) line.form
-        | [(gov_id,label)] ->
-          bprintf buff "%s\t%s\t_\t%s\t%s\t_\t%s\t%s\t_\t_\n"
-          (Id.to_string line.id)
-          line.form
-          line.xpos line.xpos
-          (Id.to_string gov_id) label
-        | _ -> error ~line:line.line_num "multiple deps not handled"
+         | [] ->
+           let xpos = match line.xpos with "PONCT" -> "_" | x -> x in
+           bprintf buff "%s\t%s\t_\t%s\t%s\t_\t_\t_\t_\t_\n" (Id.to_string line.id) line.form xpos xpos
+         | [(gov_id,"ponct")] ->
+           bprintf buff "%s\t%s\t_\t_\t_\t_\t_\t_\t_\t_\n" (Id.to_string line.id) line.form
+         | [(gov_id,label)] ->
+           bprintf buff "%s\t%s\t_\t%s\t%s\t_\t%s\t%s\t_\t_\n"
+             (Id.to_string line.id)
+             line.form
+             line.xpos line.xpos
+             (Id.to_string gov_id) label
+         | _ -> error ~line:line.line_num "multiple deps not handled"
       ) t.lines;
     Buffer.contents buff
 
@@ -871,30 +874,30 @@ module Conll = struct
     | Some (largest,_) ->
       Int_map.fold
         (fun k mwe acc ->
-          Int_map.add (k+largest) (Mwe.shift delta mwe) acc
+           Int_map.add (k+largest) (Mwe.shift delta mwe) acc
         ) mwe2 mwe1
 
   let shift delta t =
     let new_lines = List.map
-      (fun line -> {line with
-        id=Id.shift delta line.id;
-        deps = List.map (function
-          | ((0,None),"root") -> ((0,None),"root")
-          | (id,label) -> (Id.shift delta id, label)
-        ) line.deps;
-      }) t.lines in
+        (fun line -> {line with
+                      id=Id.shift delta line.id;
+                      deps = List.map (function
+                          | ((0,None),"root") -> ((0,None),"root")
+                          | (id,label) -> (Id.shift delta id, label)
+                        ) line.deps;
+                     }) t.lines in
     let new_multiwords = List.map
-      (fun multiword -> {multiword with
-        mw_line_num = None;
-        first = multiword.first + delta;
-        last = multiword.last + delta;
-      }) t.multiwords in
+        (fun multiword -> {multiword with
+                           mw_line_num = None;
+                           first = multiword.first + delta;
+                           last = multiword.last + delta;
+                          }) t.multiwords in
     {t with lines = new_lines; multiwords = new_multiwords }
 
   let merge new_sentid t1 t2 =
     let new_text = match (get_sentence t1, get_sentence t2) with
-    | Some s1, Some s2 -> Sentence.fr_clean_spaces (s1 ^ " " ^ s2)
-    | _ -> error "cannot merge without sentence" in
+      | Some s1, Some s2 -> Sentence.fr_clean_spaces (s1 ^ " " ^ s2)
+      | _ -> error "cannot merge without sentence" in
     let new_meta =
       (sprintf "# sent_id = %s" new_sentid) ::
       (sprintf "# text = %s" new_text) ::
@@ -904,10 +907,10 @@ module Conll = struct
     | Some { id = (delta,_) } ->
       let shifted_t2 = shift delta t2 in
       {t1 with
-        meta = new_meta;
-        lines = t1.lines @ shifted_t2.lines;
-        multiwords = t1.multiwords @ shifted_t2.multiwords;
-        mwes = merge_mwes delta t1.mwes t2.mwes;
+       meta = new_meta;
+       lines = t1.lines @ shifted_t2.lines;
+       multiwords = t1.multiwords @ shifted_t2.multiwords;
+       mwes = merge_mwes delta t1.mwes t2.mwes;
       }
 
 end (* module Conll *)
@@ -928,21 +931,21 @@ module Conll_corpus = struct
     let rev_locals = ref [] in
     let save_one () =
       (try
-        let conll = Conll.parse_rev ~file !rev_locals in
-        incr cpt;
-        let base = Filename.basename file in
-        let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
-        res := (sentid,conll) :: !res
-      with Conll.Empty_conll -> ());
+         let conll = Conll.parse_rev ~file !rev_locals in
+         incr cpt;
+         let base = Filename.basename file in
+         let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
+         res := (sentid,conll) :: !res
+       with Conll.Empty_conll -> ());
       rev_locals := [] in
 
     let _ =
       List.iter
         (fun (line_num,line) -> match line with
-          | "" when !rev_locals = [] -> Log.fwarning "[Conll, File %s] Several blank lines around line %d" file line_num;
-          | "" -> save_one ()
-          | _ -> rev_locals := (line_num,line) :: !rev_locals
-      ) lines in
+           | "" when !rev_locals = [] -> Log.fwarning "[Conll, File %s] Several blank lines around line %d" file line_num;
+           | "" -> save_one ()
+           | _ -> rev_locals := (line_num,line) :: !rev_locals
+        ) lines in
 
     if !rev_locals != []
     then (
@@ -971,7 +974,7 @@ module Conll_corpus = struct
   let save file_name t =
     let out_ch = open_out file_name in
     Array.iter (fun (id,conll) ->
-      fprintf out_ch "%s" (prepare_for_output conll);
+        fprintf out_ch "%s" (prepare_for_output conll);
         if not (Conll.is_void conll)
         then fprintf out_ch "\n"
       ) t;
@@ -981,14 +984,14 @@ module Conll_corpus = struct
     let out_ch = open_out file_name in
     for i = first to last do
       let (id,conll) = t.(i) in
-        fprintf out_ch "%s" (prepare_for_output conll);
-        if not (Conll.is_void conll) then fprintf out_ch "\n"
+      fprintf out_ch "%s" (prepare_for_output conll);
+      if not (Conll.is_void conll) then fprintf out_ch "\n"
     done;
     close_out out_ch
 
   let dump t =
     Array.iter (fun (_,conll) ->
-      printf "%s\n" (prepare_for_output conll)
+        printf "%s\n" (prepare_for_output conll)
       ) t
 
   let token_size t =
@@ -1000,15 +1003,15 @@ module Conll_corpus = struct
 
     Array.iteri
       (fun i (_,conll) ->
-        if i mod size = 0
-        then
-          begin
-          close ();
-          out_ch := Some (open_out (sprintf "%s_%02d.conll" base_output (i/size+1)))
-          end;
-        match !out_ch with
-        | None -> failwith "BUG web_anno"
-        | Some oc -> fprintf oc "%s\n" (Conll.web_anno conll)
+         if i mod size = 0
+         then
+           begin
+             close ();
+             out_ch := Some (open_out (sprintf "%s_%02d.conll" base_output (i/size+1)))
+           end;
+         match !out_ch with
+         | None -> failwith "BUG web_anno"
+         | Some oc -> fprintf oc "%s\n" (Conll.web_anno conll)
       ) corpus;
     close ()
 
@@ -1018,6 +1021,7 @@ module Conll_corpus = struct
     with Found c -> Some c
 end
 
+(* ======================================================================================================================== *)
 module Stat = struct
   module String_map = Map.Make (String)
   module String_set = Set.Make (String)
@@ -1050,75 +1054,80 @@ module Stat = struct
     let lines = conll.Conll.lines in
     List.fold_left
       (fun acc line ->
-        let dep_pos = match key with Upos -> line.Conll.upos | Xpos -> line.Conll.xpos in
-        let acc2 = {acc with tags = String_set.add dep_pos acc.tags} in
-        List.fold_left
-          (fun acc3 (gov_id, label) ->
-            match gov_id with
+         let dep_pos = match key with Upos -> line.Conll.upos | Xpos -> line.Conll.xpos in
+         let acc2 = {acc with tags = String_set.add dep_pos acc.tags} in
+         List.fold_left
+           (fun acc3 (gov_id, label) ->
+              match gov_id with
               | (0, None) -> acc3
               | _ ->
-              let gov = List.find (fun line -> line.Conll.id = gov_id) lines in
-              let gov_pos = match key with Upos -> gov.Conll.upos | Xpos -> gov.Conll.xpos in
-              {
-                map = add label gov_pos dep_pos acc3.map;
-                labels = String_set.add label acc3.labels;
-                tags = String_set.add dep_pos acc3.tags;
-                key
-              }
-          ) acc2 line.Conll.deps
+                let gov = List.find (fun line -> line.Conll.id = gov_id) lines in
+                let gov_pos = match key with Upos -> gov.Conll.upos | Xpos -> gov.Conll.xpos in
+                {
+                  map = add label gov_pos dep_pos acc3.map;
+                  labels = String_set.add label acc3.labels;
+                  tags = String_set.add dep_pos acc3.tags;
+                  key
+                }
+           ) acc2 line.Conll.deps
       ) stat lines
 
   let build key corpus =
     Array.fold_left
       (fun acc (_,conll) ->
-        add_conll key conll acc
+         add_conll key conll acc
       ) empty corpus
 
   let dump stat =
     String_map.iter
       (fun label map2 ->
-        String_map.iter
-          (fun gov map3 ->
-            String_map.iter
-              (fun dep value ->
-                Printf.printf "%s -[%s]-> %s ==> %d\n" gov label dep value
-              ) map3
-          ) map2
+         String_map.iter
+           (fun gov map3 ->
+              String_map.iter
+                (fun dep value ->
+                   Printf.printf "%s -[%s]-> %s ==> %d\n" gov label dep value
+                ) map3
+           ) map2
       ) stat.map
 
   let get stat gov label dep =
     try Some (stat.map
-    |> (String_map.find label)
-    |> (String_map.find gov)
-    |> (String_map.find dep))
+              |> (String_map.find label)
+              |> (String_map.find gov)
+              |> (String_map.find dep)
+             )
     with Not_found -> None
 
   let table buff corpus_id stat label =
-    bprintf buff "    <table>\n";
-    bprintf buff "            <colgroup/>\n";
-    String_set.iter (fun _ -> bprintf buff "            <colgroup/>\n") stat.tags;
-    bprintf buff "      <thead>\n";
-    bprintf buff "        <tr>\n";
-    bprintf buff "          <th/>\n";
-    String_set.iter (fun tag -> bprintf buff "            <th>%s</th>\n" tag) stat.tags;
-    bprintf buff "        </tr>\n";
-    bprintf buff "      </thead>\n";
-    bprintf buff "      <tbody>\n";
+    bprintf buff "							<table>\n";
+    bprintf buff "								<colgroup/>\n";
+    String_set.iter (fun _ -> bprintf buff "								<colgroup/>\n") stat.tags;
+    bprintf buff "								<thead>\n";
+    bprintf buff "									<tr>\n";
+    bprintf buff "										<th>\n";
+    bprintf buff "											<span>DEP⇨</span>\n";
+    bprintf buff "											<br>\n";
+    bprintf buff "											<span>⇩GOV</span>\n";
+    bprintf buff "										</th>\n";
+    String_set.iter (fun tag -> bprintf buff "										<th>%s</th>\n" tag) stat.tags;
+    bprintf buff "									</tr>\n";
+    bprintf buff "								</thead>\n";
+    bprintf buff "								<tbody>\n";
     String_set.iter (fun gov ->
-      bprintf buff "        <tr>\n";
-      bprintf buff "          <th>%s</th>\n" gov;
+        bprintf buff "									<tr>\n";
+        bprintf buff "										<th>%s</th>\n" gov;
         String_set.iter (fun dep ->
-          bprintf buff "          <td>%s</td>\n"
-          (match get stat gov label dep with
-            | Some i ->
-              let url = sprintf "http://match.grew.fr?corpus=%s&relation=%s&source=%s&target=%s" corpus_id label gov dep in
-              sprintf "<a href=\"%s\" class=\"btn btn-primary\" target=\"_blank\">%d</a>" url i
-            | None -> "")
-        ) stat.tags;
-      bprintf buff "        </tr>\n";
-    ) stat.tags;
-    bprintf buff "      </tbody>\n";
-    bprintf buff "    </table>\n";
+            bprintf buff "										<td>%s</td>\n"
+              (match get stat gov label dep with
+               | Some i ->
+                 let url = sprintf "http://match.grew.fr?corpus=%s&relation=%s&source=%s&target=%s" corpus_id label gov dep in
+                 sprintf "<a href=\"%s\" class=\"btn btn-primary\" target=\"_blank\">%d</a>" url i
+               | None -> "")
+          ) stat.tags;
+        bprintf buff "									</tr>\n";
+      ) stat.tags;
+    bprintf buff "								</tbody>\n";
+    bprintf buff "							</table>\n";
     ()
 
   let escape_dot s =
@@ -1129,34 +1138,51 @@ module Stat = struct
 
   let to_html corpus_id stat =
     let buff = Buffer.create 32 in
-    bprintf buff "<?php include ('header.html'); ?>";
-    bprintf buff "<h2 style=\"text-align: center;\">%s</h2>" corpus_id;
-    bprintf buff "<div class=\"navbar\" id=\"right-navbar\">\n";
-    bprintf buff "  <div class=\"navbar-inner\">\n";
-    bprintf buff "    <ul class=\"nav nav-pills\">\n";
+    bprintf buff "<!DOCTYPE html>\n";
+    bprintf buff "<html lang=\"en\">\n";
+    bprintf buff "<head>\n";
+    bprintf buff "	<meta charset=\"utf-8\">\n";
+    bprintf buff "	<title>XXX</title>\n";
+    bprintf buff "	<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n";
+    bprintf buff "	<script src=\"https://code.jquery.com/jquery-3.4.1.min.js\"> </script>\n";
+    bprintf buff "	<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\" integrity=\"sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u\" crossorigin=\"anonymous\">\n";
+    bprintf buff "	<script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js\" integrity=\"sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa\" crossorigin=\"anonymous\"></script>\n";
+    bprintf buff "	<link rel=\"stylesheet\" type=\"text/css\" href=\"../css/tables.css\">\n";
+    bprintf buff "</head>\n";
+    bprintf buff "<body>\n";
+    bprintf buff "	<div class=\"container\">\n";
+    bprintf buff "		<div class=\"row\">\n";
+    bprintf buff "			<h1>%s</h1>\n" corpus_id;
+    bprintf buff "			<div role=\"tabpanel\">\n";
+    bprintf buff "				<div class=\"col-sm-2\">\n";
+    bprintf buff "					<ul class=\"nav nav-pills brand-pills nav-stacked\" role=\"tablist\">\n";
     String_set.iter
       (fun label ->
-        bprintf buff
-        "      <li><a class=\"explore-label\" href=\"#%s\" data-toggle=\"tab\">%s</a></li>\n"
-        (escape_dot label) label
+         let esc = escape_dot label in
+         bprintf buff "						<li role=\"presentation\" class=\"brand-nav\"><a href=\"#%s\" aria-controls=\"#%s\" data-toggle=\"tab\">%s</a></li>"
+           esc esc label
       ) stat.labels;
-    bprintf buff "    </ul>\n";
-    bprintf buff "  </div>\n";
-    bprintf buff "</div>\n";
 
-    bprintf buff "<div class=\"tab-content\">\n";
+    bprintf buff "					</ul>\n";
+    bprintf buff "				</div>\n";
+    bprintf buff "				<div class=\"col-sm-10\">\n";
+    bprintf buff "					<div class=\"tab-content\">\n";
+
     String_set.iter
       (fun label ->
-        bprintf buff "  <div class=\"tab-pane\" id=\"%s\">\n" (escape_dot label);
-        table buff corpus_id stat label;
-        bprintf buff "  </div>\n";
+         bprintf buff "						<div class=\"tab-pane\" id=\"%s\">\n" (escape_dot label);
+         table buff corpus_id stat label;
+         bprintf buff "						</div>\n";
       ) stat.labels;
-    bprintf buff "</div>\n";
+
+    bprintf buff "					</div>\n";
+    bprintf buff "				</div>\n";
+    bprintf buff "			</div>\n";
+    bprintf buff "		</div>\n";
+    bprintf buff "	</div>\n";
     bprintf buff "</body>\n";
     bprintf buff "</html>\n";
 
     Buffer.contents buff
-
-
 
 end
