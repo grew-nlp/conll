@@ -7,16 +7,20 @@ open Conll_types
 (* ======================================================================================================================== *)
 exception Conll_error of Yojson.Basic.t
 
-let error ?file ?line ?fct ?data msg =
+let error ?file ?sent_id ?line ?fct ?data ?prev ?msg () =
   let opt_list = [
-    Some ("message", `String msg);
+    (CCOpt.map (fun x -> ("message", `String x)) msg);
     (CCOpt.map (fun x -> ("file", `String x)) file);
+    (CCOpt.map (fun x -> ("sent_id", `String x)) sent_id);
     (CCOpt.map (fun x -> ("line", `Int x)) line);
-    Some ("library", `String "Conll");
     (CCOpt.map (fun x -> ("function", `String x)) fct);
     (CCOpt.map (fun x -> ("data", `String x)) data);
   ] in
-  let json = `Assoc (CCList.filter_map (fun x->x) opt_list) in
+  let prev_list = match prev with
+  | None -> [("library", `String "Conll")]
+  | Some (`Assoc l) -> l
+  | Some json -> ["ill_formed_error", json] in
+  let json = `Assoc ((CCList.filter_map (fun x-> x) opt_list) @ prev_list) in
   raise (Conll_error json)
 
 (* ======================================================================================================================== *)
@@ -115,11 +119,11 @@ module Mwe = struct
         | ["MWE"] -> (Mwe, None)
         | ["MWE"; l]-> (Mwe, Some l)
         | ["NE"; l] -> (Ne, Some l)
-        | _ -> error (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s) in
+        | _ -> error ~msg:(sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s) () in
       {mwepos; kind; label; criterion; first=(conll_id,proj_opt); items=Id_with_proj_set.empty}
     | [l] ->
       {mwepos=None; kind=Mwe; label=Some l; criterion=None; first=(conll_id,proj_opt); items=Id_with_proj_set.empty}
-    | _ -> error (sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s)
+    | _ -> error ~msg:(sprintf "mwe: cannot interpret MWE/NE description \"%s\"" s) ()
 
   let shift delta t = {t with
                        first = Id_with_proj.shift delta t.first;
@@ -184,7 +188,7 @@ module Conll = struct
     | ((_,Some _), (_,None)) -> 1
     | ((_,Some sub_id1), (_,Some sub_id2)) -> Pervasives.compare sub_id1 sub_id2
     | ((id,None), (_,None)) ->
-      error ~line:l2.line_num ~fct:"Conll.compare" (sprintf "identifier \"%d\" already used " id)
+      error ~line:l2.line_num ~fct:"Conll.compare" ~msg:(sprintf "identifier \"%d\" already used " id) ()
 
   let fs_to_string = function
     | [] -> "_"
@@ -223,7 +227,7 @@ module Conll = struct
       | (_, hfv) :: tail when hfv = fv ->
         Log.fwarning "[line %d], feature %s=%s is defined twice" line_num fn fv;
         (fn,fv) :: tail
-      | (_, hfv) :: _ -> error ~line:line_num (sprintf "inconsistent features: %s id defined twice with two different values" fn) in
+      | (_, hfv) :: _ -> error ~line:line_num ~msg:(sprintf "inconsistent features: %s id defined twice with two different values" fn) () in
     loop feats
 
   let add_feat_line (fn,fv) line = { line with feats = add_feat line.line_num (fn,fv) line.feats }
@@ -318,7 +322,7 @@ module Conll = struct
 
   let get_line_num t =
     match t.lines with
-    | [] -> error "empty"
+    | [] -> error ~msg:"empty" ()
     | first :: _ -> first.line_num
 
   let check t =
@@ -352,13 +356,86 @@ module Conll = struct
         List.iter (
           fun (i,_) ->
             if (fst i)>0 && not (List.mem i id_list)
-            then error ?file:t.file ~line:line_num (sprintf "cannot find gov identifier %s" (Id.to_string i));
+            then error ?file:t.file ~line:line_num ~msg:(sprintf "cannot find gov identifier %s" (Id.to_string i)) ();
             if id = i
-            then error ?file:t.file ~line:line_num (sprintf "loop in dependency %s" (Id.to_string i));
+            then error ?file:t.file ~line:line_num ~msg:(sprintf "loop in dependency %s" (Id.to_string i)) ();
         ) deps
     ) t.lines
 
   let empty file = { file;  meta=[]; lines=[]; multiwords=[]; mwes=Int_map.empty; }
+
+  (* ========== dealing with sentid information ========== *)
+  let rec get_sentid_from_meta = function
+    | [] -> None
+    | line::tail ->
+      match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
+      | [Str.Delim _; Str.Text t] -> Some t
+      | _ ->
+        match Str.split (Str.regexp " ") line with
+        (* deal with sent_id declaration of the PARSEME project *)
+        | ["#"; "source_sent_id"; "="; _; _; id ] -> Some id
+        | _ -> get_sentid_from_meta tail
+
+  let get_sentid_meta t = get_sentid_from_meta t.meta
+
+  let rm_sentid_meta t =
+    List.fold_left (fun acc line ->
+        match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
+        | [Str.Delim _; Str.Text t] -> acc
+        | _ -> line :: acc
+      ) [] t
+
+  let get_sentid_feats t =
+    match t.lines with
+    | [] -> None
+    | head::_ ->
+      match get_feat "sent_id" head
+      with None -> get_feat "sentid" head | x -> x
+
+  let get_sentid t =
+    match (get_sentid_meta t, get_sentid_feats t) with
+    | (None, None) -> None
+    | (Some id, None) -> Some id
+    | (None, Some id) -> Some id
+    | (Some idm, Some idf) when idm = idf ->
+      Log.fwarning "[Conll, %ssentid %s], sentid declared both in meta and feats" (sof t.file) idm;
+      Some idm
+    | (Some idm, Some idf) ->
+      error ?file:t.file ~msg:(sprintf "unconsistent sentid (\"%s\" in meta VS \"%s\" in feats)" idm idf) ()
+
+  let remove_sentid_feats = function
+    | [] -> []
+    | head::tail -> (head |> remove_feat "sentid" |> remove_feat "sent_id") :: tail
+
+  let ensure_sentid_in_meta ?default t =
+    match (get_sentid_meta t, get_sentid_feats t, default) with
+    | (None, None, None) ->
+      Log.fwarning "[Conll.ensure_sentid_in_meta%s, line %d] sentence without sentid"
+        (match t.file with None -> "" | Some f -> ", file "^f)
+        (get_line_num t); t
+    | (None, None, Some def) -> { t with meta = (sprintf "# sent_id = %s" def) :: t.meta; }
+    | (Some id, _,_) -> t
+    | (None, Some id,_) ->
+      { t with
+        meta = (sprintf "# sent_id = %s" id) :: t.meta;
+        lines = remove_sentid_feats t.lines }
+
+  let set_sentid new_sentid t =
+    let meta_line = sprintf "# sent_id = %s" new_sentid in
+    let rec loop = function
+      | [] -> [meta_line]
+      | line::tail ->
+        match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
+        | [Str.Delim _; Str.Text t] -> meta_line :: tail
+        | _ -> line :: (loop tail) in
+    { t with meta = loop t.meta}
+
+  (* ---------- dealing with sentid information ---------- *)
+
+
+
+
+
 
   let encode_feat_name s = Str.global_replace (Str.regexp "\\[\\([0-9a-z]+\\)\\]") "__\\1" s
   let decode_feat_name s = Str.global_replace (Str.regexp "__\\([0-9a-z]+\\)$") "[\\1]" s
@@ -371,7 +448,7 @@ module Conll = struct
            match Str.bounded_split (Str.regexp "=") feat 2 with
            | [feat_name] -> add_feat line_num (encode_feat_name feat_name, "true") acc
            | [feat_name; feat_value] -> add_feat line_num (encode_feat_name feat_name, feat_value) acc
-           | _ -> error ?file ~line:line_num ~fct:"Conll.parse_feats" (sprintf "failed to parse \"%s\"" feats)
+           | _ -> error ?file ~line:line_num ~fct:"Conll.parse_feats" ~msg:(sprintf "failed to parse \"%s\"" feats) ()
         ) [] (Str.split (Str.regexp "|") feats)
 
   let parse_feats ~file line_num s =
@@ -395,7 +472,7 @@ module Conll = struct
                     if line.id=id
                     then match line.deps with
                       | [(gov,lab)] -> {line with deps=[(gov,new_label)]}
-                      | _ -> error "ambiguous set_label"
+                      | _ -> error ~msg:"ambiguous set_label" ()
                     else line
                  ) t.lines
     }
@@ -409,7 +486,7 @@ module Conll = struct
         fun sd -> match Str.bounded_split (Str.regexp ":") sd 2 with
           | [gov;lab] -> Some (Id.of_string gov, "E:"^lab)  (* E: is the prefix for extended relations *)
           | [_] -> None
-          | _ -> error (sprintf "cannot parse extended dependency \"%s\"" sd)
+          | _ -> error ~msg:(sprintf "cannot parse extended dependency \"%s\"" sd) ()
       ) sd_list
 
   let add_feat_id id (fn, fv) t =
@@ -454,7 +531,7 @@ module Conll = struct
     match List.map int_of_string_opt (Str.split (Str.regexp "/") s) with
     | [Some i] -> (i, None)
     | [Some i; Some j] -> (i, Some j)
-    | _ -> error (sprintf "Cannot parse mwe_id \"%s\"" s)
+    | _ -> error ~msg:(sprintf "Cannot parse mwe_id \"%s\"" s) ()
 
   let add_mwe_nodes ?file lines conll =
     let (new_lines, mwes) = List.fold_left
@@ -463,7 +540,7 @@ module Conll = struct
            List.fold_left
              (fun (acc2_lines, acc2) item ->
                 match Str.split (Str.regexp ":") item with
-                | [] -> error ?file ~line:line_num (sprintf "Cannot parse mwe item \"%s\"" item)
+                | [] -> error ?file ~line:line_num ~msg:(sprintf "Cannot parse mwe item \"%s\"" item) ()
                 | mwe_id_string::tail ->
                   let (mwe_id, proj_opt) = parse_mwe_id_proj_opt mwe_id_string in
 
@@ -481,10 +558,10 @@ module Conll = struct
                   | [] ->
                     begin
                       match Int_map.find_opt mwe_id acc2 with
-                      | None -> error ?file ~line:line_num (sprintf "Cannot find definition for mwe_id: \"%d\"" mwe_id)
+                      | None -> error ?file ~line:line_num ~msg:(sprintf "Cannot find definition for mwe_id: \"%d\"" mwe_id) ()
                       | Some x -> (new_lines, Int_map.add mwe_id {x with items = Id_with_proj_set.add (conll_id, proj_opt) x.items} acc2)
                     end
-                  | _ -> error ?file ~line:line_num (sprintf "Cannot parse mwe item \"%s\"" item)
+                  | _ -> error ?file ~line:line_num ~msg:(sprintf "Cannot parse mwe item \"%s\"" item) ()
              ) (acc_lines, acc) items
         ) (conll.lines, Int_map.empty) lines in
     { conll with lines = new_lines; mwes }
@@ -492,6 +569,7 @@ module Conll = struct
   exception Empty_conll
   (* parse a list of line corresponding to one conll structure *)
   let parse_rev ?file lines =
+    let lines = List.rev lines in
     let (conll,mwe) = (* mwe contains the list of (line_num, id, mwe_field) to be processed later in add_mwe_nodes *)
       List.fold_left
         (fun (acc, acc_mwe) (line_num, line) ->
@@ -523,7 +601,7 @@ module Conll = struct
                        | ([(0,None)], []) -> [] (* handle Talismane output on tokens without gov *)
                        | _ ->
                          try List.combine gov_list lab_list
-                         with Invalid_argument _ -> error ?file ~line:line_num "inconsistent relation specification" in
+                         with Invalid_argument _ -> error ?file ~line:line_num ~msg:"inconsistent relation specification" () in
 
                      let deps = match c9 with
                        | "_" -> prim_deps
@@ -557,16 +635,17 @@ module Conll = struct
                      let new_acc_mwe = match tail with
                        | [] | ["*"] | [_;_;_]-> acc_mwe
                        | [x] -> (line_num, id, x) :: acc_mwe
-                       | _ -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l))
+                       | _ -> error ?file ~line:line_num ~data:line ~msg:(sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l)) ()
                      in
 
                      ({acc with lines = new_line :: acc.lines }, new_acc_mwe)
-                   | _ -> error ?file ~line:line_num (sprintf "illegal field one \"%s\"" f1)
+                   | _ -> error ?file ~line:line_num ~msg:(sprintf "illegal field one \"%s\"" f1) ()
                  with
-                 | Id.Wrong_id id -> error ?file ~line:line_num (sprintf "illegal identifier \"%s\"" id)
-                 | exc -> error ?file ~line:line_num ~data:line (sprintf "unexpected exception \"%s\"" (Printexc.to_string exc))
+                 | Id.Wrong_id id -> error ?file ~line:line_num ?sent_id:(get_sentid_from_meta acc.meta) ~msg:(sprintf "illegal identifier \"%s\"" id) ()
+                 | Conll_error json -> error ~data:line ?sent_id:(get_sentid_from_meta acc.meta) ~prev:json ()
+                 | exc -> error ?file ~line:line_num ~data:line ~msg:(sprintf "unexpected exception \"%s\"" (Printexc.to_string exc)) ()
                end
-             | l -> error ?file ~line:line_num ~data:line (sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l))
+             | l -> error ?file ~line:line_num ~data:line ~msg:(sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l)) ()
         ) (empty file,[]) lines in
     if List.length conll.lines = 0 then raise Empty_conll;
     check conll;
@@ -667,73 +746,6 @@ module Conll = struct
     fprintf in_ch "%s" (to_dot t);
     close_out in_ch
 
-  (* ========== dealing with sentid information ========== *)
-  let get_sentid_meta t =
-    let rec loop = function
-      | [] -> None
-      | line::tail ->
-        match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
-        | [Str.Delim _; Str.Text t] -> Some t
-        | _ ->
-          match Str.split (Str.regexp " ") line with
-          (* deal with sent_id declaration of the PARSEME project *)
-          | ["#"; "source_sent_id"; "="; _; _; id ] -> Some id
-          | _ -> loop tail in
-    loop t.meta
-
-  let rm_sentid_meta t =
-    List.fold_left (fun acc line ->
-        match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
-        | [Str.Delim _; Str.Text t] -> acc
-        | _ -> line :: acc
-      ) [] t
-
-  let get_sentid_feats t =
-    match t.lines with
-    | [] -> None
-    | head::_ ->
-      match get_feat "sent_id" head
-      with None -> get_feat "sentid" head | x -> x
-
-  let get_sentid t =
-    match (get_sentid_meta t, get_sentid_feats t) with
-    | (None, None) -> None
-    | (Some id, None) -> Some id
-    | (None, Some id) -> Some id
-    | (Some idm, Some idf) when idm = idf ->
-      Log.fwarning "[Conll, %ssentid %s], sentid declared both in meta and feats" (sof t.file) idm;
-      Some idm
-    | (Some idm, Some idf) ->
-      error ?file:t.file (sprintf "unconsistent sentid (\"%s\" in meta VS \"%s\" in feats)" idm idf)
-
-  let remove_sentid_feats = function
-    | [] -> []
-    | head::tail -> (head |> remove_feat "sentid" |> remove_feat "sent_id") :: tail
-
-  let ensure_sentid_in_meta ?default t =
-    match (get_sentid_meta t, get_sentid_feats t, default) with
-    | (None, None, None) ->
-      Log.fwarning "[Conll.ensure_sentid_in_meta%s, line %d] sentence without sentid"
-        (match t.file with None -> "" | Some f -> ", file "^f)
-        (get_line_num t); t
-    | (None, None, Some def) -> { t with meta = (sprintf "# sent_id = %s" def) :: t.meta; }
-    | (Some id, _,_) -> t
-    | (None, Some id,_) ->
-      { t with
-        meta = (sprintf "# sent_id = %s" id) :: t.meta;
-        lines = remove_sentid_feats t.lines }
-
-  let set_sentid new_sentid t =
-    let meta_line = sprintf "# sent_id = %s" new_sentid in
-    let rec loop = function
-      | [] -> [meta_line]
-      | line::tail ->
-        match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
-        | [Str.Delim _; Str.Text t] -> meta_line :: tail
-        | _ -> line :: (loop tail) in
-    { t with meta = loop t.meta}
-
-  (* ---------- dealing with sentid information ---------- *)
 
 
 
@@ -757,9 +769,9 @@ module Conll = struct
            | (Some fusion, Some string_span, efs) ->
              let span =
                try int_of_string string_span
-               with Failure _ -> error ?file:t.file ~line:(get_line_num t) "_UD_mw_span must be integer" in
+               with Failure _ -> error ?file:t.file ~line:(get_line_num t) ~msg:"_UD_mw_span must be integer" () in
              insert_multiword (fst line.id) span fusion efs acc
-           | _ -> error ?file:t.file ~line:(get_line_num t) "inconsistent mw specification"
+           | _ -> error ?file:t.file ~line:(get_line_num t) ~msg:"inconsistent mw specification" ()
         )
         t.multiwords t.lines in
     { t with
@@ -803,7 +815,7 @@ module Conll = struct
       | (_::tail, multiwords) ->
         (loop (tail,multiwords))
       | (_, mw::_) ->
-        error ?file:t.file ?line:mw.mw_line_num "Inconsistent multiwords" in
+        error ?file:t.file ?line:mw.mw_line_num ~msg:"Inconsistent multiwords" () in
     let form_list = loop (t.lines, t.multiwords) in
     concat_words form_list
 
@@ -864,7 +876,7 @@ module Conll = struct
              line.form
              line.xpos line.xpos
              (Id.to_string gov_id) label
-         | _ -> error ~line:line.line_num "multiple deps not handled"
+         | _ -> error ~line:line.line_num ~msg:"multiple deps not handled" ()
       ) t.lines;
     Buffer.contents buff
 
@@ -897,13 +909,13 @@ module Conll = struct
   let merge new_sentid t1 t2 =
     let new_text = match (get_sentence t1, get_sentence t2) with
       | Some s1, Some s2 -> Sentence.fr_clean_spaces (s1 ^ " " ^ s2)
-      | _ -> error "cannot merge without sentence" in
+      | _ -> error ~msg:"cannot merge without sentence" () in
     let new_meta =
       (sprintf "# sent_id = %s" new_sentid) ::
       (sprintf "# text = %s" new_text) ::
       (t1.meta |> rm_sentid_meta |> rm_sentence_text) in
     match CCList.last_opt t1.lines with
-    | None -> error "Empty t1 in merge"
+    | None -> error ~msg:"Empty t1 in merge" ()
     | Some { id = (delta,_) } ->
       let shifted_t2 = shift delta t2 in
       {t1 with
@@ -926,17 +938,29 @@ module Conll_corpus = struct
 
   let reset () = cpt := 0; res := []
 
-  let add_lines file lines =
+  let add_lines ?log_file file lines =
 
     let rev_locals = ref [] in
     let save_one () =
-      (try
-         let conll = Conll.parse_rev ~file !rev_locals in
-         incr cpt;
-         let base = Filename.basename file in
-         let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
-         res := (sentid,conll) :: !res
-       with Conll.Empty_conll -> ());
+      begin
+        try
+          let conll = Conll.parse_rev ~file !rev_locals in
+          incr cpt;
+          let base = Filename.basename file in
+          let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
+          res := (sentid,conll) :: !res
+        with
+        | Conll.Empty_conll -> ()
+        | (Conll_error json) as e ->
+          begin
+            match log_file with
+            | None -> raise e
+            | Some f ->
+              let out_ch = open_out_gen [Open_append] 0o755 f in
+              Printf.fprintf out_ch "%s" (Yojson.Basic.pretty_to_string json);
+              close_out out_ch
+          end
+      end;
       rev_locals := [] in
 
     let _ =
@@ -953,16 +977,16 @@ module Conll_corpus = struct
       save_one ()
     )
 
-  let load_list file_list =
+  let load_list ?log_file file_list =
     reset ();
-    List.iter (fun file -> add_lines file (File.read file)) file_list;
+    List.iter (fun file -> add_lines ?log_file file (File.read file)) file_list;
     Array.of_list (List.rev !res)
 
-  let load file = load_list [file]
+  let load ?log_file file = load_list ?log_file [file]
 
-  let from_lines ?(basename="noname") lines =
+  let from_lines ?log_file ?(basename="noname") lines =
     reset ();
-    add_lines basename lines;
+    add_lines ?log_file basename lines;
     Array.of_list (List.rev !res)
 
   let prepare_for_output conll =
@@ -1142,7 +1166,7 @@ module Stat = struct
     bprintf buff "<html lang=\"en\">\n";
     bprintf buff "<head>\n";
     bprintf buff "	<meta charset=\"utf-8\">\n";
-    bprintf buff "	<title>XXX</title>\n";
+    bprintf buff "	<title>%s</title>\n" corpus_id;
     bprintf buff "	<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n";
     bprintf buff "	<script src=\"https://code.jquery.com/jquery-3.4.1.min.js\"> </script>\n";
     bprintf buff "	<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\" integrity=\"sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u\" crossorigin=\"anonymous\">\n";

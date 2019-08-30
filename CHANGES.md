@@ -1,4 +1,13 @@
-## 1.5.0 (2016/06/24)
+## 1.5.3 (2019/08/30)
+  * log_file optional argument in loading functions
+
+## 1.5.2 (2019/08/23)
+  * new html tables
+
+## 1.5.1 (2019/08/22)
+  * escape new symbol @ for SUD relations
+
+# 1.5.0 (2019/06/24)
   *  /!\ “Conll.Error” instead of “Conll_types.Error”
 
 ## 1.4.1 (2019/03/26)
