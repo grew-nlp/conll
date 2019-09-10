@@ -95,6 +95,11 @@ end
 
 module Conll_corpus : sig
   type t = (string * Conll.t) array
+
+  (* In the next 3 functions, if a log_file is given, data are loaded in a robust mode:
+    no error is produced on Conll error but problems are reported in the given log_file.
+    If the log_file already doesn't exist, it is created; else data are append to the file.
+    *)
   val load: ?log_file:string -> string -> t
   val load_list: ?log_file:string -> string list -> t
   val from_lines: ?log_file:string -> ?basename: string -> (int * string) list -> t

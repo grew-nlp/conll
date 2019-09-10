@@ -568,8 +568,7 @@ module Conll = struct
 
   exception Empty_conll
   (* parse a list of line corresponding to one conll structure *)
-  let parse_rev ?file lines =
-    let lines = List.rev lines in
+  let parse_rev ?file lines_rev =
     let (conll,mwe) = (* mwe contains the list of (line_num, id, mwe_field) to be processed later in add_mwe_nodes *)
       List.fold_left
         (fun (acc, acc_mwe) (line_num, line) ->
@@ -646,7 +645,7 @@ module Conll = struct
                  | exc -> error ?file ~line:line_num ~data:line ~msg:(sprintf "unexpected exception \"%s\"" (Printexc.to_string exc)) ()
                end
              | l -> error ?file ~line:line_num ~data:line ~msg:(sprintf "illegal line, %d fields (10, 11 or 13 are expected)" (List.length l)) ()
-        ) (empty file,[]) lines in
+        ) (empty file,[]) lines_rev in
     if List.length conll.lines = 0 then raise Empty_conll;
     check conll;
     conll
@@ -955,8 +954,12 @@ module Conll_corpus = struct
           begin
             match log_file with
             | None -> raise e
-            | Some f ->
+            | Some f when Sys.file_exists f ->
               let out_ch = open_out_gen [Open_append] 0o755 f in
+              Printf.fprintf out_ch "%s" (Yojson.Basic.pretty_to_string json);
+              close_out out_ch
+            | Some f ->
+              let out_ch = open_out f in
               Printf.fprintf out_ch "%s" (Yojson.Basic.pretty_to_string json);
               close_out out_ch
           end

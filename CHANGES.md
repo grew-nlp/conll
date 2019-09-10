@@ -1,3 +1,6 @@
+## 1.5.4 (2019/09/10)
+  * Wrong warning about ids
+
 ## 1.5.3 (2019/08/30)
   * log_file optional argument in loading functions
 
