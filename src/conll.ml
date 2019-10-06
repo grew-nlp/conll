@@ -1196,7 +1196,7 @@ module Stat = struct
             bprintf buff "										<td>%s</td>\n"
               (match get stat gov label dep with
                | Some i ->
-                 let url = sprintf "http://match.grew.fr?corpus=%s&relation=%s&source=%s&target=%s" corpus_id label gov dep in
+                 let url = sprintf "../?corpus=%s&relation=%s&source=%s&target=%s" corpus_id label gov dep in
                  sprintf "<a href=\"%s\" class=\"btn btn-primary\" target=\"_blank\">%d</a>" url i
                | None -> "")
           ) stat.tags;
