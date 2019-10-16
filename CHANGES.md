@@ -1,3 +1,6 @@
+## 1.5.5 (2019/10/16)
+  * Add ocaml version constraint (https://gitlab.inria.fr/grew/grew_doc/issues/6)
+
 ## 1.5.4 (2019/09/10)
   * Wrong warning about ids
 
