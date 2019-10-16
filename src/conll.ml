@@ -190,9 +190,13 @@ module Conll = struct
     | ((id,None), (_,None)) ->
       error ~line:l2.line_num ~fct:"Conll.compare" ~msg:(sprintf "identifier \"%d\" already used " id) ()
 
+  (* deal with UD features like "Number[psor]" written "Number__psor" in Grew to void clashes with Grew brackets usage *)
+  let encode_feat_name s = Str.global_replace (Str.regexp "\\[\\([0-9a-z]+\\)\\]") "__\\1" s
+  let decode_feat_name s = Str.global_replace (Str.regexp "__\\([0-9a-z]+\\)$") "[\\1]" s
+
   let fs_to_string = function
     | [] -> "_"
-    | list -> String.concat "|" (List.map (fun (f,v) -> sprintf "%s=%s" f v) list)
+    | list -> String.concat "|" (List.map (fun (f,v) -> sprintf "%s=%s" (decode_feat_name f) v) list)
 
   let remove_feat feat_name t =
     let new_feats =
@@ -437,8 +441,6 @@ module Conll = struct
 
 
 
-  let encode_feat_name s = Str.global_replace (Str.regexp "\\[\\([0-9a-z]+\\)\\]") "__\\1" s
-  let decode_feat_name s = Str.global_replace (Str.regexp "__\\([0-9a-z]+\\)$") "[\\1]" s
 
   let intern_parse_feats ~file line_num = function
     | "_" -> []
