@@ -1181,12 +1181,12 @@ module Stat = struct
     bprintf buff "		<div class=\"row\">\n";
     bprintf buff "			<h1>%s</h1>\n" corpus_id;
     bprintf buff "			<div role=\"tabpanel\">\n";
-    bprintf buff "				<div class=\"col-sm-2\">\n";
+    bprintf buff "				<div class=\"col-sm-2\" style=\"height: 100vh; overflow-y: auto;\">\n";
     bprintf buff "					<ul class=\"nav nav-pills brand-pills nav-stacked\" role=\"tablist\">\n";
     String_set.iter
       (fun label ->
          let esc = escape_dot label in
-         bprintf buff "						<li role=\"presentation\" class=\"brand-nav\"><a href=\"#%s\" aria-controls=\"#%s\" data-toggle=\"tab\">%s</a></li>"
+         bprintf buff "						<li role=\"presentation\" class=\"brand-nav\"><a href=\"#%s\" aria-controls=\"#%s\" data-toggle=\"tab\">%s</a></li>\n"
            esc esc label
       ) stat.labels;
 
