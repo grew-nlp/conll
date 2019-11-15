@@ -1172,12 +1172,12 @@ module Stat = struct
 
     bprintf buff "									<tr>\n";
     bprintf buff "										<td><b>TOTAL</b></td>\n";
-    bprintf buff "										<td><a href=\"http://match.grew.fr?corpus=%s&relation=%s\" class=\"btn btn-warning\" target=\"_blank\">%d</a></td>\n" corpus_id label(get_total stat label);
+    bprintf buff "										<td><a href=\"../?corpus=%s&relation=%s\" class=\"btn btn-warning\" target=\"_blank\">%d</a></td>\n" corpus_id label(get_total stat label);
     String_set.iter (fun dep ->
         bprintf buff "										<td>%s</td>\n"
           (match get_total_dep stat label dep with
            | Some i ->
-             let url = sprintf "http://match.grew.fr?corpus=%s&relation=%s&target=%s" corpus_id label dep in
+             let url = sprintf "../?corpus=%s&relation=%s&target=%s" corpus_id label dep in
              sprintf "<a href=\"%s\" class=\"btn btn-success\" target=\"_blank\">%d</a>" url i
            | None -> "")
       ) stat.tags;
@@ -1190,7 +1190,7 @@ module Stat = struct
         bprintf buff "										<td>%s</td>\n"
           (match get_total_gov stat label gov with
            | Some i ->
-             let url = sprintf "http://match.grew.fr?corpus=%s&relation=%s&source=%s" corpus_id label gov in
+             let url = sprintf "../?corpus=%s&relation=%s&source=%s" corpus_id label gov in
              sprintf "<a href=\"%s\" class=\"btn btn-success\" target=\"_blank\">%d</a>" url i
            | None -> "");
 
