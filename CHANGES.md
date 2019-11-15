@@ -1,3 +1,7 @@
+## 1.5.6 (2019/10/16)
+  * Improve table display
+  * Remove deprecated Pervasives
+
 ## 1.5.5 (2019/10/16)
   * Add ocaml version constraint (https://gitlab.inria.fr/grew/grew_doc/issues/6)
 
