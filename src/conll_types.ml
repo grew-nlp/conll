@@ -59,11 +59,11 @@ module Id = struct
 
   let compare id1 id2 =
     match (id1, id2) with
-    | ((i1, _), (i2, _)) when i1 <> i2 -> Pervasives.compare i1 i2
+    | ((i1, _), (i2, _)) when i1 <> i2 -> Stdlib.compare i1 i2
     (* all other cases: i1=i2 *)
     | ((_,None), (_,Some _)) -> -1
     | ((_,Some _), (_,None)) -> 1
-    | ((_,Some sub_i1), (_,Some sub_i2)) -> Pervasives.compare sub_i1 sub_i2
+    | ((_,Some sub_i1), (_,Some sub_i2)) -> Stdlib.compare sub_i1 sub_i2
     | ((_,None), (_,None)) -> 0
 
   let min id1 id2 = if compare id1 id2 < 0 then id1 else id2
@@ -76,5 +76,5 @@ end
 module Id_set = Set.Make (Id)
 module Id_map = Map.Make (Id)
 
-module Int_map = Map.Make (struct type t = int let compare = Pervasives.compare end)
+module Int_map = Map.Make (struct type t = int let compare = Stdlib.compare end)
 

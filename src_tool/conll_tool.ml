@@ -128,7 +128,7 @@ let _ =
 				loop (size-1) (bound - (List.length conll.Conll.lines)) ((id,conll)::sub, new_rem) in
 		let (sub,rem) = loop full_size min_tokens ([],full_list) in
 		Conll_corpus.save (basename^"_sub.conll")
-			(Array.of_list (List.sort (fun (id1,_) (id2,_) -> Pervasives.compare id1 id2) sub));
+			(Array.of_list (List.sort (fun (id1,_) (id2,_) -> Stdlib.compare id1 id2) sub));
 		Conll_corpus.save (basename^"_rem.conll") (Array.of_list rem)
 	| "random"::_ -> printf "ERROR: sub-command \"random\" expects two arguments\n"; print_usage ()
 

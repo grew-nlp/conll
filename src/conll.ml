@@ -74,7 +74,7 @@ module Id_with_proj = struct
   (* t = (3, Some 1) <--> 3/1 conllid=3, partial_proj=1 *)
   type t = Id.t * int option
 
-  let compare = Pervasives.compare
+  let compare = Stdlib.compare
 
   let shift delta (i,p) = (Id.shift delta i, p)
 end
@@ -183,10 +183,10 @@ module Conll = struct
 
   let compare l1 l2 =
     match (l1.id, l2.id) with
-    | ((id1, _), (id2, _)) when id1 <> id2 -> Pervasives.compare id1 id2
+    | ((id1, _), (id2, _)) when id1 <> id2 -> Stdlib.compare id1 id2
     | ((_,None), (_,Some _)) -> -1
     | ((_,Some _), (_,None)) -> 1
-    | ((_,Some sub_id1), (_,Some sub_id2)) -> Pervasives.compare sub_id1 sub_id2
+    | ((_,Some sub_id1), (_,Some sub_id2)) -> Stdlib.compare sub_id1 sub_id2
     | ((id,None), (_,None)) ->
       error ~line:l2.line_num ~fct:"Conll.compare" ~msg:(sprintf "identifier \"%d\" already used " id) ()
 
@@ -269,7 +269,7 @@ module Conll = struct
 
     check_line l;
     let mwe_info =
-      try String.concat ";" (List.sort Pervasives.compare (List.assoc l.id assoc_list))
+      try String.concat ";" (List.sort Stdlib.compare (List.assoc l.id assoc_list))
       with Not_found -> "*" in
 
     let (ext,not_ext) = List.partition is_extended l.deps in
@@ -463,7 +463,7 @@ module Conll = struct
 
   let sort_feats feats =
     List.sort
-      (fun (id1,_) (id2,_) -> Pervasives.compare (String.lowercase_ascii id1) (String.lowercase_ascii id2))
+      (fun (id1,_) (id2,_) -> Stdlib.compare (String.lowercase_ascii id1) (String.lowercase_ascii id2))
       feats
 
   let underscore s = if s = "" then "_" else s
@@ -518,7 +518,7 @@ module Conll = struct
         fun (n,v) -> String.length n > 6 && String.sub n 0 6 = "_MISC_"
       ) l.feats in
     let new_efs = List.map (fun (n,v) -> (String.sub n 6 ((String.length n) - 6),v)) pre_efs in
-    let efs = List.sort Pervasives.compare (new_efs @ l.efs) in
+    let efs = List.sort Stdlib.compare (new_efs @ l.efs) in
     { l with efs; feats }
 
   let feats_to_misc t = { t with lines = List.map line_feats_to_misc t.lines }
