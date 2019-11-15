@@ -17,9 +17,9 @@ let error ?file ?sent_id ?line ?fct ?data ?prev ?msg () =
     (CCOpt.map (fun x -> ("data", `String x)) data);
   ] in
   let prev_list = match prev with
-  | None -> [("library", `String "Conll")]
-  | Some (`Assoc l) -> l
-  | Some json -> ["ill_formed_error", json] in
+    | None -> [("library", `String "Conll")]
+    | Some (`Assoc l) -> l
+    | Some json -> ["ill_formed_error", json] in
   let json = `Assoc ((CCList.filter_map (fun x-> x) opt_list) @ prev_list) in
   raise (Conll_error json)
 
@@ -1125,23 +1125,30 @@ module Stat = struct
              )
     with Not_found -> None
 
-  let get_total_dep stat label gov =
+  let get_total_gov stat label gov =
     try
       let map_dep = stat.map |> (String_map.find label) |> (String_map.find gov) in
       Some (String_map.fold (fun _ x acc -> x + acc) map_dep 0)
     with Not_found -> None
 
-  let get_total_gov stat label dep =
+  let get_total_dep stat label dep =
     try
       let map_map_gov = stat.map |> (String_map.find label)  in
-      Some (String_map.fold
+      match
+        String_map.fold
           (fun _ map acc ->
-            match String_map.find_opt dep map with
-            | None -> acc
-            | Some x -> x+acc
-          ) map_map_gov 0)
+             match String_map.find_opt dep map with
+             | None -> acc
+             | Some x -> x+acc
+          ) map_map_gov 0 with
+      | 0 -> None
+      | i -> Some i
     with Not_found -> None
 
+  let get_total stat label =
+    String_map.fold (fun _ map acc1 ->
+        String_map.fold (fun _ x acc2 -> x + acc2) map acc1
+      ) (String_map.find label stat.map) 0
 
   let table buff corpus_id stat label =
     bprintf buff "							<table>\n";
@@ -1154,13 +1161,37 @@ module Stat = struct
     bprintf buff "											<br>\n";
     bprintf buff "											<span>⇩GOV</span>\n";
     bprintf buff "										</th>\n";
+    bprintf buff "										<th><b>TOTAL</b></th>\n";
     String_set.iter (fun tag -> bprintf buff "										<th>%s</th>\n" tag) stat.tags;
     bprintf buff "									</tr>\n";
     bprintf buff "								</thead>\n";
     bprintf buff "								<tbody>\n";
+
+
+    bprintf buff "									<tr>\n";
+    bprintf buff "										<td><b>TOTAL</b></td>\n";
+    bprintf buff "										<td><a href=\"http://match.grew.fr?corpus=%s&relation=%s\" class=\"btn btn-warning\" target=\"_blank\">%d</a></td>\n" corpus_id label(get_total stat label);
+    String_set.iter (fun dep ->
+        bprintf buff "										<td>%s</td>\n"
+          (match get_total_dep stat label dep with
+           | Some i ->
+             let url = sprintf "http://match.grew.fr?corpus=%s&relation=%s&target=%s" corpus_id label dep in
+             sprintf "<a href=\"%s\" class=\"btn btn-success\" target=\"_blank\">%d</a>" url i
+           | None -> "")
+      ) stat.tags;
+    bprintf buff "									</tr>\n";
+
     String_set.iter (fun gov ->
         bprintf buff "									<tr>\n";
         bprintf buff "										<th>%s</th>\n" gov;
+
+        bprintf buff "										<td>%s</td>\n"
+          (match get_total_gov stat label gov with
+           | Some i ->
+             let url = sprintf "http://match.grew.fr?corpus=%s&relation=%s&source=%s" corpus_id label gov in
+             sprintf "<a href=\"%s\" class=\"btn btn-success\" target=\"_blank\">%d</a>" url i
+           | None -> "");
+
         String_set.iter (fun dep ->
             bprintf buff "										<td>%s</td>\n"
               (match get stat gov label dep with
