@@ -1125,6 +1125,24 @@ module Stat = struct
              )
     with Not_found -> None
 
+  let get_total_dep stat label gov =
+    try
+      let map_dep = stat.map |> (String_map.find label) |> (String_map.find gov) in
+      Some (String_map.fold (fun _ x acc -> x + acc) map_dep 0)
+    with Not_found -> None
+
+  let get_total_gov stat label dep =
+    try
+      let map_map_gov = stat.map |> (String_map.find label)  in
+      Some (String_map.fold
+          (fun _ map acc ->
+            match String_map.find_opt dep map with
+            | None -> acc
+            | Some x -> x+acc
+          ) map_map_gov 0)
+    with Not_found -> None
+
+
   let table buff corpus_id stat label =
     bprintf buff "							<table>\n";
     bprintf buff "								<colgroup/>\n";
