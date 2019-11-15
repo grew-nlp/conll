@@ -527,11 +527,11 @@ module Conll = struct
     13/2 --> (13, Some 2)
     _ --> fail
   *)
-  let parse_mwe_id_proj_opt s =
+  let parse_mwe_id_proj_opt ?file ?line s =
     match List.map int_of_string_opt (Str.split (Str.regexp "/") s) with
     | [Some i] -> (i, None)
     | [Some i; Some j] -> (i, Some j)
-    | _ -> error ~msg:(sprintf "Cannot parse mwe_id \"%s\"" s) ()
+    | _ -> error ?file ?line ~msg:(sprintf "Cannot parse mwe_id \"%s\"" s) ()
 
   let add_mwe_nodes ?file lines conll =
     let (new_lines, mwes) = List.fold_left
@@ -542,7 +542,7 @@ module Conll = struct
                 match Str.split (Str.regexp ":") item with
                 | [] -> error ?file ~line:line_num ~msg:(sprintf "Cannot parse mwe item \"%s\"" item) ()
                 | mwe_id_string::tail ->
-                  let (mwe_id, proj_opt) = parse_mwe_id_proj_opt mwe_id_string in
+                  let (mwe_id, proj_opt) = parse_mwe_id_proj_opt ?file ~line:line_num mwe_id_string in
 
                   let new_lines =
                     (* match snd mwe_id with
