@@ -1,3 +1,6 @@
+## 1.5.7 (2020/01/18)
+  * Sort columns and rows in tables
+
 ## 1.5.6 (2019/10/16)
   * Improve table display
   * Remove deprecated Pervasives
