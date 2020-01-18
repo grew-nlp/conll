@@ -173,7 +173,7 @@ module Conll = struct
     | 0 ->
       begin
         match Id.compare id1 id2 with
-        | 0 -> Pervasives.compare lab1 lab2
+        | 0 -> Stdlib.compare lab1 lab2
         | x -> x
       end
     | x -> x
@@ -375,9 +375,9 @@ module Conll = struct
       match Str.full_split (Str.regexp "# ?sent_?id ?[:=]?[ \t]?") line with
       | [Str.Delim _; Str.Text t] -> Some t
       | _ ->
-        match Str.split (Str.regexp " ") line with
+        match Str.bounded_split (Str.regexp " ") line 4 with
         (* deal with sent_id declaration of the PARSEME project *)
-        | ["#"; "source_sent_id"; "="; _; _; id ] -> Some id
+        | ["#"; "source_sent_id"; "="; id ] -> Some id
         | _ -> get_sentid_from_meta tail
 
   let get_sentid_meta t = get_sentid_from_meta t.meta
