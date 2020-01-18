@@ -1152,7 +1152,24 @@ module Stat = struct
         String_map.fold (fun _ x acc2 -> x + acc2) map acc1
       ) (String_map.find label stat.map) 0
 
+  let count_compare (tag1,count1) (tag2,count2) =
+    match (count1, count2) with
+      | (Some i, Some j) -> Stdlib.compare j i
+      | (None, Some _) -> 1
+      | (Some _, None) -> -1
+      | (None, None) -> Stdlib.compare tag1 tag2
+
   let table buff corpus_id stat label =
+    let govs = String_set.fold
+      (fun gov acc -> (gov, get_total_gov stat label gov) :: acc
+      ) stat.tags [] in
+    let sorted_govs = List.sort count_compare govs in
+
+    let deps = String_set.fold
+      (fun dep acc -> (dep, get_total_dep stat label dep) :: acc
+      ) stat.tags [] in
+    let sorted_deps = List.sort count_compare deps in
+
     bprintf buff "							<table>\n";
     bprintf buff "								<colgroup/>\n";
     String_set.iter (fun _ -> bprintf buff "								<colgroup/>\n") stat.tags;
@@ -1164,46 +1181,46 @@ module Stat = struct
     bprintf buff "											<span>⇩GOV</span>\n";
     bprintf buff "										</th>\n";
     bprintf buff "										<th><b>TOTAL</b></th>\n";
-    String_set.iter (fun tag -> bprintf buff "										<th>%s</th>\n" tag) stat.tags;
+    List.iter (fun (dep,_) -> bprintf buff "										<th>%s</th>\n" dep) sorted_deps;
     bprintf buff "									</tr>\n";
     bprintf buff "								</thead>\n";
     bprintf buff "								<tbody>\n";
 
 
     bprintf buff "									<tr>\n";
-    bprintf buff "										<td><b>TOTAL</b></td>\n";
-    bprintf buff "										<td><a href=\"../?corpus=%s&relation=%s\" class=\"btn btn-warning\" target=\"_blank\">%d</a></td>\n" corpus_id label(get_total stat label);
-    String_set.iter (fun dep ->
-        bprintf buff "										<td>%s</td>\n"
-          (match get_total_dep stat label dep with
+    bprintf buff "										<th><b>TOTAL</b></th>\n";
+    bprintf buff "										<td class=\"total\"><a href=\"../?corpus=%s&relation=%s\" class=\"btn btn-warning\" target=\"_blank\">%d</a></td>\n" corpus_id label(get_total stat label);
+    List.iter (fun (dep,count) ->
+        bprintf buff "										<td class=\"total\">%s</td>\n"
+          (match count with
            | Some i ->
              let url = sprintf "../?corpus=%s&relation=%s&target=%s" corpus_id label dep in
              sprintf "<a href=\"%s\" class=\"btn btn-success\" target=\"_blank\">%d</a>" url i
            | None -> "")
-      ) stat.tags;
+      ) sorted_deps;
     bprintf buff "									</tr>\n";
 
-    String_set.iter (fun gov ->
+    List.iter (fun (gov, count) ->
         bprintf buff "									<tr>\n";
         bprintf buff "										<th>%s</th>\n" gov;
 
-        bprintf buff "										<td>%s</td>\n"
-          (match get_total_gov stat label gov with
+        bprintf buff "										<td class=\"total\">%s</td>\n"
+          (match count with
            | Some i ->
              let url = sprintf "../?corpus=%s&relation=%s&source=%s" corpus_id label gov in
              sprintf "<a href=\"%s\" class=\"btn btn-success\" target=\"_blank\">%d</a>" url i
            | None -> "");
 
-        String_set.iter (fun dep ->
+        List.iter (fun (dep,_) ->
             bprintf buff "										<td>%s</td>\n"
               (match get stat gov label dep with
                | Some i ->
                  let url = sprintf "../?corpus=%s&relation=%s&source=%s&target=%s" corpus_id label gov dep in
                  sprintf "<a href=\"%s\" class=\"btn btn-primary\" target=\"_blank\">%d</a>" url i
                | None -> "")
-          ) stat.tags;
+          ) sorted_deps;
         bprintf buff "									</tr>\n";
-      ) stat.tags;
+      ) sorted_govs;
     bprintf buff "								</tbody>\n";
     bprintf buff "							</table>\n";
     ()
@@ -1237,8 +1254,8 @@ module Stat = struct
     String_set.iter
       (fun label ->
          let esc = escape_dot label in
-         bprintf buff "						<li role=\"presentation\" class=\"brand-nav\"><a href=\"#%s\" aria-controls=\"#%s\" data-toggle=\"tab\">%s</a></li>\n"
-           esc esc label
+         bprintf buff "						<li role=\"presentation\" class=\"brand-nav\"><a href=\"#%s\" aria-controls=\"#%s\" data-toggle=\"tab\">%s [%d]</a></li>\n"
+           esc esc label (get_total stat label)
       ) stat.labels;
 
     bprintf buff "					</ul>\n";
