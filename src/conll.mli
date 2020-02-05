@@ -76,7 +76,7 @@ module Conll : sig
   val to_string: ?cupt:bool -> t -> string
   val to_dot: t -> string
   val save_dot: string -> t -> unit
-  val load: string -> t
+  val load: ?tf_wf:bool -> string -> t
   val get_sentid_meta: t -> string option
   val get_sentid: t -> string option
   val set_sentid: string -> t -> t
@@ -100,9 +100,9 @@ module Conll_corpus : sig
     no error is produced on Conll error but problems are reported in the given log_file.
     If the log_file already doesn't exist, it is created; else data are append to the file.
     *)
-  val load: ?log_file:string -> string -> t
-  val load_list: ?log_file:string -> string list -> t
-  val from_lines: ?log_file:string -> ?basename: string -> (int * string) list -> t
+  val load: ?tf_wf:bool -> ?log_file:string -> string -> t
+  val load_list: ?tf_wf: bool -> ?log_file:string -> string list -> t
+  val from_lines: ?tf_wf: bool -> ?log_file:string -> ?basename: string -> (int * string) list -> t
   val save: string -> t -> unit
   val save_sub: string -> int -> int -> t -> unit
   val dump: t -> unit

@@ -523,6 +523,37 @@ module Conll = struct
 
   let feats_to_misc t = { t with lines = List.map line_feats_to_misc t.lines }
 
+  (* move efs into feats (without prefix) *)
+  let line_tf_wf l =
+    let feats_with_misc =
+      List.fold_left
+        (fun acc (n,v) -> match n with
+           | "SpaceAfter" -> acc
+           | _ when List.mem_assoc n acc -> error ~msg:"feature already used" ()
+           | _ -> (n,v)::acc
+        ) l.feats l.efs in
+    { l with feats = feats_with_misc; efs=[] }
+
+  let copy_form tar_feat line =
+    if List.mem_assoc tar_feat line.feats
+    then line
+    else { line with feats = (tar_feat, line.form) :: line.feats }
+
+  let add_tf_wf t =
+    let with_mwt =
+      List.fold_left
+        (fun acc {first; last; fusion } ->
+           let rec loop index acc2 =
+             if index > last
+             then acc2
+             else loop (index+1) (add_feat_id (index,None) ("textform", "_") acc2)
+           in loop (first+1) (add_feat_id (first,None) ("textform", fusion) acc)
+        ) t t.multiwords in
+    { with_mwt with lines =
+                      with_mwt.lines
+                      |> List.map (copy_form "textform")
+                      |> List.map (copy_form "wordform")
+    }
 
   (*
     13 --> (13,None)
@@ -570,7 +601,7 @@ module Conll = struct
 
   exception Empty_conll
   (* parse a list of line corresponding to one conll structure *)
-  let parse_rev ?file lines_rev =
+  let parse_rev ?(tf_wf=false) ?file lines_rev =
     let (conll,mwe) = (* mwe contains the list of (line_num, id, mwe_field) to be processed later in add_mwe_nodes *)
       List.fold_left
         (fun (acc, acc_mwe) (line_num, line) ->
@@ -650,12 +681,18 @@ module Conll = struct
         ) (empty file,[]) lines_rev in
     if List.length conll.lines = 0 then raise Empty_conll;
     check conll;
-    conll
-    |> misc_to_feats (* add features _MISC_ *)
-    |> add_mw_feats  (* add features _UD_ *)
-    |> (add_mwe_nodes ?file mwe)
+    if tf_wf
+    then
+      conll
+      |> add_tf_wf
+      |> (add_mwe_nodes ?file mwe)
+    else
+      conll
+      |> misc_to_feats (* add features _MISC_ *)
+      |> add_mw_feats  (* add features _UD_ *)
+      |> (add_mwe_nodes ?file mwe)
 
-  let parse ?file lines = parse_rev ?file (List.rev lines)
+  let parse ?tf_wf ?file lines = parse_rev ?tf_wf ?file (List.rev lines)
 
   let from_string s =
     let lines = Str.split (Str.regexp "\n") s in
@@ -663,9 +700,9 @@ module Conll = struct
     parse num_lines
 
   (* load conll structure from file: the file must contain only one structure *)
-  let load file =
+  let load ?tf_wf file =
     let lines_rev = File.read_rev file in
-    parse_rev ~file lines_rev
+    parse_rev ?tf_wf ~file lines_rev
 
   let to_string ?(cupt=false) t =
     let t = feats_to_misc t in
@@ -939,13 +976,13 @@ module Conll_corpus = struct
 
   let reset () = cpt := 0; res := []
 
-  let add_lines ?log_file file lines =
+  let add_lines ?tf_wf ?log_file file lines =
 
     let rev_locals = ref [] in
     let save_one () =
       begin
         try
-          let conll = Conll.parse_rev ~file !rev_locals in
+          let conll = Conll.parse_rev ?tf_wf ~file !rev_locals in
           incr cpt;
           let base = Filename.basename file in
           let sentid = match Conll.get_sentid conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
@@ -982,16 +1019,16 @@ module Conll_corpus = struct
       save_one ()
     )
 
-  let load_list ?log_file file_list =
+  let load_list ?tf_wf ?log_file file_list =
     reset ();
-    List.iter (fun file -> add_lines ?log_file file (File.read file)) file_list;
+    List.iter (fun file -> add_lines ?tf_wf ?log_file file (File.read file)) file_list;
     Array.of_list (List.rev !res)
 
-  let load ?log_file file = load_list ?log_file [file]
+  let load ?tf_wf ?log_file file = load_list ?tf_wf ?log_file [file]
 
-  let from_lines ?log_file ?(basename="noname") lines =
+  let from_lines ?tf_wf ?log_file ?(basename="noname") lines =
     reset ();
-    add_lines ?log_file basename lines;
+    add_lines ?tf_wf ?log_file basename lines;
     Array.of_list (List.rev !res)
 
   let prepare_for_output conll =
@@ -1154,20 +1191,20 @@ module Stat = struct
 
   let count_compare (tag1,count1) (tag2,count2) =
     match (count1, count2) with
-      | (Some i, Some j) -> Stdlib.compare j i
-      | (None, Some _) -> 1
-      | (Some _, None) -> -1
-      | (None, None) -> Stdlib.compare tag1 tag2
+    | (Some i, Some j) -> Stdlib.compare j i
+    | (None, Some _) -> 1
+    | (Some _, None) -> -1
+    | (None, None) -> Stdlib.compare tag1 tag2
 
   let table buff corpus_id stat label =
     let govs = String_set.fold
-      (fun gov acc -> (gov, get_total_gov stat label gov) :: acc
-      ) stat.tags [] in
+        (fun gov acc -> (gov, get_total_gov stat label gov) :: acc
+        ) stat.tags [] in
     let sorted_govs = List.sort count_compare govs in
 
     let deps = String_set.fold
-      (fun dep acc -> (dep, get_total_dep stat label dep) :: acc
-      ) stat.tags [] in
+        (fun dep acc -> (dep, get_total_dep stat label dep) :: acc
+        ) stat.tags [] in
     let sorted_deps = List.sort count_compare deps in
 
     bprintf buff "							<table>\n";
