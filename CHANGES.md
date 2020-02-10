@@ -1,3 +1,6 @@
+# 1.6.0 (2020/02/10)
+  * add optional arg ~tf_wf which produces the two features textform and wordform at loading time (see https://github.com/UniversalDependencies/docs/issues/683)
+
 ## 1.5.7 (2020/01/18)
   * Sort columns and rows in tables
 
