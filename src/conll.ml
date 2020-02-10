@@ -505,11 +505,15 @@ module Conll = struct
       ) t t.multiwords
 
   (* move MISC feats in feats with prefix _MISC_ *)
-  let line_misc_to_feats l =
-    let new_feats = List.fold_left (fun acc (n,v) -> ("_MISC_"^n,v)::acc) l.feats l.efs in
+  let line_misc_to_feats ?(prefix="") l =
+    let new_feats =
+      List.fold_left
+        (fun acc (n,v) -> (prefix^n,v)::acc)
+        l.feats l.efs in
     { l with feats = new_feats; efs=[] }
 
-  let misc_to_feats t = { t with lines = List.map line_misc_to_feats t.lines }
+  let misc_to_feats ?prefix t =
+    { t with lines = List.map (line_misc_to_feats ?prefix) t.lines }
 
   (* move feats with prefix _MISC_ in MISC feats *)
   let line_feats_to_misc l =
@@ -539,7 +543,15 @@ module Conll = struct
     then line
     else { line with feats = (tar_feat, line.form) :: line.feats }
 
+  let add_tf_wf_empty_node line =
+    match line.id with
+    | (_,None) -> line
+    | _ -> line
+           |> add_feat_line ("textform", "_")
+           |> add_feat_line ("wordform", "_")
+
   let add_tf_wf t =
+    (* first step: add textform on amalgams *)
     let with_mwt =
       List.fold_left
         (fun acc {first; last; fusion } ->
@@ -549,10 +561,12 @@ module Conll = struct
              else loop (index+1) (add_feat_id (index,None) ("textform", "_") acc2)
            in loop (first+1) (add_feat_id (first,None) ("textform", fusion) acc)
         ) t t.multiwords in
-    { with_mwt with lines =
-                      with_mwt.lines
-                      |> List.map (copy_form "textform")
-                      |> List.map (copy_form "wordform")
+    { with_mwt with
+      lines =
+        with_mwt.lines
+        |> List.map add_tf_wf_empty_node    (* second step: empty node *)
+        |> List.map (copy_form "textform")  (* third step: by default, copy form *)
+        |> List.map (copy_form "wordform")
     }
 
   (*
@@ -684,11 +698,12 @@ module Conll = struct
     if tf_wf
     then
       conll
+      |> misc_to_feats
       |> add_tf_wf
       |> (add_mwe_nodes ?file mwe)
     else
       conll
-      |> misc_to_feats (* add features _MISC_ *)
+      |> (misc_to_feats ~prefix: "_MISC_") (* add features _MISC_ *)
       |> add_mw_feats  (* add features _UD_ *)
       |> (add_mwe_nodes ?file mwe)
 
