@@ -1,3 +1,6 @@
+## 1.6.2 (2020/03/10)
+  * remove speaker, start and stop feature in written orfeo
+
 ## 1.6.1 (2020/02/10)
   * Bug fixes
 

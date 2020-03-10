@@ -660,6 +660,7 @@ module Conll = struct
                          | (_,None) -> parse_feats ~file line_num feats
                          | _ -> ("_UD_empty", "Yes") :: (parse_feats ~file line_num feats) in
                        let orfeo_feats = match tail with
+                         | ["_"; "_"; "_"] -> []
                          | [start; stop; speaker] -> [("_start",start); ("_stop",stop); ("_speaker",speaker); ]
                          | _ -> [] in
                        let efs = sort_feats (parse_feats ~file line_num c10) in
