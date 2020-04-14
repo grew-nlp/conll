@@ -1,3 +1,6 @@
+## 1.6.3 (2020/04/14)
+  * Add warning for non-empty white lines
+
 ## 1.6.2 (2020/03/10)
   * remove speaker, start and stop feature in written orfeo
 

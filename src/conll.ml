@@ -1021,12 +1021,23 @@ module Conll_corpus = struct
       end;
       rev_locals := [] in
 
+    let is_empty_line = function
+      | (_,"")-> true
+      | (line_num,l) when CCString.for_all (fun c -> c = ' ' || c = '\t') l ->
+        Log.fwarning "[Conll, File %s, line %d] the line contains white spaces and/or tabs, it should be empty" file line_num;
+        true
+      | _ -> false in
+
+
     let _ =
       List.iter
-        (fun (line_num,line) -> match line with
-           | "" when !rev_locals = [] -> Log.fwarning "[Conll, File %s] Several blank lines around line %d" file line_num;
-           | "" -> save_one ()
-           | _ -> rev_locals := (line_num,line) :: !rev_locals
+        (fun line ->
+           if is_empty_line line
+           then
+             if !rev_locals = []
+             then Log.fwarning "[Conll, File %s] Several blank lines around line %d" file (fst line)
+             else save_one ()
+           else rev_locals := line :: !rev_locals
         ) lines in
 
     if !rev_locals != []
