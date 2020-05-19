@@ -1,5 +1,6 @@
 open Printf
 open Conll
+open Conllx
 
 let rec list_extract n = function
 	| [] -> failwith "list_extract"
@@ -47,7 +48,7 @@ let split corpus id_list =
 let sub corpus id_list =
   let sub_list = CCList.filter_map
     (fun id ->
-      CCArray.find (fun (i,c) -> if i=id then Some (i,c) else None) corpus
+      CCArray.find_map (fun (i,c) -> if i=id then Some (i,c) else None) corpus
     ) id_list in
   Array.of_list sub_list
 
@@ -246,6 +247,23 @@ let _ =
 
 
 	| "cut"::_ -> printf "ERROR: sub-command \"cut\" expects 3 arguments\n"; print_usage ()
+
+	| ["to_json"; infile] ->
+			begin
+				let cx = Corpusx.load infile in
+				Array.iter (fun (_,conllx) ->
+					let json = Conllx.to_json conllx in
+					Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
+					) (Corpusx.get_data cx)
+			end
+
+	| ["from_json"; infile] ->
+			begin
+				let json = Yojson.Basic.from_file infile in
+				let conll = Conllx.from_json json in
+				Printf.printf "%s\n" (Conllx.to_string Profile.default conll)
+			end
+
 
 	| [] -> print_usage ()
 	| x :: _ -> printf "ERROR: unknown sub-command \"%s\"\n" x; print_usage ()
