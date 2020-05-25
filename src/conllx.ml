@@ -141,12 +141,12 @@ module Id = struct
   (* rebuild ids list to follow the given order (taking into account empty nodes) *)
   let normalise_list is_empty id_list =
     let rec loop = function
-    | (_,[]) -> []
-    | (Simple pos, head::tail) when is_empty head -> let new_id = Empty (pos, 1) in (head,new_id) :: (loop (new_id,tail))
-    | (Empty (pos,i), head::tail) when is_empty head -> let new_id = Empty (pos,i+1) in (head,new_id) :: (loop (new_id,tail))
-    | (id, head::tail) -> let new_id = Simple ((base id)+1) in (head,new_id) :: (loop (new_id,tail))
-     in
-    loop (Simple 0, id_list)
+      | (_,[]) -> []
+      | (Simple pos, head::tail) when is_empty head -> let new_id = Empty (pos, 1) in (head,new_id) :: (loop (new_id,tail))
+      | (Empty (pos,i), head::tail) when is_empty head -> let new_id = Empty (pos,i+1) in (head,new_id) :: (loop (new_id,tail))
+      | (id, head::tail) -> let new_id = Simple ((base id)+1) in (head,new_id) :: (loop (new_id,tail))
+    in
+    loop (Simple (-1), id_list)
 
   let from_string s =
     try
@@ -200,6 +200,10 @@ module Node = struct
     wordform: string option;
     textform: string option;
   }
+
+  let conll_root = { id = Id.Simple 0; form="__ROOT__"; feats=[]; wordform=None; textform=None;}
+
+  let is_conll_root t = t.form = "__ROOT__"
 
   let compare ?file ?sent_id n1 n2 = Id.compare ?file ?sent_id n1.id n2.id
 
@@ -257,9 +261,15 @@ module Node = struct
                | (k,v) -> Some (k, v |> to_string)
              ) (json |> to_assoc)
           )  in
+      let id = json |> member "id" |> to_string |> Id.from_string in
+      let form_opt = try Some (json |> member "form" |> to_string) with Type_error _ -> None in
+      let form = match (id, form_opt) with
+        | (_, Some f) -> f
+        | (Simple 0, None) -> "__ROOT__"
+        | (_, None) -> error ~fct:"Node.from_json" "missing form" in
       {
-        id = json |> member "id" |> to_string |> Id.from_string;
-        form = json |> member "form" |> to_string;
+        id;
+        form;
         feats;
         wordform = (try Some (json |> member "wordform" |> to_string) with Type_error _ -> None);
         textform = (try Some (json |> member "textform" |> to_string) with Type_error _ -> None);
@@ -307,6 +317,7 @@ module Node = struct
     let mwt_misc = ref [] in
     let rec loop to_underscore = function
       | [] -> []
+      | ({ form="__ROOT__" } as node) :: tail -> node :: (loop to_underscore tail)
       | ({ id=Id.Empty _; _ } as node) :: tail -> { node with textform = Some "_"} :: (loop to_underscore tail)
       | { id=Id.Mwt (init,final); form; feats; _} :: next :: tail ->
         (match feats with [] -> () | l -> mwt_misc := ((init,final),l) :: !mwt_misc);
@@ -359,6 +370,7 @@ module Node = struct
     List.map
       (fun node ->
          match (node.id, List.assoc_opt "wordform" node.feats) with
+         | _ when node.form = "__ROOT__" -> node
          | (_, Some wf) -> { node with wordform = Some wf; feats = List.remove_assoc "wordform" node.feats }
          | (Empty _, _) -> { node with wordform = Some "_" }
          | (_, None) -> { node with wordform = Some (escape_form node.form) }
@@ -372,8 +384,7 @@ module Node = struct
          | Some wf when (unescape_form wf) <> node.form ->
            { node with wordform = None; feats = List.sort Feat.compare (("wordform", wf) :: node.feats) }
          | Some _ -> { node with wordform = None }
-         | None ->
-           error "wordform_down"
+         | None -> { node with wordform = None }
       ) node_list
 
   let is_empty t = t.wordform = Some "_" && t.textform = Some "_"
@@ -477,30 +488,43 @@ module Conllx = struct
     sec_edges: Edge.t list;
   }
 
+  (* ------------------------------------------------------------------------ *)
+  let get_meta t = t.meta
+
+  (* ------------------------------------------------------------------------ *)
   let find_node id t = List.find_opt (fun n -> n.Node.id = id) t
 
+  (* ------------------------------------------------------------------------ *)
   (* when MISC features is used on a MWT line, there is no place to store the data in Conllx.t: we used a special meta as a hack *)
   let textform_up t =
     match Node.textform_up t.nodes with
     | (new_nodes, "") -> { t with nodes = new_nodes }
     | (new_nodes, mwt_misc) -> { t with nodes = new_nodes; meta=("##MWT_MISC##", mwt_misc)::t.meta }
 
+  (* ------------------------------------------------------------------------ *)
   let textform_down t =
     match List.assoc_opt "##MWT_MISC##" t.meta with
     | None -> { t with nodes = Node.textform_down "" t.nodes}
     | Some mwt_misc -> { t with nodes = Node.textform_down mwt_misc t.nodes; meta = List.remove_assoc "##MWT_MISC##" t.meta }
 
+  (* ------------------------------------------------------------------------ *)
   let wordform_up t = { t with nodes = Node.wordform_up t.nodes}
+
+  (* ------------------------------------------------------------------------ *)
   let wordform_down t = { t with nodes = Node.wordform_down t.nodes}
 
+  (* ------------------------------------------------------------------------ *)
   let get_sent_id_opt t = List.assoc_opt "sent_id" t.meta
 
+  (* ------------------------------------------------------------------------ *)
   let parse_meta (_,t) =
     match Str.bounded_split (Str.regexp "# *\\| *= *") t 2 with
     | [key;value] -> (key,value)
     | _ -> ("", t)
 
-  let from_string_list ?file profile string_list =
+  (* ------------------------------------------------------------------------ *)
+  let from_string_list ?file ?(profile=Profile.default) string_list =
+
     let (meta_lines, graph_lines) =
       List.partition (fun (_,l) -> l <> "" && l.[0] = '#') string_list in
 
@@ -523,26 +547,32 @@ module Conllx = struct
         ) ([],[],[]) items_list in
     {
       meta = List.rev meta;
-      nodes;
-      order = List.map (fun node -> node.Node.id) nodes;
+      nodes = Node.conll_root :: nodes;
+      order = []; (* [order] is computed after textform/wordform because of MWT "nodes" *)
       edges;
       sec_edges;
     }
     |> textform_up
     |> wordform_up
+    |> (fun t -> { t with order = List.map (fun node -> node.Node.id) t.nodes;})
 
-    let normalise_ids t =
-      let is_empty id = match find_node id t.nodes with
+  let normalise_ids t =
+    let is_empty id = match find_node id t.nodes with
       | Some node -> Node.is_empty node
-      | None -> error "inconstant id" in
-      let mapping = Id.normalise_list is_empty t.order in
+      | None -> error "inconsistent id: %s" (Id.to_string id) in
+    let mapping = Id.normalise_list is_empty t.order in
 
-      let new_nodes = List.map (Node.id_map mapping) t.nodes in
-      let new_edges = List.map (Edge.id_map mapping) t.edges in
-      let new_sec_edges = List.map (Edge.id_map mapping) t.sec_edges in
-      { t with nodes = new_nodes; edges=new_edges; sec_edges= new_sec_edges}
+    let new_nodes = List.map (Node.id_map mapping) t.nodes in
+    let new_edges = List.map (Edge.id_map mapping) t.edges in
+    let new_sec_edges = List.map (Edge.id_map mapping) t.sec_edges in
+    { t with nodes = new_nodes; edges=new_edges; sec_edges= new_sec_edges}
 
+  (* ------------------------------------------------------------------------ *)
+  let from_string ?profile s =
+    from_string_list ?profile
+      (List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s))
 
+  (* ------------------------------------------------------------------------ *)
   let to_json (t: t) : Yojson.Basic.t =
     `Assoc
       (CCList.filter_map
@@ -559,6 +589,7 @@ module Conllx = struct
          ]
       )
 
+  (* ------------------------------------------------------------------------ *)
   let from_json json =
     let open Yojson.Basic.Util in
     try
@@ -571,32 +602,36 @@ module Conllx = struct
       }
     with Type_error _ -> error ~fct:"Conllx.from_json" "illformed json"
 
-  let to_buff ?sent_id buff profile t =
+  (* ------------------------------------------------------------------------ *)
+  let to_buff ?sent_id buff ?(profile = Profile.default) t =
     let down_t = t |> normalise_ids |> wordform_down |> textform_down in
+
+    let t_without_root = { down_t with nodes = List.filter (fun node -> not (Node.is_conll_root node)) down_t.nodes} in
 
     let _ = List.iter
         (function
           | ("", meta) -> bprintf buff "%s\n" meta
           | (key,value) -> bprintf buff "# %s = %s\n" key value
-        ) down_t.meta in
+        ) t_without_root.meta in
     let _ = List.iter
         (fun node ->
            let (head,deprel) =
-             match List.filter (Edge.is_tar node.Node.id) down_t.edges with
+             match List.filter (Edge.is_tar node.Node.id) t_without_root.edges with
              | [] -> ("_", "_")
              | [one] -> (Id.to_string one.Edge.src, one.Edge.label)
              | _ -> error ?sent_id "more the one edge with one tar" in
            let deps =
-             match List.sort Edge.compare (List.filter (Edge.is_tar node.Node.id) down_t.sec_edges) with
+             match List.sort Edge.compare (List.filter (Edge.is_tar node.Node.id) t_without_root.sec_edges) with
              | [] -> "_"
              | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^e.Edge.label) l) in
            bprintf buff "%s\n" (Node.to_conll profile head deprel deps node)
-        ) down_t.nodes in
+        ) t_without_root.nodes in
     ()
 
-  let to_string profile t =
+  (* ------------------------------------------------------------------------ *)
+  let to_string ?profile t =
     let buff = Buffer.create 32 in
-    to_buff buff profile t;
+    to_buff buff ?profile t;
     Buffer.contents buff
 
 end
@@ -617,7 +652,7 @@ module Corpusx = struct
     Array.iter
       (fun (_,conll) ->
          let sent_id = Conllx.get_sent_id_opt conll in
-         Conllx.to_buff ?sent_id buff t.profile conll;
+         Conllx.to_buff ?sent_id buff ~profile:t.profile conll;
          bprintf buff "\n";
       ) t.data;
     Buffer.contents buff
@@ -638,7 +673,7 @@ module Corpusx = struct
       let save_one () =
         begin
           try
-            let conll = Conllx.from_string_list ~file profile !rev_locals in
+            let conll = Conllx.from_string_list ~file ~profile !rev_locals in
             incr cpt;
             let base = Filename.basename file in
             let sent_id = match Conllx.get_sent_id_opt conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
