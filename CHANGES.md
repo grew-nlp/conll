@@ -1,3 +1,6 @@
+## 1.6.4 (2020/05/29)
+  * Introduction of Conllx (partial)
+
 ## 1.6.3 (2020/04/14)
   * Add warning for non-empty white lines
 
