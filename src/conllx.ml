@@ -606,8 +606,10 @@ module Conllx = struct
 
   (* ------------------------------------------------------------------------ *)
   let from_string ?profile s =
-    from_string_list ?profile
-      (List.rev (List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s)))
+    match List.rev (List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s)) with
+    | (_,"") :: t -> from_string_list ?profile t (* remove pending empty line, if any *)
+    | l -> from_string_list ?profile l
+
 
   (* ------------------------------------------------------------------------ *)
   let to_json (t: t) : Yojson.Basic.t =
