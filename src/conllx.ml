@@ -434,15 +434,18 @@ module Edge = struct
           (fun (acc_src, acc_label) col item ->
              match (item, col, acc_src, acc_label) with
              | ("_",_,_,_) -> (acc_src, acc_label)
-             | (_,Column.HEAD, None, _) -> (Some (Id.from_string item), acc_label)
-             | (_,Column.DEPREL, _, None) -> (acc_src,Some item)
+             | (_,Column.HEAD, None, _) -> (Some item, acc_label)
+             | (_,Column.DEPREL, _, None) -> (acc_src, Some item)
              | (_,Column.HEAD, _, _)
              | (_,Column.DEPREL, _, _) -> error ?file ?sent_id ?line_num "Invalid HEAD/DEPREL spec"
              | _ -> (acc_src, acc_label)
           ) (None, None) profile item_list in
       match (src_opt, label_opt) with
-      | (Some src, Some label) -> Some { src; label; tar}
-      | (None, None) -> None
+      | (Some srcs, Some labels) ->
+        let src_id_list = List.map Id.from_string (Str.split (Str.regexp "|") srcs) in
+        let label_list = Str.split (Str.regexp "|") labels in
+        List.map2 (fun src label -> { src; label; tar}) src_id_list label_list
+      | (None, None) -> []
       | _ -> error ?file ?sent_id ?line_num "Invalid HEAD/DEPREL spec"
     with Invalid_argument _ ->
       error ?file ?sent_id ?line_num
@@ -558,11 +561,11 @@ module Conllx = struct
         (fun (acc_nodes, acc_edges, acc_sec_edges)  (line_num,graph_line) ->
            let item_list = Str.split (Str.regexp "\t") graph_line in
            let node = Node.from_item_list ?file ?sent_id ~line_num profile item_list in
-           let edge_opt = Edge.from_item_list ?file ?sent_id ~line_num profile node.Node.id item_list in
+           let edge_list = Edge.from_item_list ?file ?sent_id ~line_num profile node.Node.id item_list in
            let sec_edges = Edge.sec_from_item_list ?file ?sent_id ~line_num profile node.Node.id item_list in
            (
              node::acc_nodes,
-             (match edge_opt with Some new_edge -> new_edge::acc_edges | _ -> acc_edges),
+             (edge_list @ acc_edges),
              (sec_edges @ acc_sec_edges)
            )
         ) ([],[],[]) graph_lines_rev in
