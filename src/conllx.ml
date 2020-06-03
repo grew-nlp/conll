@@ -78,7 +78,9 @@ end
 
 (* ==================================================================================================== *)
 module Column = struct
-  type t = ID | FORM | LEMMA | UPOS | XPOS | FEATS | HEAD | DEPREL | DEPS | MISC | PARSEME_MWE
+  type t = ID | FORM | LEMMA | UPOS | XPOS | FEATS | HEAD | DEPREL | DEPS | MISC
+    | PARSEME_MWE
+    | SEMCOR_NOUN
 
   let to_string = function
     | ID -> "ID"
@@ -92,6 +94,7 @@ module Column = struct
     | DEPS -> "DEPS"
     | MISC -> "MISC"
     | PARSEME_MWE-> "PARSEME:MWE"
+    | SEMCOR_NOUN-> "SEMCOR:NOUN"
 
   let from_string ?file ?line_num = function
     | "ID" -> ID
@@ -105,6 +108,7 @@ module Column = struct
     | "DEPS" -> DEPS
     | "MISC" -> MISC
     | "PARSEME:MWE" -> PARSEME_MWE
+    | "SEMCOR:NOUN" -> SEMCOR_NOUN
     | x -> error ?file ?line_num "Unknown Column %s" x
 end
 
