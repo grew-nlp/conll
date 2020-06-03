@@ -250,18 +250,21 @@ let _ =
 
 	| ["to_json"; infile] ->
 			begin
+				try
 				let cx = Corpusx.load infile in
 				Array.iter (fun (_,conllx) ->
 					let json = Conllx.to_json conllx in
 					Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
 					) (Corpusx.get_data cx)
+				with
+				| Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
 			end
 
 	| ["from_json"; infile] ->
 			begin
 				let json = Yojson.Basic.from_file infile in
 				let conll = Conllx.from_json json in
-				Printf.printf "%s\n" (Conllx.to_string Profile.default conll)
+				Printf.printf "%s\n" (Conllx.to_string ~profile:Profile.default conll)
 			end
 
 
