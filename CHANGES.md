@@ -1,3 +1,7 @@
+## 1.6.5 (2020/06/03)
+  * Change Error --> Conllx_error
+  * Check consistency at parsing time (edge refers to existing nodes, no duplicate id in nodes)
+
 ## 1.6.4 (2020/05/29)
   * Introduction of Conllx (partial)
 

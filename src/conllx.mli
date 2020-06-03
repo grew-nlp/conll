@@ -1,4 +1,4 @@
-exception Error of Yojson.Basic.t
+exception Conllx_error of Yojson.Basic.t
 
 module Profile : sig
   type t

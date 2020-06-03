@@ -1,7 +1,7 @@
 open Printf
 
 (* ==================================================================================================== *)
-exception Error of Yojson.Basic.t
+exception Conllx_error of Yojson.Basic.t
 exception Skip
 let robust = ref false
 
@@ -29,9 +29,23 @@ let error_ ?file ?sent_id ?line_num ?fct ?data ?prev message =
   let json = build_json ?file ?sent_id ?line_num ?fct ?data ?prev message in
   if !robust
   then (Printf.eprintf "%s\n" (Yojson.Basic.pretty_to_string json); raise Skip)
-  else raise (Error json)
+  else raise (Conllx_error json)
 
 let error ?file ?sent_id ?line_num ?fct ?data ?prev = Printf.ksprintf (error_ ?file ?sent_id ?line_num ?fct ?data ?prev)
+
+let reraise ?file ?sent_id ?line_num ?fct ?data ?prev json =
+  let new_json = match json with
+    | `Assoc list -> `Assoc (
+        list
+        |> (fun l -> match file with None -> l | Some x -> ("file", `String x) :: (List.remove_assoc "file" l))
+        |> (fun l -> match sent_id with None -> l | Some x -> ("sent_id", `String x) :: (List.remove_assoc "sent_id" l))
+        |> (fun l -> match line_num with None -> l | Some x -> ("line_num", `String x) :: (List.remove_assoc "line_num" l))
+        |> (fun l -> match fct with None -> l | Some x -> ("fct", `String x) :: (List.remove_assoc "fct" l))
+        |> (fun l -> match data with None -> l | Some x -> ("data", `String x) :: (List.remove_assoc "data" l))
+        |> (fun l -> match prev with None -> l | Some x -> ("prev", `String x) :: (List.remove_assoc "prev" l))
+      )
+    | _ -> error "Bug in json error structure" in
+  raise (Conllx_error new_json)
 
 (* ==================================================================================================== *)
 module Misc = struct
@@ -159,6 +173,8 @@ module Id = struct
       | _ -> error "Cannot parse id %s" s
     with Failure _ -> error "Cannot parse id %s" s
 end
+
+module Id_set = Set.Make (struct type t = Id.t let compare = Stdlib.compare end)
 
 (* ==================================================================================================== *)
 module Feat = struct
@@ -523,19 +539,24 @@ module Conllx = struct
     | _ -> ("", t)
 
   (* ------------------------------------------------------------------------ *)
-  let from_string_list ?file ?(profile=Profile.default) string_list =
+  let check_edge nodes edge =
+    match (List.exists (fun n -> n.Node.id = edge.Edge.src) nodes, List.exists (fun n -> n.Node.id = edge.Edge.tar) nodes) with
+    | (true, true) -> ()
+    | (false, _) -> error "Unknown identifier `%s`" (Id.to_string edge.Edge.src)
+    | (_, false) -> error "Unknown identifier `%s`" (Id.to_string edge.Edge.tar)
 
-    let (meta_lines, graph_lines) =
-      List.partition (fun (_,l) -> l <> "" && l.[0] = '#') string_list in
+  (* ------------------------------------------------------------------------ *)
+  let from_string_list ?file ?(profile=Profile.default) string_list_rev =
+    let (meta_lines, graph_lines_rev) =
+      List.partition (fun (_,l) -> l <> "" && l.[0] = '#') string_list_rev in
 
     let meta = List.map parse_meta meta_lines in
     let sent_id = List.assoc_opt "sent_id" meta in
 
-    let items_list = List.map (fun (n,l) -> (n,Str.split (Str.regexp "\t") l)) graph_lines in
-
-    let (nodes, edges, sec_edges) =
+    let (nodes_without_root, edges, sec_edges) =
       List.fold_left
-        (fun (acc_nodes, acc_edges, acc_sec_edges)  (line_num,item_list)->
+        (fun (acc_nodes, acc_edges, acc_sec_edges)  (line_num,graph_line) ->
+           let item_list = Str.split (Str.regexp "\t") graph_line in
            let node = Node.from_item_list ?file ?sent_id ~line_num profile item_list in
            let edge_opt = Edge.from_item_list ?file ?sent_id ~line_num profile node.Node.id item_list in
            let sec_edges = Edge.sec_from_item_list ?file ?sent_id ~line_num profile node.Node.id item_list in
@@ -544,10 +565,25 @@ module Conllx = struct
              (match edge_opt with Some new_edge -> new_edge::acc_edges | _ -> acc_edges),
              (sec_edges @ acc_sec_edges)
            )
-        ) ([],[],[]) items_list in
+        ) ([],[],[]) graph_lines_rev in
+
+    let nodes = Node.conll_root :: nodes_without_root in
+
+    (* check Conll structure; duplicated edges, src and tar of edges *)
+    begin
+      let rec loop used_ids = function
+        | [] -> ()
+        | {Node.id=id}::tail when Id_set.mem id used_ids -> error ?sent_id ?file "id `%s` is used twice" (Id.to_string id)
+        | {Node.id=id}::tail -> loop (Id_set.add id used_ids) tail in
+      try
+        loop Id_set.empty nodes;
+        List.iter (check_edge nodes) edges;
+        List.iter (check_edge nodes) sec_edges
+      with Conllx_error e -> reraise ?sent_id ?file e
+    end;
     {
       meta = List.rev meta;
-      nodes = Node.conll_root :: nodes;
+      nodes;
       order = []; (* [order] is computed after textform/wordform because of MWT "nodes" *)
       edges;
       sec_edges;
@@ -555,6 +591,7 @@ module Conllx = struct
     |> textform_up
     |> wordform_up
     |> (fun t -> { t with order = List.map (fun node -> node.Node.id) t.nodes;})
+  (* NOTE: order is built from order on nodes in input data, not following numerical order. *)
 
   let normalise_ids t =
     let is_empty id = match find_node id t.nodes with
@@ -570,7 +607,7 @@ module Conllx = struct
   (* ------------------------------------------------------------------------ *)
   let from_string ?profile s =
     from_string_list ?profile
-      (List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s))
+      (List.rev (List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s)))
 
   (* ------------------------------------------------------------------------ *)
   let to_json (t: t) : Yojson.Basic.t =
@@ -653,7 +690,6 @@ module Corpusx = struct
       (fun (_,conll) ->
          let sent_id = Conllx.get_sent_id_opt conll in
          Conllx.to_buff ?sent_id buff ~profile:t.profile conll;
-         bprintf buff "\n";
       ) t.data;
     Buffer.contents buff
 
