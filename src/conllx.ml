@@ -79,8 +79,8 @@ end
 (* ==================================================================================================== *)
 module Column = struct
   type t = ID | FORM | LEMMA | UPOS | XPOS | FEATS | HEAD | DEPREL | DEPS | MISC
-    | PARSEME_MWE
-    | SEMCOR_NOUN
+         | PARSEME_MWE
+         | SEMCOR_NOUN
 
   let to_string = function
     | ID -> "ID"
@@ -408,6 +408,103 @@ module Node = struct
       ) node_list
 
   let is_empty t = t.wordform = Some "_" && t.textform = Some "_"
+end
+
+(* ==================================================================================================== *)
+module String_map = Map.Make (String)
+
+(* ==================================================================================================== *)
+module Label_config = struct
+  type t = {
+    core: string; (* name of the required part (no join symbol) *)
+    extensions: (string * char) list; (* (field_name, join symbol) *)  (* UD, SUD *)
+    prefixes: (string * char) list; (* (kind_value, prefix) *)         (* Seq *)
+  }
+
+  (* covers also UD *)
+  let sud = {
+    core = "1";
+    extensions = [ ("2",':'); ("deep", '@') ];
+    prefixes = [];
+  }
+
+  let future_sud = {
+    core = "rel";
+    extensions = [ ("subrel",':'); ("deep", '@') ];
+    prefixes = [];
+  }
+
+  let sequoia = {
+    core = "1";
+    extensions = [ ("2",':') ];
+    prefixes = [ ( "deep", 'D'); ("surf", 'S') ];
+  }
+end
+
+(* ==================================================================================================== *)
+module Label = struct
+
+  type t = string String_map.t
+
+  let to_string_long t =
+    String.concat ","
+      (String_map.fold (fun k v acc -> (sprintf "%s=%s" k v) :: acc) t [])
+
+  exception Skip
+  let to_string ?(config=Label_config.sud) t =
+    try
+      match String_map.find_opt config.core t with
+      | None -> raise Skip (* no core relation *)
+      | Some rel ->
+        let t = String_map.remove config.core t in
+        let prefix_string = match String_map.find_opt "kind" t with
+          | None -> ""
+          | Some k -> match List.assoc_opt k config.prefixes with
+            | None -> raise Skip (* unknown "kind" value *)
+            | Some p -> sprintf "%c:" p in
+        let t = String_map.remove "kind" t in
+        let (remaining, extensions_string) = List.fold_left
+            (fun (acc_rem, acc_ext_string) (name, sym) ->
+               match String_map.find_opt name t with
+               | Some v -> (String_map.remove name acc_rem, sprintf "%s%c%s" acc_ext_string sym v)
+               | None -> (acc_rem, acc_ext_string)
+            ) (t,"") config.extensions in
+        if String_map.is_empty remaining
+        then prefix_string ^ rel ^ extensions_string
+        else raise Skip (* there are more feature that cannot be encoded *)
+    with skip -> to_string_long t
+
+  let of_string ?(config=Label_config.sud) s =
+    let (kind_opt, pos) =
+      if String.length s > 1 && s.[1] = ':'
+      then
+        match List.find_opt (fun (_,sym) -> sym = s.[0]) config.prefixes with
+        | Some (v,_) -> (Some ("kind", v), 2)
+        | None -> (None, 0)
+      else (None, 0) in
+
+    let rec loop feat p = function
+      | [] -> String_map.singleton feat (CCString.drop p s)
+      | (next,sym) :: tail ->
+        match String.index_from_opt s p sym with
+        | None -> String_map.singleton feat (CCString.drop p s)
+        | Some new_pos -> String_map.add feat (CCString.Sub.copy (CCString.Sub.make s p (new_pos-p))) (loop next (new_pos+1) tail) in
+
+    match kind_opt with
+    | Some (f,v) -> String_map.add f v (loop config.core pos config.extensions)
+    | None -> (loop config.core pos config.extensions)
+
+  (* let _ =
+     printf "comp:aux@tense\n";
+     let l = of_string "comp:aux@tense" in
+     String_map.iter (fun f v -> printf "### %s = %s\n" f v) l;
+     printf "==> %s\n" (to_string l)
+
+     let _ =
+     printf "D:subj:obj\n";
+     let l = of_string ~config:Label_config.sequoia "D:subj:obj" in
+     String_map.iter (fun f v -> printf "### %s = %s\n" f v) l;
+     printf "==> %s\n" (to_string ~config:Label_config.sequoia l) *)
 end
 
 (* ==================================================================================================== *)
