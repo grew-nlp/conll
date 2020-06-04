@@ -2,6 +2,7 @@ open Printf
 
 (* ==================================================================================================== *)
 exception Conllx_error of Yojson.Basic.t
+
 exception Skip
 let robust = ref false
 
@@ -96,7 +97,7 @@ module Column = struct
     | PARSEME_MWE-> "PARSEME:MWE"
     | SEMCOR_NOUN-> "SEMCOR:NOUN"
 
-  let from_string ?file ?line_num = function
+  let of_string ?file ?line_num = function
     | "ID" -> ID
     | "FORM" -> FORM
     | "LEMMA" -> LEMMA
@@ -113,7 +114,7 @@ module Column = struct
 end
 
 (* ==================================================================================================== *)
-module Profile = struct
+module Conllx_profile = struct
   type t = Column.t list
 
   let default = [Column.ID; FORM; LEMMA; UPOS; XPOS; FEATS; HEAD; DEPREL; DEPS; MISC]
@@ -122,9 +123,9 @@ module Profile = struct
     sprintf "# global.columns = %s"
       (String.concat " " (List.map Column.to_string t))
 
-  let from_string ?file ?line_num t =
+  let of_string ?file ?line_num t =
     match Str.split (Str.regexp " ") t with
-    | "#" :: "global.columns" :: "=" :: l -> Some (List.map (Column.from_string ?file ?line_num) l)
+    | "#" :: "global.columns" :: "=" :: l -> Some (List.map (Column.of_string ?file ?line_num) l)
     | _ -> None
 end
 
@@ -166,7 +167,7 @@ module Id = struct
     in
     loop (Simple (-1), id_list)
 
-  let from_string s =
+  let of_string s =
     try
       match Str.bounded_full_split (Str.regexp "[.-]") s 2 with
       | [Str.Text string_id] -> Simple (int_of_string string_id)
@@ -232,13 +233,13 @@ module Node = struct
     | Some new_id -> {t with id = new_id}
     | None -> t
 
-  let from_item_list ?file ?sent_id ?line_num profile item_list =
+  let of_item_list ?file ?sent_id ?line_num profile item_list =
     try
       let (id_opt, form, feats) =
         List.fold_left2
           (fun (acc_id_opt, acc_form, acc_feats) col item ->
              match (col, acc_id_opt) with
-             | (Column.ID, None) -> (Some (Id.from_string item), acc_form, acc_feats)
+             | (Column.ID, None) -> (Some (Id.of_string item), acc_form, acc_feats)
              | (Column.ID, _) -> error "Dup id"
              | (Column.FORM, _) ->
                (acc_id_opt, item, acc_feats)
@@ -270,7 +271,7 @@ module Node = struct
           :: (List.map (fun (f,v) -> Some (f, `String v)) t.feats)
         ))
 
-  let from_json (json: Yojson.Basic.t) =
+  let of_json (json: Yojson.Basic.t) =
     let open Yojson.Basic.Util in
     try
       let feats =
@@ -281,12 +282,12 @@ module Node = struct
                | (k,v) -> Some (k, v |> to_string)
              ) (json |> to_assoc)
           )  in
-      let id = json |> member "id" |> to_string |> Id.from_string in
+      let id = json |> member "id" |> to_string |> Id.of_string in
       let form_opt = try Some (json |> member "form" |> to_string) with Type_error _ -> None in
       let form = match (id, form_opt) with
         | (_, Some f) -> f
         | (Simple 0, None) -> "__ROOT__"
-        | (_, None) -> error ~fct:"Node.from_json" "missing form" in
+        | (_, None) -> error ~fct:"Node.of_json" "missing form" in
       {
         id;
         form;
@@ -294,7 +295,7 @@ module Node = struct
         wordform = (try Some (json |> member "wordform" |> to_string) with Type_error _ -> None);
         textform = (try Some (json |> member "textform" |> to_string) with Type_error _ -> None);
       }
-    with Type_error _ -> error ~fct:"Node.from_json" "illformed json"
+    with Type_error _ -> error ~fct:"Node.of_json" "illformed json"
 
   let to_conll profile head deprel deps t =
     String.concat "\t"
@@ -322,12 +323,12 @@ module Node = struct
          ) mwt_misc
       )
 
-  let mwt_misc_from_string s : mwt_misc =
+  let mwt_misc_of_string s : mwt_misc =
     List.map
       (fun item ->
          match Str.split (Str.regexp_string "::") item with
          | [si; sj; feats] -> ((int_of_string si, int_of_string sj), Misc.parse_features feats)
-         | _ -> error "mwt_misc_from_string"
+         | _ -> error "mwt_misc_of_string"
       )  (Str.split (Str.regexp_string "||") s)
 
   let escape_form = function "_" -> "UNDERSCORE" | x -> x
@@ -351,7 +352,7 @@ module Node = struct
     (new_node_list, mwt_misc_to_string !mwt_misc)
 
   let textform_down mwt_misc_string node_list =
-    let mwt_misc = mwt_misc_from_string mwt_misc_string in
+    let mwt_misc = mwt_misc_of_string mwt_misc_string in
     let (in_span, new_node_list) =
       CCList.fold_map (
         fun acc node ->
@@ -411,10 +412,10 @@ module Node = struct
 end
 
 (* ==================================================================================================== *)
-module String_map = Map.Make (String)
+module String_map = CCMap.Make (String)
 
 (* ==================================================================================================== *)
-module Label_config = struct
+module Conllx_config = struct
   type t = {
     core: string; (* name of the required part (no join symbol) *)
     extensions: (string * char) list; (* (field_name, join symbol) *)  (* UD, SUD *)
@@ -450,17 +451,17 @@ module Label = struct
     String.concat ","
       (String_map.fold (fun k v acc -> (sprintf "%s=%s" k v) :: acc) t [])
 
-  exception Skip
-  let to_string ?(config=Label_config.sud) t =
+  exception Long
+  let to_string ?(config=Conllx_config.sud) t =
     try
       match String_map.find_opt config.core t with
-      | None -> raise Skip (* no core relation *)
+      | None -> raise Long (* no core relation *)
       | Some rel ->
         let t = String_map.remove config.core t in
         let prefix_string = match String_map.find_opt "kind" t with
           | None -> ""
           | Some k -> match List.assoc_opt k config.prefixes with
-            | None -> raise Skip (* unknown "kind" value *)
+            | None -> raise Long (* unknown "kind" value *)
             | Some p -> sprintf "%c:" p in
         let t = String_map.remove "kind" t in
         let (remaining, extensions_string) = List.fold_left
@@ -471,10 +472,10 @@ module Label = struct
             ) (t,"") config.extensions in
         if String_map.is_empty remaining
         then prefix_string ^ rel ^ extensions_string
-        else raise Skip (* there are more feature that cannot be encoded *)
-    with skip -> to_string_long t
+        else raise Long (* there are more feature that cannot be encoded *)
+    with Long -> to_string_long t
 
-  let of_string ?(config=Label_config.sud) s =
+  let of_string ?(config=Conllx_config.sud) s =
     let (kind_opt, pos) =
       if String.length s > 1 && s.[1] = ':'
       then
@@ -494,6 +495,15 @@ module Label = struct
     | Some (f,v) -> String_map.add f v (loop config.core pos config.extensions)
     | None -> (loop config.core pos config.extensions)
 
+  let to_json t = `Assoc (List.map (fun (x,y) -> (x,`String y)) (String_map.to_list t))
+
+  let of_json js =
+    let open Yojson.Basic.Util in
+    js
+    |> to_assoc
+    |> (List.map (fun (k,v) -> k, to_string v))
+    |> String_map.of_list
+
   (* let _ =
      printf "comp:aux@tense\n";
      let l = of_string "comp:aux@tense" in
@@ -502,33 +512,33 @@ module Label = struct
 
      let _ =
      printf "D:subj:obj\n";
-     let l = of_string ~config:Label_config.sequoia "D:subj:obj" in
+     let l = of_string ~config:Conllx_config.sequoia "D:subj:obj" in
      String_map.iter (fun f v -> printf "### %s = %s\n" f v) l;
-     printf "==> %s\n" (to_string ~config:Label_config.sequoia l) *)
+     printf "==> %s\n" (to_string ~config:Conllx_config.sequoia l) *)
 end
 
 (* ==================================================================================================== *)
 module Edge = struct
   type t = {
     src: Id.t;
-    label: string;
+    label: Label.t;
     tar: Id.t;
   }
 
-  let to_string e = sprintf "%s -[%s]-> %s" (Id.to_string e.src) e.label (Id.to_string e.tar)
+  let to_string ?config e = sprintf "%s -[%s]-> %s" (Id.to_string e.src) (Label.to_string ?config e.label) (Id.to_string e.tar)
 
   let id_map mapping t =
     let new_src = match List.assoc_opt t.src mapping with Some new_id -> new_id | None -> t.src in
     let new_tar = match List.assoc_opt t.tar mapping with Some new_id -> new_id | None -> t.tar in
     {t with src=new_src; tar=new_tar }
 
-  let compare e1 e2 =
+  let compare ?config e1 e2 =
     match Id.compare e1.src e2.src with
-    | 0 -> Stdlib.compare e1.label e2.label
+    | 0 -> Stdlib.compare (Label.to_string ?config e1.label) (Label.to_string ?config e2.label)
     | n -> n
   let is_tar id edge = edge.tar = id
 
-  let from_item_list ?file ?sent_id ?line_num profile tar item_list =
+  let of_item_list ?config ?file ?sent_id ?line_num profile tar item_list =
     try
       let (src_opt, label_opt) =
         List.fold_left2
@@ -543,8 +553,8 @@ module Edge = struct
           ) (None, None) profile item_list in
       match (src_opt, label_opt) with
       | (Some srcs, Some labels) ->
-        let src_id_list = List.map Id.from_string (Str.split (Str.regexp "|") srcs) in
-        let label_list = Str.split (Str.regexp "|") labels in
+        let src_id_list = List.map Id.of_string (Str.split (Str.regexp "|") srcs) in
+        let label_list = List.map (Label.of_string ?config) (Str.split (Str.regexp "|") labels) in
         List.map2 (fun src label -> { src; label; tar}) src_id_list label_list
       | (None, None) -> []
       | _ -> error ?file ?sent_id ?line_num "Invalid HEAD/DEPREL spec"
@@ -554,7 +564,7 @@ module Edge = struct
         (List.length item_list) (List.length profile)
 
 
-  let sec_from_item_list ?file ?sent_id ?line_num profile tar item_list =
+  let sec_of_item_list ?config ?file ?sent_id ?line_num profile tar item_list =
     try
       List.fold_left2
         (fun acc_sec_edges col item ->
@@ -567,7 +577,7 @@ module Edge = struct
                       (List.fold_left
                          (fun acc sec ->
                             match Str.bounded_split (Str.regexp ":") sec 2 with
-                            | [src_string;label] -> { src=Id.from_string src_string; label; tar} :: acc
+                            | [src_string;label] -> { src=Id.of_string src_string; label = Label.of_string ?config label; tar} :: acc
                             | _ -> error ?file ?sent_id ?line_num "Cannot parse secondary edges %s" sec
                          ) [] (Str.split (Str.regexp "|") item)
                       )
@@ -582,19 +592,19 @@ module Edge = struct
 
   let to_json t = `Assoc [
       ("src", `String (Id.to_string t.src));
-      ("label", `String t.label);
+      ("label", Label.to_json t.label);
       ("tar", `String (Id.to_string t.tar));
     ]
 
-  let from_json json =
+  let of_json json =
     let open Yojson.Basic.Util in
     try
       {
-        src = json |> member "src" |> to_string |> Id.from_string;
-        label = json |> member "label" |> to_string;
-        tar = json |> member "tar" |> to_string |> Id.from_string;
+        src = json |> member "src" |> to_string |> Id.of_string;
+        label = json |> member "label" |> Label.of_json;
+        tar = json |> member "tar" |> to_string |> Id.of_string;
       }
-    with Type_error _ -> error ~fct:"Edge.from_json" "illformed json"
+    with Type_error _ -> error ~fct:"Edge.of_json" "illformed json"
 
 end
 
@@ -650,7 +660,7 @@ module Conllx = struct
     | (_, false) -> error "Unknown identifier `%s`" (Id.to_string edge.Edge.tar)
 
   (* ------------------------------------------------------------------------ *)
-  let from_string_list ?file ?(profile=Profile.default) string_list_rev =
+  let of_string_list ?config ?file ?(profile=Conllx_profile.default) string_list_rev =
     let (meta_lines, graph_lines_rev) =
       List.partition (fun (_,l) -> l <> "" && l.[0] = '#') string_list_rev in
 
@@ -661,9 +671,9 @@ module Conllx = struct
       List.fold_left
         (fun (acc_nodes, acc_edges, acc_sec_edges)  (line_num,graph_line) ->
            let item_list = Str.split (Str.regexp "\t") graph_line in
-           let node = Node.from_item_list ?file ?sent_id ~line_num profile item_list in
-           let edge_list = Edge.from_item_list ?file ?sent_id ~line_num profile node.Node.id item_list in
-           let sec_edges = Edge.sec_from_item_list ?file ?sent_id ~line_num profile node.Node.id item_list in
+           let node = Node.of_item_list ?file ?sent_id ~line_num profile item_list in
+           let edge_list = Edge.of_item_list ?config ?file ?sent_id ~line_num profile node.Node.id item_list in
+           let sec_edges = Edge.sec_of_item_list ?file ?sent_id ~line_num profile node.Node.id item_list in
            (
              node::acc_nodes,
              (edge_list @ acc_edges),
@@ -709,10 +719,10 @@ module Conllx = struct
     { t with nodes = new_nodes; edges=new_edges; sec_edges= new_sec_edges}
 
   (* ------------------------------------------------------------------------ *)
-  let from_string ?profile s =
+  let of_string ?config ?profile s =
     match List.rev (List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s)) with
-    | (_,"") :: t -> from_string_list ?profile t (* remove pending empty line, if any *)
-    | l -> from_string_list ?profile l
+    | (_,"") :: t -> of_string_list ?config ?profile t (* remove pending empty line, if any *)
+    | l -> of_string_list ?profile l
 
 
   (* ------------------------------------------------------------------------ *)
@@ -733,20 +743,20 @@ module Conllx = struct
       )
 
   (* ------------------------------------------------------------------------ *)
-  let from_json json =
+  let of_json json =
     let open Yojson.Basic.Util in
     try
       {
         meta = json |> member "meta" |> to_list |> List.map (fun j -> (j |> member "key" |> to_string, j |> member "value" |> to_string));
-        nodes = json |> member "nodes" |> to_list |> List.map Node.from_json;
-        order = json |> member "order" |> to_list |> List.map (function `String s -> Id.from_string s | _ -> error ~fct:"Conllx.from_json" "illformed json (order field)");
-        edges = json |> member "edges" |> to_list |> List.map Edge.from_json;
-        sec_edges = try json |> member "sec_edges" |> to_list |> List.map Edge.from_json with Type_error _ -> [];
+        nodes = json |> member "nodes" |> to_list |> List.map Node.of_json;
+        order = json |> member "order" |> to_list |> List.map (function `String s -> Id.of_string s | _ -> error ~fct:"Conllx.of_json" "illformed json (order field)");
+        edges = json |> member "edges" |> to_list |> List.map Edge.of_json;
+        sec_edges = try json |> member "sec_edges" |> to_list |> List.map Edge.of_json with Type_error _ -> [];
       }
-    with Type_error _ -> error ~fct:"Conllx.from_json" "illformed json"
+    with Type_error _ -> error ~fct:"Conllx.of_json" "illformed json"
 
   (* ------------------------------------------------------------------------ *)
-  let to_buff ?sent_id buff ?(profile = Profile.default) t =
+  let to_buff buff ?config ?sent_id ?(profile = Conllx_profile.default) t =
     let down_t = t |> normalise_ids |> wordform_down |> textform_down in
 
     let t_without_root = { down_t with nodes = List.filter (fun node -> not (Node.is_conll_root node)) down_t.nodes} in
@@ -761,52 +771,54 @@ module Conllx = struct
            let (head,deprel) =
              match List.filter (Edge.is_tar node.Node.id) t_without_root.edges with
              | [] -> ("_", "_")
-             | [one] -> (Id.to_string one.Edge.src, one.Edge.label)
-             | _ -> error ?sent_id "more the one edge with one tar" in
+             | l -> (
+                String.concat "|" (List.map (fun e -> Id.to_string e.Edge.src) l),
+                String.concat "|" (List.map (fun e -> Label.to_string ?config e.Edge.label) l)
+                ) in
            let deps =
              match List.sort Edge.compare (List.filter (Edge.is_tar node.Node.id) t_without_root.sec_edges) with
              | [] -> "_"
-             | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^e.Edge.label) l) in
+             | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Label.to_string ?config e.Edge.label)) l) in
            bprintf buff "%s\n" (Node.to_conll profile head deprel deps node)
         ) t_without_root.nodes in
     ()
 
   (* ------------------------------------------------------------------------ *)
-  let to_string ?profile t =
+  let to_string ?config ?profile t =
     let buff = Buffer.create 32 in
-    to_buff buff ?profile t;
+    to_buff buff ?config ?profile t;
     Buffer.contents buff
 
 end
 
 (* ==================================================================================================== *)
-module Corpusx = struct
+module Conllx_corpus = struct
   type t = {
-    profile: Profile.t;
+    profile: Conllx_profile.t;
     data: (string * Conllx.t) array;
   }
   let empty = { profile = []; data = [||] }
 
   let get_data t = t.data
 
-  let to_string t =
+  let to_string ?config t =
     let buff = Buffer.create 32 in
-    bprintf buff "%s\n" (Profile.to_string t.profile);
+    bprintf buff "%s\n" (Conllx_profile.to_string t.profile);
     Array.iter
       (fun (_,conll) ->
          let sent_id = Conllx.get_sent_id_opt conll in
-         Conllx.to_buff ?sent_id buff ~profile:t.profile conll;
+         Conllx.to_buff ?config ?sent_id buff ~profile:t.profile conll;
       ) t.data;
     Buffer.contents buff
 
 
-  let load file =
+  let load ?config file =
     match Misc.read_lines file with
     | [] -> empty
     | ((line_num,h)::t) as all ->
-      let (profile, data_lines) = match Profile.from_string ~file ~line_num h with
+      let (profile, data_lines) = match Conllx_profile.of_string ~file ~line_num h with
         | Some p -> (p,t)
-        | None -> (Profile.default, all) in
+        | None -> (Conllx_profile.default, all) in
 
       let cpt = ref 0 in
       let res = ref [] in
@@ -815,7 +827,7 @@ module Corpusx = struct
       let save_one () =
         begin
           try
-            let conll = Conllx.from_string_list ~file ~profile !rev_locals in
+            let conll = Conllx.of_string_list ?config ~file ~profile !rev_locals in
             incr cpt;
             let base = Filename.basename file in
             let sent_id = match Conllx.get_sent_id_opt conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
