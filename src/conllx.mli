@@ -32,6 +32,7 @@ module Conllx_corpus : sig
   type t
 
   val load: ?config: Conllx_config.t -> string -> t
+  val read: ?config: Conllx_config.t -> unit -> t
 
   val to_string: ?config: Conllx_config.t -> t -> string
 

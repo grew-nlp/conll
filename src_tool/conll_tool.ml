@@ -248,10 +248,10 @@ let _ =
 
   | "cut"::_ -> printf "ERROR: sub-command \"cut\" expects 3 arguments\n"; print_usage ()
 
-  | ["sud_to_json"; infile] ->
+  | ["sud_to_json"] ->
     begin
       try
-        let cx = Conllx_corpus.load infile in
+        let cx = Conllx_corpus.read () in
         Array.iter (fun (_,conllx) ->
             let json = Conllx.to_json conllx in
             Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
@@ -260,10 +260,10 @@ let _ =
       | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
     end
 
-  | ["seq_to_json"; infile] ->
+  | ["seq_to_json"] ->
     begin
       try
-        let cx = Conllx_corpus.load ~config:Conllx_config.sequoia infile in
+        let cx = Conllx_corpus.read ~config:Conllx_config.sequoia () in
         Array.iter (fun (_,conllx) ->
             let json = Conllx.to_json conllx in
             Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
@@ -272,20 +272,20 @@ let _ =
       | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
     end
 
-  | ["sud_of_json"; infile] ->
+  | ["sud_of_json"] ->
     begin
       try
-        let json = Yojson.Basic.from_file infile in
+        let json = Yojson.Basic.from_channel stdin in
         let conll = Conllx.of_json json in
         Printf.printf "%s\n" (Conllx.to_string ~profile:Conllx_profile.default conll)
       with
       | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
     end
 
-  | ["seq_of_json"; infile] ->
+  | ["seq_of_json"] ->
     begin
       try
-        let json = Yojson.Basic.from_file infile in
+        let json = Yojson.Basic.from_channel stdin in
         let conll = Conllx.of_json json in
         Printf.printf "%s\n" (Conllx.to_string ~config:Conllx_config.sequoia ~profile:Conllx_profile.default conll)
       with
