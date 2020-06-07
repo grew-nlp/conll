@@ -287,7 +287,7 @@ let _ =
       try
         let json = Yojson.Basic.from_channel stdin in
         let conll = Conllx.of_json json in
-        Printf.printf "%s\n" (Conllx.to_string ~config:Conllx_config.sequoia ~profile:Conllx_profile.default conll)
+        Printf.printf "%s\n" (Conllx.to_string ~config:Conllx_config.sequoia ~profile:Conllx_profile.cupt conll)
       with
       | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
     end

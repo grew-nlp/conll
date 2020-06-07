@@ -15,7 +15,7 @@ module Error = struct
       (CCOpt.map (fun x -> ("sent_id", `String x)) sent_id);
       (CCOpt.map (fun x -> ("line", `Int x)) line_num);
       (CCOpt.map (fun x -> ("function", `String x)) fct);
-      (CCOpt.map (fun x -> ("data", `String x)) data);
+      (CCOpt.map (fun x -> ("data", x)) data);
     ] in
     let prev_list = match prev with
       | None -> [("library", `String "Conllx")]
@@ -49,7 +49,7 @@ module Error = struct
           |> (fun l -> match sent_id with None -> l | Some x -> ("sent_id", `String x) :: (List.remove_assoc "sent_id" l))
           |> (fun l -> match line_num with None -> l | Some x -> ("line_num", `String x) :: (List.remove_assoc "line_num" l))
           |> (fun l -> match fct with None -> l | Some x -> ("fct", `String x) :: (List.remove_assoc "fct" l))
-          |> (fun l -> match data with None -> l | Some x -> ("data", `String x) :: (List.remove_assoc "data" l))
+          |> (fun l -> match data with None -> l | Some x -> ("data", x) :: (List.remove_assoc "data" l))
           |> (fun l -> match prev with None -> l | Some x -> ("prev", `String x) :: (List.remove_assoc "prev" l))
         )
       | _ -> error "Bug in json error structure" in
@@ -58,6 +58,7 @@ end
 
 (* ==================================================================================================== *)
 module String_map = CCMap.Make (String)
+module Int_map = CCMap.Make (Int)
 
 (* ==================================================================================================== *)
 module Misc = struct
@@ -149,6 +150,7 @@ module Conllx_profile = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let default = [Column.ID; FORM; LEMMA; UPOS; XPOS; FEATS; HEAD; DEPREL; DEPS; MISC]
+  let cupt = [Column.ID; FORM; LEMMA; UPOS; XPOS; FEATS; HEAD; DEPREL; DEPS; MISC; PARSEME_MWE]
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_string t =
@@ -226,15 +228,17 @@ module Id = struct
     | Simple of int
     | Mwt of int * int   (* (3,4) --> "3-4" *)
     | Empty of int * int (* (8,2) --> "8.2" *)
+    | Raw of string (* when built from json *)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let base = function Simple i | Mwt (i,_) | Empty (i,_) -> i
+  let base = function Simple i | Mwt (i,_) | Empty (i,_) -> i | Raw _ -> failwith "Raw id"
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_string = function
     | Simple id -> sprintf "%d" id
     | Mwt (init,final) -> sprintf "%d-%d" init final
     | Empty (base,sub) -> sprintf "%d.%d" base sub
+    | Raw s -> s
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let compare ?file ?sent_id t1 t2 =
@@ -379,7 +383,7 @@ module Node = struct
                | (k,v) -> Some (k, v |> to_string)
              ) (json |> to_assoc)
           )  in
-      let id = json |> member "id" |> to_string |> Id.of_string in
+      let id = Id.Raw (json |> member "id" |> to_string) in
       let form_opt = try Some (json |> member "form" |> to_string) with Type_error _ -> None in
       let form = match (id, form_opt) with
         | (_, Some f) -> f
@@ -395,7 +399,7 @@ module Node = struct
     with Type_error _ -> Error.error ~fct:"Node.of_json" "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_conll ?config profile head deprel deps t =
+  let to_conll ?config profile head deprel deps parseme_mwe t =
     String.concat "\t"
       (List.map (function
            | Column.ID -> Id.to_string t.id
@@ -408,6 +412,7 @@ module Node = struct
            | Column.DEPREL -> deprel
            | Column.DEPS -> deps
            | Column.MISC -> Feat.string_feats ?config true t.feats
+           | Column.PARSEME_MWE -> parseme_mwe
            | _ -> "_"
          ) profile)
 
@@ -677,11 +682,11 @@ module Edge = struct
     let open Yojson.Basic.Util in
     try
       {
-        src = json |> member "src" |> to_string |> Id.of_string;
+        src = Id.Raw (json |> member "src" |> to_string);
         label = json |> member "label" |> Label.of_json;
-        tar = json |> member "tar" |> to_string |> Id.of_string;
+        tar = Id.Raw (json |> member "tar" |> to_string);
       }
-    with Type_error _ -> Error.error ~fct:"Edge.of_json" "illformed json"
+    with Type_error _ -> Error.error ~fct:"Edge.of_json" ~data:json "illformed json"
 
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -702,12 +707,133 @@ module Edge = struct
 end
 
 (* ==================================================================================================== *)
+module Parseme_mwes = struct
+
+  type proj = Full | Proj_1 | Proj_2
+
+  (* encoding of partial inclusion of multi-word in MWE *)
+  (* example from [sequoia.deep_and_surf.parseme.frsemcor]
+     1	Quant	quant	ADV	ADV	mwehead=P+D|mwelemma=quant_à	6	mod	_	_	1:P|MWE|CRAN	*
+     2	au	à	P+D	P+D	component=y|s=def	1	dep_cpd	_	_	1/1	*
+     3	sous-préfet	sous-préfet	N	NC	def=y|g=m|n=s|s=c	1	obj.p	_	_	2:NC|MWE|LEX	Person
+  *)
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let mwe_id_proj_of_string s =
+    try
+      match Str.bounded_split (Str.regexp "/") s 2 with
+      | [id] -> (int_of_string id, Full)
+      | [id; "1"] -> (int_of_string id, Proj_1)
+      | [id; "2"] -> (int_of_string id, Proj_2)
+      | _ -> Error.error "Cannot parse mwe_id: %s" s
+    with Failure _ -> Error.error "Cannot parse mwe_id: %s" s
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let mwe_id_proj_to_string (mwe_id,proj) =
+    match proj with
+    | Full -> sprintf "%d" mwe_id
+    | Proj_1 -> sprintf "%d/1" mwe_id
+    | Proj_2 -> sprintf "%d/2" mwe_id
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  type item = {
+    parseme: string;
+    mwepos: string option;
+    label: string option;
+    criterion: string option;
+    ids: (Id.t * proj) list; (* ordered list of ids *)
+  }
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let empty = { mwepos = None; parseme = ""; label = None; criterion = None; ids = []; }
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let id_map mapping t = { t with ids = List.map (fun (x,y) -> (List.assoc x mapping,y)) t.ids }
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let item_to_json id item : Yojson.Basic.t = `Assoc (
+      CCList.filter_map CCFun.id  [
+        Some ("id", `String (sprintf "PARSEME_%d" id));
+        (match item.parseme with ""  -> Error.error "Illegal MWE, no parseme fiela" | s -> Some ("parseme", `String s));
+        (match item.mwepos with Some x -> Some ("mwepos", `String x) | None -> None);
+        (match item.label with Some x -> Some ("label", `String x) | None -> None);
+        (match item.criterion with Some x -> Some ("criterion", `String x) | None -> None)
+      ]
+    )
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let item_of_json ids json =
+    let open Yojson.Basic.Util in
+    let parseme = json |> member "parseme" |> to_string in
+    let mwepos = try Some (json |> member "mwepos" |> to_string) with _ -> None in
+    let label = try Some (json |> member "label" |> to_string) with _ -> None  in
+    let criterion = try Some (json |> member "criterion" |> to_string) with _ -> None in
+    { parseme; mwepos; label; criterion; ids }
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let item_of_string s =
+    match Str.split (Str.regexp "|") s with
+    | [m;kl;c] ->
+      let mwepos = match m with "_" -> None | s -> Some s in
+      let (parseme, label) =
+        match Str.split (Str.regexp "-") kl with
+        | [k] -> (k, None)
+        | [k; l] -> (k, Some l)
+        | _ -> Error.error "Cannot parse PARSEME:MWE %s" s in
+      let criterion = match c with "_" -> None | s -> Some s in
+      { mwepos; parseme; label; criterion; ids=[] }
+    | _ -> Error.error "Cannot parse PARSEME:MWE %s" s
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let item_to_string item =
+    sprintf "%s|%s|%s"
+      (match item.mwepos with None -> "_" | Some s -> s)
+      (match item.label with None -> item.parseme | Some s -> sprintf "%s-%s" item.parseme s)
+      (match item.criterion with None -> "_" | Some s -> s)
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  type t = item Int_map.t
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let update ?file ?sent_id ~line_num profile node_id item_list t =
+    List.fold_left2
+      (fun acc col item ->
+         match (col, item) with
+         | (Column.PARSEME_MWE, "*") -> acc
+         | (Column.PARSEME_MWE, s) ->
+           let mwe_items = Str.split (Str.regexp ";") s in
+           List.fold_left
+             (fun acc2 mwe_item ->
+                match Str.bounded_split (Str.regexp ":") item 2 with
+                | [id_proj] ->
+                  let (mwe_id, proj) = mwe_id_proj_of_string id_proj in
+                  begin
+                    match Int_map.find_opt mwe_id acc2 with
+                    | None -> Int_map.add mwe_id {empty with ids = [(node_id, proj)] } acc2
+                    | Some item -> Int_map.add mwe_id { item with ids = (node_id, proj) :: item.ids } acc2
+                  end
+                | [id_proj; desc] ->
+                  begin
+                    let (mwe_id, proj) = mwe_id_proj_of_string id_proj in
+                    let new_item = item_of_string desc in
+                    match Int_map.find_opt mwe_id acc2 with
+                    | None -> Int_map.add mwe_id {new_item with ids = [(node_id, proj)] } acc2
+                    | Some item -> Int_map.add mwe_id { new_item with ids = (node_id, proj) :: item.ids } acc2
+                  end
+                | _ -> Error.error "cannot parse PARSEME_MWE"
+             ) acc mwe_items
+         | _ -> acc
+      ) t profile item_list
+end
+
+(* ==================================================================================================== *)
 module Conllx = struct
   type t = {
     meta: (string * string) list;
     nodes: Node.t list;
     order: Id.t list;
     edges: Edge.t list;
+    parseme_mwes: Parseme_mwes.t;
   }
 
   let get_meta t = t.meta
@@ -759,17 +885,19 @@ module Conllx = struct
     let meta = List.map parse_meta meta_lines in
     let sent_id = List.assoc_opt "sent_id" meta in
 
-    let (nodes_without_root, edges) =
+    let (nodes_without_root, edges, parseme_mwes) =
       List.fold_left
-        (fun (acc_nodes, acc_edges)  (line_num,graph_line) ->
+        (fun (acc_nodes, acc_edges, acc_mwes)  (line_num,graph_line) ->
            let item_list = Str.split (Str.regexp "\t") graph_line in
            let node = Node.of_item_list ?file ?sent_id ~line_num profile item_list in
            let edge_list = Edge.of_item_list ?config ?file ?sent_id ~line_num profile node.Node.id item_list in
+           let new_acc_mwes = Parseme_mwes.update ?file ?sent_id ~line_num profile node.Node.id item_list acc_mwes in
            (
              node::acc_nodes,
-             (edge_list @ acc_edges)
+             (edge_list @ acc_edges),
+             new_acc_mwes
            )
-        ) ([],[]) graph_lines_rev in
+        ) ([],[],Int_map.empty) graph_lines_rev in
 
     let nodes = Node.conll_root :: nodes_without_root in
 
@@ -789,6 +917,7 @@ module Conllx = struct
       nodes;
       order = []; (* [order] is computed after textform/wordform because of MWT "nodes" *)
       edges;
+      parseme_mwes; (* TODO: need cleaning (ids order) *)
     }
     |> textform_up
     |> wordform_up
@@ -804,7 +933,8 @@ module Conllx = struct
 
     let new_nodes = List.map (Node.id_map mapping) t.nodes in
     let new_edges = List.map (Edge.id_map mapping) t.edges in
-    { t with nodes = new_nodes; edges=new_edges }
+    let new_parseme_mwes = Int_map.map (Parseme_mwes.id_map mapping) t.parseme_mwes in
+    { t with nodes = new_nodes; edges=new_edges; parseme_mwes=new_parseme_mwes }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string ?config ?profile s =
@@ -814,6 +944,27 @@ module Conllx = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json (t: t) : Yojson.Basic.t =
+    let token_nodes = List.map Node.to_json t.nodes in
+    let token_edges = List.map Edge.to_json t.edges in
+
+    let (nodes, edges) =
+      Int_map.fold
+        (fun mwe_id mwe_item (acc_nodes, acc_edges) ->
+           ((Parseme_mwes.item_to_json mwe_id mwe_item) :: acc_nodes,
+            List.fold_left (fun acc (token_id,proj) ->
+                let pre_label = match proj with
+                  | Parseme_mwes.Proj_1 -> ["proj", `String "1"]
+                  | Parseme_mwes.Proj_2 -> ["proj", `String "2"]
+                  | Parseme_mwes.Full -> [] in
+                `Assoc [
+                  ("src", `String (sprintf "PARSEME_%d" mwe_id));
+                  ("label", `Assoc (("parseme", `String mwe_item.parseme) :: pre_label));
+                  ("tar", `String (Id.to_string token_id));
+                ] :: acc
+              ) acc_edges mwe_item.ids
+           )
+        ) t.parseme_mwes (token_nodes, token_edges) in
+
     `Assoc
       (CCList.filter_map
          (function
@@ -822,21 +973,48 @@ module Conllx = struct
          )
          [
            "meta", List.map (fun (k,v) -> `Assoc ["key", `String k; "value", `String v]) t.meta;
-           "nodes", List.map Node.to_json t.nodes;
+           "nodes", nodes;
            "order", (List.map (fun id -> `String (Id.to_string id)) t.order);
-           "edges", List.map Edge.to_json t.edges;
+           "edges", edges
          ]
       )
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_json json =
     let open Yojson.Basic.Util in
+    let all_nodes = json |> member "nodes" |> to_list  in
+    let (parseme_nodes, token_nodes) = List.partition (function `Assoc l when List.mem_assoc "parseme" l -> true | _ -> false) all_nodes in
+
+    let all_edges = json |> member "edges" |> to_list |> List.map Edge.of_json in
+    let (parseme_edges, token_edges) = List.partition (function e when String_map.mem "parseme" e.Edge.label -> true | _ -> false) all_edges in
+
+    let parseme_mwes =
+      CCList.foldi
+        (fun acc i parseme_node ->
+           let node_id = parseme_node |> member "id" |> to_string in
+           let tokens = List.fold_left
+               (fun acc2 token_edge ->
+                  if Id.to_string token_edge.Edge.src = node_id
+                  then
+                    (
+                      token_edge.Edge.tar,
+                      match String_map.find_opt "proj" token_edge.Edge.label with
+                      | Some "1" -> Parseme_mwes.Proj_1
+                      | Some "2" -> Parseme_mwes.Proj_2
+                      | _ -> Parseme_mwes.Full
+                    ) :: acc2
+                  else acc2
+               ) [] parseme_edges in
+           Int_map.add (i+1) (Parseme_mwes.item_of_json tokens parseme_node) acc
+        ) Int_map.empty (List.rev parseme_nodes) in
+
     try
       {
         meta = json |> member "meta" |> to_list |> List.map (fun j -> (j |> member "key" |> to_string, j |> member "value" |> to_string));
-        nodes = json |> member "nodes" |> to_list |> List.map Node.of_json;
-        order = json |> member "order" |> to_list |> List.map (function `String s -> Id.of_string s | _ -> Error.error ~fct:"Conllx.of_json" "illformed json (order field)");
-        edges = json |> member "edges" |> to_list |> List.map Edge.of_json;
+        nodes = token_nodes |> List.map Node.of_json;
+        order = json |> member "order" |> to_list |> List.map (function `String s -> Id.Raw s | _ -> Error.error ~fct:"Conllx.of_json" "illformed json (order field)");
+        edges = token_edges;
+        parseme_mwes;
       }
     with Type_error _ -> Error.error ~fct:"Conllx.of_json" "illformed json"
 
@@ -851,6 +1029,7 @@ module Conllx = struct
           | ("", meta) -> bprintf buff "%s\n" meta
           | (key,value) -> bprintf buff "# %s = %s\n" key value
         ) t_without_root.meta in
+
     let _ = List.iter
         (fun node ->
            let (basic_edges, desp_edges) = Edge.split ?config t_without_root.edges in
@@ -866,7 +1045,25 @@ module Conllx = struct
              match List.sort Edge.compare (List.filter (Edge.is_tar node.Node.id) desp_edges) with
              | [] -> "_"
              | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Label.to_string ?config e.Edge.label)) l) in
-           bprintf buff "%s\n" (Node.to_conll ?config profile head deprel deps node)
+
+           let parseme_mwe =
+             match
+               (Int_map.fold
+                  (fun mwe_id parseme_item acc ->
+                     match parseme_item.Parseme_mwes.ids with
+                     | (head, proj)::_ when head = node.id ->
+                       (sprintf "%s:%s" (Parseme_mwes.mwe_id_proj_to_string (mwe_id, proj)) (Parseme_mwes.item_to_string parseme_item)):: acc
+                     | _::tail when List.mem_assoc node.id tail ->
+                      let proj = List.assoc node.id tail in
+                       (Parseme_mwes.mwe_id_proj_to_string (mwe_id, proj)) :: acc
+
+                     | l -> acc
+                  ) t_without_root.parseme_mwes []) with
+             | [] -> "*"
+             | l -> String.concat ";" l in
+
+           bprintf buff "%s\n" (Node.to_conll ?config profile head deprel deps parseme_mwe node)
+
         ) t_without_root.nodes in
     ()
 

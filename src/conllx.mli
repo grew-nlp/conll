@@ -4,6 +4,7 @@ module Conllx_profile : sig
   type t
 
   val default: t
+  val cupt: t
 end
 
 module Conllx_config: sig
