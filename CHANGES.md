@@ -1,3 +1,6 @@
+## 1.6.6 (2020/06/08)
+  * put the name of “DEPS” feature in config
+
 ## 1.6.5 (2020/06/03)
   * Change Error --> Conllx_error
   * Check consistency at parsing time (edge refers to existing nodes, no duplicate id in nodes)
