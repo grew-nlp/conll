@@ -165,10 +165,11 @@ end
 (* ==================================================================================================== *)
 module Conllx_config = struct
   type t = {
-    core: string; (* name of the required part (no join symbol) *)
-    extensions: (string * char) list; (* (field_name, join symbol) *)  (* UD, SUD *)
-    prefixes: (string * char) list; (* (kind_value, prefix) *)         (* Seq *)
-    feats: string list; (* feature values in FEATS column *)
+    core: string;                     (* name of the required part (no join symbol) *)
+    extensions: (string * char) list; (* (field_name, join symbol) *)                  (* UD, SUD *)
+    prefixes: (string * char) list;   (* (kind_value, prefix) *)                       (* Seq *)
+    feats: string list;               (* feature values in FEATS column *)
+    deps: string option;              (* edge feature value name for DEPS column *)    (* EUD *)
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -193,6 +194,7 @@ module Conllx_config = struct
     extensions = [ ("2",':'); ("deep", '@') ];
     prefixes = [];
     feats = ud_features;
+    deps = Some "enhanced";
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -201,6 +203,7 @@ module Conllx_config = struct
     extensions = [ ("subrel",':'); ("deep", '@') ];
     prefixes = [];
     feats = ud_features;
+    deps = Some "enhanced";
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -211,7 +214,8 @@ module Conllx_config = struct
     feats = [
       "agent"; "cltype"; "component"; "def"; "diat"; "dl"; "dm"; "g";
       "intrinsimp"; "m"; "mwehead"; "mwelemma"; "n"; "p"; "s"; "se"; "t"; "void"
-    ]
+    ];
+    deps = None;
   }
 end
 
@@ -570,7 +574,7 @@ module Label = struct
 
     loop config.core pos config.extensions
     |> (fun x -> match kind_opt with Some (f,v) -> String_map.add f v x | None -> x)
-    |> (fun x -> if deps then String_map.add "enh" "yes" x else x)
+    |> (fun x -> match (deps, config.deps) with (true, Some efn) -> String_map.add efn "yes" x | _ -> x)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json t = `Assoc (List.map (fun (x,y) -> (x,`String y)) (String_map.to_list t))
@@ -683,15 +687,18 @@ module Edge = struct
   (* ---------------------------------------------------------------------------------------------------- *)
 
   (* [split] an edge list in two list: basic edges (HEAD/DEPREL columns) and DEPS column *)
-  let split edge_list =
-    let rec loop basic deps = function
-      | [] -> (basic,deps)
-      | edge::tail ->
-        match String_map.find_opt "enh" edge.label with
-        | Some "yes" -> loop basic ({edge with label = (String_map.remove "enh" edge.label)} :: deps) tail
-        | Some x -> Error.error "Cannot interpret edge feature `enh=%s`, `yes` is the only available value for feature `enh`" x
-        | None -> loop (edge::basic) deps tail
-    in loop [] [] edge_list
+  let split ?(config=Conllx_config.sud) edge_list =
+    match config.deps with
+    | None -> (edge_list, [])
+    | Some deps_efn ->
+      let rec loop basic deps = function
+        | [] -> (basic,deps)
+        | edge::tail ->
+          match String_map.find_opt deps_efn edge.label with
+          | Some "yes" -> loop basic ({edge with label = (String_map.remove deps_efn edge.label)} :: deps) tail
+          | Some x -> Error.error "Cannot interpret edge feature `%s=%s`, `yes` is the only available value for feature `%s`" deps_efn x deps_efn
+          | None -> loop (edge::basic) deps tail
+      in loop [] [] edge_list
 end
 
 (* ==================================================================================================== *)
@@ -846,7 +853,7 @@ module Conllx = struct
         ) t_without_root.meta in
     let _ = List.iter
         (fun node ->
-           let (basic_edges, desp_edges) = Edge.split t_without_root.edges in
+           let (basic_edges, desp_edges) = Edge.split ?config t_without_root.edges in
 
            let (head,deprel) =
              match List.filter (Edge.is_tar node.Node.id) basic_edges with
