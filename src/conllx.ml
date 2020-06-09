@@ -804,7 +804,7 @@ module Parseme_mwes = struct
            let mwe_items = Str.split (Str.regexp ";") s in
            List.fold_left
              (fun acc2 mwe_item ->
-                match Str.bounded_split (Str.regexp ":") item 2 with
+                match Str.bounded_split (Str.regexp ":") mwe_item 2 with
                 | [id_proj] ->
                   let (mwe_id, proj) = mwe_id_proj_of_string id_proj in
                   begin
@@ -1141,10 +1141,19 @@ module Conllx_corpus = struct
       { profile; data=Array.of_list (List.rev !res) }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load ?config file = of_lines ~file (Misc.read_lines file)
+  let load ?config file = of_lines ?config ~file (Misc.read_lines file)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let read ?config () = of_lines (Misc.read_stdin ())
+  let load_list ?config file_list =
+      match List.map (load ?config) file_list with
+      | [] -> empty
+      | ({ profile }::tail) as l ->
+        if List.for_all (fun {profile=p} -> p = profile) tail
+        then { profile; data = Array.concat (List.map (fun c -> c.data) l) }
+        else Error.error "All files must have the same profile"
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let read ?config () = of_lines ?config (Misc.read_stdin ())
 
 end
 
