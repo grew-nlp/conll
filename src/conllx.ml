@@ -175,6 +175,15 @@ module Conllx_config = struct
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
+  let default = {
+    core = "rel";
+    extensions = [];
+    prefixes = [];
+    feats = [];
+    deps = None;
+  }
+
+  (* ---------------------------------------------------------------------------------------------------- *)
   let ud_features = [
     (* UD morphology *)
     "Abbr"; "AbsErgDatNumber"; "AbsErgDatPerson"; "AbsErgDatPolite"; "AdpType"; "AdvType"; "Animacy";
@@ -189,14 +198,30 @@ module Conllx_config = struct
   ]
 
   (* ---------------------------------------------------------------------------------------------------- *)
+  let ud = { (* covers also eud *)
+    core = "1";
+    extensions = [ ("2",':')];
+    prefixes = [];
+    feats = ud_features;
+    deps = Some "enhanced";
+  }
 
-  (* covers also UD *)
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let future_ud = { (* covers also eud *)
+    core = "rel";
+    extensions = [ ("subrel",':')];
+    prefixes = [];
+    feats = ud_features;
+    deps = Some "enhanced";
+  }
+
+  (* ---------------------------------------------------------------------------------------------------- *)
   let sud = {
     core = "1";
     extensions = [ ("2",':'); ("deep", '@') ];
     prefixes = [];
     feats = ud_features;
-    deps = Some "enhanced";
+    deps = None;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -219,6 +244,13 @@ module Conllx_config = struct
     ];
     deps = None;
   }
+
+  let build = function
+  | "sequoia" -> sequoia
+  | "ud" -> ud
+  | "sud" -> sud
+  | "orfeo" -> default
+  | s -> Error.error "Unknown config `%s` (available values are: `ud`, `sud`, `sequoia`, `orfeo` or `core`)" s
 end
 
 
@@ -295,10 +327,11 @@ module Feat = struct
     | l -> String.concat "|" (List.map (fun (f,v) -> f^"="^v) l)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let string_feats ?(config = Conllx_config.sud) misc feats =
+  let string_feats ~config misc feats =
     let filtered_feats = List.filter
         (function
           | ("lemma",_) | ("upos",_) | ("xpos",_) -> false
+          | _ when config.Conllx_config.feats = [] -> not misc
           | (f,_) when List.mem f config.feats -> not misc
           | _ -> misc
         ) feats in
@@ -332,7 +365,7 @@ module Node = struct
     | None -> t
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_item_list ?file ?sent_id ?line_num profile item_list =
+  let of_item_list ?file ?sent_id ?line_num ~profile item_list =
     try
       let (id_opt, form, feats) =
         List.fold_left2
@@ -399,7 +432,7 @@ module Node = struct
     with Type_error _ -> Error.error ~fct:"Node.of_json" "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_conll ?config profile head deprel deps parseme_mwe t =
+  let to_conll ~config ~profile head deprel deps parseme_mwe t =
     String.concat "\t"
       (List.map (function
            | Column.ID -> Id.to_string t.id
@@ -407,11 +440,11 @@ module Node = struct
            | Column.LEMMA -> (match List.assoc_opt "lemma" t.feats with Some l -> l | None -> "_")
            | Column.UPOS -> (match List.assoc_opt "upos" t.feats with Some l -> l | None -> "_")
            | Column.XPOS -> (match List.assoc_opt "xpos" t.feats with Some l -> l | None -> "_")
-           | Column.FEATS -> Feat.string_feats ?config false t.feats
+           | Column.FEATS -> Feat.string_feats ~config false t.feats
            | Column.HEAD -> head
            | Column.DEPREL -> deprel
            | Column.DEPS -> deps
-           | Column.MISC -> Feat.string_feats ?config true t.feats
+           | Column.MISC -> Feat.string_feats ~config true t.feats
            | Column.PARSEME_MWE -> parseme_mwe
            | _ -> "_"
          ) profile)
@@ -420,7 +453,7 @@ module Node = struct
   type mwt_misc = ((int * int) * (string * string) list) list
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let mwt_misc_to_string ?config (mwt_misc: mwt_misc) =
+  let mwt_misc_to_string (mwt_misc: mwt_misc) =
     String.concat "||"
       (List.map
          (fun ((i,f),feats) ->
@@ -537,9 +570,9 @@ module Label = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   exception Long
-  let to_string ?(config=Conllx_config.sud) t =
+  let to_string ~config t =
     try
-      match String_map.find_opt config.core t with
+      match String_map.find_opt config.Conllx_config.core t with
       | None -> raise Long (* no core relation *)
       | Some rel ->
         let t = String_map.remove config.core t in
@@ -561,11 +594,11 @@ module Label = struct
     with Long -> to_string_long t
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string ?(deps=false) ?(config=Conllx_config.sud) s =
+  let of_string ?(deps=false) ~config s =
     let (kind_opt, pos) =
       if String.length s > 1 && s.[1] = ':'
       then
-        match List.find_opt (fun (_,sym) -> sym = s.[0]) config.prefixes with
+        match List.find_opt (fun (_,sym) -> sym = s.[0]) config.Conllx_config.prefixes with
         | Some (v,_) -> (Some ("kind", v), 2)
         | None -> (None, 0)
       else (None, 0) in
@@ -614,7 +647,7 @@ module Edge = struct
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string ?config e = sprintf "%s -[%s]-> %s" (Id.to_string e.src) (Label.to_string ?config e.label) (Id.to_string e.tar)
+  let to_string ~config e = sprintf "%s -[%s]-> %s" (Id.to_string e.src) (Label.to_string ~config e.label) (Id.to_string e.tar)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let id_map mapping t =
@@ -623,14 +656,14 @@ module Edge = struct
     {t with src=new_src; tar=new_tar }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let compare ?config e1 e2 =
+  let compare ~config e1 e2 =
     match Id.compare e1.src e2.src with
-    | 0 -> Stdlib.compare (Label.to_string ?config e1.label) (Label.to_string ?config e2.label)
+    | 0 -> Stdlib.compare (Label.to_string ~config e1.label) (Label.to_string ~config e2.label)
     | n -> n
   let is_tar id edge = edge.tar = id
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_item_list ?config ?file ?sent_id ?line_num profile tar item_list =
+  let of_item_list ?file ?sent_id ?line_num ~config ~profile tar item_list =
     try
       let (src_opt, label_opt, sec_opt) =
         List.fold_left2
@@ -647,7 +680,7 @@ module Edge = struct
         match (src_opt, label_opt) with
         | (Some srcs, Some labels) ->
           let src_id_list = List.map Id.of_string (Str.split (Str.regexp "|") srcs) in
-          let label_list = List.map (Label.of_string ?config) (Str.split (Str.regexp "|") labels) in
+          let label_list = List.map (Label.of_string ~config) (Str.split (Str.regexp "|") labels) in
           begin
             try List.map2 (fun src label -> { src; label; tar}) src_id_list label_list
             with Invalid_argument _ -> Error.error ?file ?sent_id ?line_num "different number of items in HEAD/DEPREL spec"
@@ -661,7 +694,7 @@ module Edge = struct
         List.fold_left
           (fun acc sec ->
              match Str.bounded_split (Str.regexp ":") sec 2 with
-             | [src_string;label] -> { src=Id.of_string src_string; label = Label.of_string ~deps:true ?config label; tar} :: acc
+             | [src_string;label] -> { src=Id.of_string src_string; label = Label.of_string ~deps:true ~config label; tar} :: acc
              | _ -> Error.error ?file ?sent_id ?line_num "Cannot parse secondary edges %s" sec
           ) head_dep_edges (Str.split (Str.regexp "|") deps)
 
@@ -795,7 +828,7 @@ module Parseme_mwes = struct
   type t = item Int_map.t
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let update ?file ?sent_id ~line_num profile node_id item_list t =
+  let update ?file ?sent_id ~line_num ~profile node_id item_list t =
     List.fold_left2
       (fun acc col item ->
          match (col, item) with
@@ -878,7 +911,7 @@ module Conllx = struct
     | (_, false) -> Error.error "Unknown identifier `%s`" (Id.to_string edge.Edge.tar)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string_list ?config ?file ?(profile=Conllx_profile.default) string_list_rev =
+  let of_string_list ~config ?file ?(profile=Conllx_profile.default) string_list_rev =
     let (meta_lines, graph_lines_rev) =
       List.partition (fun (_,l) -> l <> "" && l.[0] = '#') string_list_rev in
 
@@ -889,9 +922,9 @@ module Conllx = struct
       List.fold_left
         (fun (acc_nodes, acc_edges, acc_mwes)  (line_num,graph_line) ->
            let item_list = Str.split (Str.regexp "\t") graph_line in
-           let node = Node.of_item_list ?file ?sent_id ~line_num profile item_list in
-           let edge_list = Edge.of_item_list ?config ?file ?sent_id ~line_num profile node.Node.id item_list in
-           let new_acc_mwes = Parseme_mwes.update ?file ?sent_id ~line_num profile node.Node.id item_list acc_mwes in
+           let node = Node.of_item_list ?file ?sent_id ~line_num ~profile item_list in
+           let edge_list = Edge.of_item_list ?file ?sent_id ~line_num ~config ~profile node.Node.id item_list in
+           let new_acc_mwes = Parseme_mwes.update ?file ?sent_id ~line_num ~profile node.Node.id item_list acc_mwes in
            (
              node::acc_nodes,
              (edge_list @ acc_edges),
@@ -937,10 +970,10 @@ module Conllx = struct
     { t with nodes = new_nodes; edges=new_edges; parseme_mwes=new_parseme_mwes }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string ?config ?profile s =
+  let of_string ~config ?profile s =
     match List.rev (List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s)) with
-    | (_,"") :: t -> of_string_list ?config ?profile t (* remove pending empty line, if any *)
-    | l -> of_string_list ?profile l
+    | (_,"") :: t -> of_string_list ~config ?profile t (* remove pending empty line, if any *)
+    | l -> of_string_list ?profile ~config l
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json (t: t) : Yojson.Basic.t =
@@ -1019,7 +1052,7 @@ module Conllx = struct
     with Type_error _ -> Error.error ~fct:"Conllx.of_json" "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_buff buff ?config ?sent_id ?(profile = Conllx_profile.default) t =
+  let to_buff ?sent_id ~config ~profile buff t =
     let down_t = t |> normalise_ids |> wordform_down |> textform_down in
 
     let t_without_root = { down_t with nodes = List.filter (fun node -> not (Node.is_conll_root node)) down_t.nodes} in
@@ -1032,19 +1065,19 @@ module Conllx = struct
 
     let _ = List.iter
         (fun node ->
-           let (basic_edges, desp_edges) = Edge.split ?config t_without_root.edges in
+           let (basic_edges, desp_edges) = Edge.split ~config t_without_root.edges in
 
            let (head,deprel) =
              match List.filter (Edge.is_tar node.Node.id) basic_edges with
              | [] -> ("_", "_")
              | l -> (
                  String.concat "|" (List.map (fun e -> Id.to_string e.Edge.src) l),
-                 String.concat "|" (List.map (fun e -> Label.to_string ?config e.Edge.label) l)
+                 String.concat "|" (List.map (fun e -> Label.to_string ~config e.Edge.label) l)
                ) in
            let deps =
-             match List.sort Edge.compare (List.filter (Edge.is_tar node.Node.id) desp_edges) with
+             match List.sort (Edge.compare ~config) (List.filter (Edge.is_tar node.Node.id) desp_edges) with
              | [] -> "_"
-             | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Label.to_string ?config e.Edge.label)) l) in
+             | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Label.to_string ~config e.Edge.label)) l) in
 
            let parseme_mwe =
              match
@@ -1062,15 +1095,15 @@ module Conllx = struct
              | [] -> "*"
              | l -> String.concat ";" l in
 
-           bprintf buff "%s\n" (Node.to_conll ?config profile head deprel deps parseme_mwe node)
+           bprintf buff "%s\n" (Node.to_conll ~config ~profile head deprel deps parseme_mwe node)
 
         ) t_without_root.nodes in
     ()
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string ?config ?profile t =
+  let to_string ~config ?(profile = Conllx_profile.default) t =
     let buff = Buffer.create 32 in
-    to_buff buff ?config ?profile t;
+    to_buff ~config ~profile buff t;
     Buffer.contents buff
 
 end
@@ -1090,18 +1123,18 @@ module Conllx_corpus = struct
   let get_data t = t.data
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string ?config t =
+  let to_string ~config t =
     let buff = Buffer.create 32 in
     bprintf buff "%s\n" (Conllx_profile.to_string t.profile);
     Array.iter
       (fun (_,conll) ->
          let sent_id = Conllx.get_sent_id_opt conll in
-         Conllx.to_buff ?config ?sent_id buff ~profile:t.profile conll;
+         Conllx.to_buff ?sent_id ~config ~profile:t.profile buff conll;
       ) t.data;
     Buffer.contents buff
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_lines ?config ?file lines =
+  let of_lines ~config ?file lines =
     match lines with
     | [] -> empty
     | ((line_num,h)::t) as all ->
@@ -1116,7 +1149,7 @@ module Conllx_corpus = struct
       let save_one () =
         begin
           try
-            let conll = Conllx.of_string_list ?config ?file ~profile !rev_locals in
+            let conll = Conllx.of_string_list ?file ~config ~profile !rev_locals in
             incr cpt;
             let base = match file with Some f -> Filename.basename f | None -> "stdin" in
             let sent_id = match Conllx.get_sent_id_opt conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
@@ -1141,11 +1174,11 @@ module Conllx_corpus = struct
       { profile; data=Array.of_list (List.rev !res) }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load ?config file = of_lines ?config ~file (Misc.read_lines file)
+  let load ~config file = of_lines ~config ~file (Misc.read_lines file)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load_list ?config file_list =
-      match List.map (load ?config) file_list with
+  let load_list ~config file_list =
+      match List.map (load ~config) file_list with
       | [] -> empty
       | ({ profile }::tail) as l ->
         if List.for_all (fun {profile=p} -> p = profile) tail
@@ -1153,7 +1186,7 @@ module Conllx_corpus = struct
         else Error.error "All files must have the same profile"
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let read ?config () = of_lines ?config (Misc.read_stdin ())
+  let read ~config () = of_lines ~config (Misc.read_stdin ())
 
 end
 

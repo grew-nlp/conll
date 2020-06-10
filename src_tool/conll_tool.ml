@@ -70,6 +70,8 @@ let print_usage () =
       "      output is stored in two files with extension _sub.conll (the extracted part) and _rem.conll (the remaining sentences)";
       " * split <corpus_file> <id_file>";
       "      split input <corpus_file> in two files with extension _in.conll (the sentid belongs to <id_file>) and _out.conll (the remaining sentences)";
+      " * order <corpus_file> <id_file>";
+      "      order input <corpus_file> follwing id giveni in <id_file>";
       " * fusion <corpus_file>";
       "      dump the input <corpus_file> with new lines for fusion words (data taken from _UD_mw_span and _UD_mw_fusion special features)";
       " * web_anno <corpus_file> <basename> <size>";
@@ -151,6 +153,20 @@ let _ =
     let c_in = sub corpus id_list in
     Conll_corpus.save (corpus_in) c_in
   | "split"::_ -> printf "ERROR: sub-command \"split\" expects two or three arguments\n"; print_usage ()
+
+
+  | ["order"; corpus_name; id_file] ->
+    let corpus = Conll_corpus.load corpus_name in
+    let id_list = CCIO.(with_in id_file read_lines_l) in
+    let new_corpus = Array.of_list (
+        List.map
+          (fun id -> match Conll_corpus.get id corpus with
+            | Some g -> (id, g)
+            | None -> failwith ("unkonwn id "^id)
+          ) id_list
+      ) in
+    Conll_corpus.dump new_corpus
+
 
   | ["fusion"; corpus_name] ->
     let corpus = Conll_corpus.load corpus_name in
@@ -251,7 +267,7 @@ let _ =
   | ["sud_to_json"] ->
     begin
       try
-        let cx = Conllx_corpus.read () in
+        let cx = Conllx_corpus.read ~config:(Conllx_config.build "sud") () in
         Array.iter (fun (_,conllx) ->
             let json = Conllx.to_json conllx in
             Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
@@ -263,7 +279,7 @@ let _ =
   | ["seq_to_json"] ->
     begin
       try
-        let cx = Conllx_corpus.read ~config:Conllx_config.sequoia () in
+        let cx = Conllx_corpus.read ~config:(Conllx_config.build "sequoia") () in
         Array.iter (fun (_,conllx) ->
             let json = Conllx.to_json conllx in
             Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
@@ -277,7 +293,7 @@ let _ =
       try
         let json = Yojson.Basic.from_channel stdin in
         let conll = Conllx.of_json json in
-        Printf.printf "%s\n" (Conllx.to_string ~profile:Conllx_profile.default conll)
+        Printf.printf "%s\n" (Conllx.to_string ~config:(Conllx_config.build "sud") ~profile:Conllx_profile.default conll)
       with
       | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
     end
@@ -287,11 +303,10 @@ let _ =
       try
         let json = Yojson.Basic.from_channel stdin in
         let conll = Conllx.of_json json in
-        Printf.printf "%s\n" (Conllx.to_string ~config:Conllx_config.sequoia ~profile:Conllx_profile.cupt conll)
+        Printf.printf "%s\n" (Conllx.to_string ~config:(Conllx_config.build "sequoia") ~profile:Conllx_profile.cupt conll)
       with
       | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
     end
-
 
   | [] -> print_usage ()
   | x :: _ -> printf "ERROR: unknown sub-command \"%s\"\n" x; print_usage ()
