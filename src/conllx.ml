@@ -110,6 +110,9 @@ module Column = struct
   type t = ID | FORM | LEMMA | UPOS | XPOS | FEATS | HEAD | DEPREL | DEPS | MISC
          | PARSEME_MWE
          | SEMCOR_NOUN
+         | ORFEO_START
+         | ORFEO_STOP
+         | ORFEO_SPEAKER
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_string = function
@@ -123,8 +126,11 @@ module Column = struct
     | DEPREL -> "DEPREL"
     | DEPS -> "DEPS"
     | MISC -> "MISC"
-    | PARSEME_MWE-> "PARSEME:MWE"
-    | SEMCOR_NOUN-> "SEMCOR:NOUN"
+    | PARSEME_MWE -> "PARSEME:MWE"
+    | SEMCOR_NOUN -> "SEMCOR:NOUN"
+    | ORFEO_START -> "ORFEO:START"
+    | ORFEO_STOP -> "ORFEO:STOP"
+    | ORFEO_SPEAKER -> "ORFEO:SPEAKER"
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string ?file ?line_num = function
@@ -140,22 +146,29 @@ module Column = struct
     | "MISC" -> MISC
     | "PARSEME:MWE" -> PARSEME_MWE
     | "SEMCOR:NOUN" -> SEMCOR_NOUN
+    | "ORFEO:START" -> ORFEO_START
+    | "ORFEO:STOP" -> ORFEO_STOP
+    | "ORFEO:SPEAKER" -> ORFEO_SPEAKER
     | x -> Error.error ?file ?line_num "Unknown Column %s" x
 end
 
 (* ==================================================================================================== *)
-module Conllx_profile = struct
+module Conllx_columns = struct
 
   type t = Column.t list
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let default = [Column.ID; FORM; LEMMA; UPOS; XPOS; FEATS; HEAD; DEPREL; DEPS; MISC]
   let cupt = [Column.ID; FORM; LEMMA; UPOS; XPOS; FEATS; HEAD; DEPREL; DEPS; MISC; PARSEME_MWE]
+  let orfeo = [Column.ID; FORM; LEMMA; UPOS; XPOS; FEATS; HEAD; DEPREL; DEPS; MISC; ORFEO_START; ORFEO_STOP; ORFEO_SPEAKER]
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_string t =
     sprintf "# global.columns = %s"
       (String.concat " " (List.map Column.to_string t))
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let build s = List.map Column.of_string (Str.split (Str.regexp " ") s)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string ?file ?line_num t =
@@ -246,11 +259,11 @@ module Conllx_config = struct
   }
 
   let build = function
-  | "sequoia" -> sequoia
-  | "ud" -> ud
-  | "sud" -> sud
-  | "orfeo" -> default
-  | s -> Error.error "Unknown config `%s` (available values are: `ud`, `sud`, `sequoia`, `orfeo` or `core`)" s
+    | "sequoia" -> sequoia
+    | "ud" -> ud
+    | "sud" -> sud
+    | "orfeo" -> default
+    | s -> Error.error "Unknown config `%s` (available values are: `ud`, `sud`, `sequoia`, `orfeo` or `core`)" s
 end
 
 
@@ -331,6 +344,7 @@ module Feat = struct
     let filtered_feats = List.filter
         (function
           | ("lemma",_) | ("upos",_) | ("xpos",_) -> false
+          | (s,_) when s.[0] = '_' -> false
           | _ when config.Conllx_config.feats = [] -> not misc
           | (f,_) when List.mem f config.feats -> not misc
           | _ -> misc
@@ -365,7 +379,7 @@ module Node = struct
     | None -> t
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_item_list ?file ?sent_id ?line_num ~profile item_list =
+  let of_item_list ?file ?sent_id ?line_num ~columns item_list =
     try
       let (id_opt, form, feats) =
         List.fold_left2
@@ -383,15 +397,21 @@ module Node = struct
                (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("xpos", item) :: acc_feats)
              | (Column.FEATS,_) -> (acc_id_opt, acc_form, (Misc.parse_features ?file ?sent_id ?line_num item) @ acc_feats)
              | (Column.MISC,_) -> (acc_id_opt, acc_form, (Misc.parse_features ?file ?sent_id ?line_num item) @ acc_feats)
+             | (Column.ORFEO_START, _) ->
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("_start", item) :: acc_feats)
+             | (Column.ORFEO_STOP, _) ->
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("_stop", item) :: acc_feats)
+             | (Column.ORFEO_SPEAKER, _) ->
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("_speaker", item) :: acc_feats)
              | _ -> (acc_id_opt, acc_form, acc_feats)
-          ) (None, "" ,[]) profile item_list in
+          ) (None, "" ,[]) columns item_list in
       match id_opt with
       | None -> Error.error "No id"
       | Some id -> { id; form; feats = List.sort Feat.compare feats; wordform=None; textform=None; }
     with Invalid_argument _ ->
       Error.error ?file ?sent_id ?line_num
         "Wrong number of fields: %d instead of %d expected"
-        (List.length item_list) (List.length profile)
+        (List.length item_list) (List.length columns)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json t = `Assoc (
@@ -432,7 +452,7 @@ module Node = struct
     with Type_error _ -> Error.error ~fct:"Node.of_json" "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_conll ~config ~profile head deprel deps parseme_mwe t =
+  let to_conll ~config ~columns head deprel deps parseme_mwe t =
     String.concat "\t"
       (List.map (function
            | Column.ID -> Id.to_string t.id
@@ -446,8 +466,11 @@ module Node = struct
            | Column.DEPS -> deps
            | Column.MISC -> Feat.string_feats ~config true t.feats
            | Column.PARSEME_MWE -> parseme_mwe
+           | Column.ORFEO_START -> (match List.assoc_opt "_start" t.feats with Some l -> l | None -> "_")
+           | Column.ORFEO_STOP -> (match List.assoc_opt "_stop" t.feats with Some l -> l | None -> "_")
+           | Column.ORFEO_SPEAKER -> (match List.assoc_opt "_speaker" t.feats with Some l -> l | None -> "_")
            | _ -> "_"
-         ) profile)
+         ) columns)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   type mwt_misc = ((int * int) * (string * string) list) list
@@ -663,7 +686,7 @@ module Edge = struct
   let is_tar id edge = edge.tar = id
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_item_list ?file ?sent_id ?line_num ~config ~profile tar item_list =
+  let of_item_list ?file ?sent_id ?line_num ~config ~columns tar item_list =
     try
       let (src_opt, label_opt, sec_opt) =
         List.fold_left2
@@ -674,7 +697,7 @@ module Edge = struct
              | (_,Column.DEPREL, _, None, _) -> (src_acc, Some item, sec_acc)
              | (_,Column.DEPS, _, _, None) -> (src_acc, label_acc, Some item)
              | _ -> (src_acc, label_acc, sec_acc)
-          ) (None, None, None) profile item_list in
+          ) (None, None, None) columns item_list in
 
       let head_dep_edges =
         match (src_opt, label_opt) with
@@ -701,7 +724,7 @@ module Edge = struct
     with Invalid_argument _ ->
       Error.error ?file ?sent_id ?line_num
         "Wrong number of fields: %d instead of %d expected"
-        (List.length item_list) (List.length profile)
+        (List.length item_list) (List.length columns)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json t = `Assoc [
@@ -724,7 +747,7 @@ module Edge = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
 
-  (* [split] an edge list in two list: basic edges (HEAD/DEPREL columns) and DEPS column *)
+  (* [split] an edge list in two lists: basic edges (HEAD/DEPREL columns) and DEPS column *)
   let split ?(config=Conllx_config.sud) edge_list =
     match config.deps with
     | None -> (edge_list, [])
@@ -828,7 +851,7 @@ module Parseme_mwes = struct
   type t = item Int_map.t
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let update ?file ?sent_id ~line_num ~profile node_id item_list t =
+  let update ?file ?sent_id ~line_num ~columns node_id item_list t =
     List.fold_left2
       (fun acc col item ->
          match (col, item) with
@@ -856,7 +879,7 @@ module Parseme_mwes = struct
                 | _ -> Error.error "cannot parse PARSEME_MWE"
              ) acc mwe_items
          | _ -> acc
-      ) t profile item_list
+      ) t columns item_list
 end
 
 (* ==================================================================================================== *)
@@ -869,10 +892,17 @@ module Conllx = struct
     parseme_mwes: Parseme_mwes.t;
   }
 
+  (* ---------------------------------------------------------------------------------------------------- *)
   let get_meta t = t.meta
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let find_node id t = List.find_opt (fun n -> n.Node.id = id) t
+  let size t = List.length t.nodes
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let find_node id t =
+    match List.find_opt (fun n -> n.Node.id = id) t with
+    | Some n -> n
+    | None -> Error.error "BUG: inconsistent id: %s" (Id.to_string id)
 
   (* ---------------------------------------------------------------------------------------------------- *)
 
@@ -911,7 +941,7 @@ module Conllx = struct
     | (_, false) -> Error.error "Unknown identifier `%s`" (Id.to_string edge.Edge.tar)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string_list ~config ?file ?(profile=Conllx_profile.default) string_list_rev =
+  let of_string_list ~config ?file ~columns string_list_rev =
     let (meta_lines, graph_lines_rev) =
       List.partition (fun (_,l) -> l <> "" && l.[0] = '#') string_list_rev in
 
@@ -922,9 +952,9 @@ module Conllx = struct
       List.fold_left
         (fun (acc_nodes, acc_edges, acc_mwes)  (line_num,graph_line) ->
            let item_list = Str.split (Str.regexp "\t") graph_line in
-           let node = Node.of_item_list ?file ?sent_id ~line_num ~profile item_list in
-           let edge_list = Edge.of_item_list ?file ?sent_id ~line_num ~config ~profile node.Node.id item_list in
-           let new_acc_mwes = Parseme_mwes.update ?file ?sent_id ~line_num ~profile node.Node.id item_list acc_mwes in
+           let node = Node.of_item_list ?file ?sent_id ~line_num ~columns item_list in
+           let edge_list = Edge.of_item_list ?file ?sent_id ~line_num ~config ~columns node.Node.id item_list in
+           let new_acc_mwes = Parseme_mwes.update ?file ?sent_id ~line_num ~columns node.Node.id item_list acc_mwes in
            (
              node::acc_nodes,
              (edge_list @ acc_edges),
@@ -959,9 +989,7 @@ module Conllx = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let normalise_ids t =
-    let is_empty id = match find_node id t.nodes with
-      | Some node -> Node.is_empty node
-      | None -> Error.error "inconsistent id: %s" (Id.to_string id) in
+    let is_empty id = Node.is_empty (find_node id t.nodes) in
     let mapping = Id.normalise_list is_empty t.order in
 
     let new_nodes = List.map (Node.id_map mapping) t.nodes in
@@ -970,10 +998,10 @@ module Conllx = struct
     { t with nodes = new_nodes; edges=new_edges; parseme_mwes=new_parseme_mwes }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string ~config ?profile s =
+  let of_string ?(config=Conllx_config.default) ?(columns=Conllx_columns.default) s =
     match List.rev (List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s)) with
-    | (_,"") :: t -> of_string_list ~config ?profile t (* remove pending empty line, if any *)
-    | l -> of_string_list ?profile ~config l
+    | (_,"") :: t -> of_string_list ~config ~columns t (* remove pending empty line, if any *)
+    | l -> of_string_list ~columns ~config l
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json (t: t) : Yojson.Basic.t =
@@ -1052,7 +1080,7 @@ module Conllx = struct
     with Type_error _ -> Error.error ~fct:"Conllx.of_json" "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_buff ?sent_id ~config ~profile buff t =
+  let to_buff ?sent_id ~config ~columns buff t =
     let down_t = t |> normalise_ids |> wordform_down |> textform_down in
 
     let t_without_root = { down_t with nodes = List.filter (fun node -> not (Node.is_conll_root node)) down_t.nodes} in
@@ -1087,7 +1115,7 @@ module Conllx = struct
                      | (head, proj)::_ when head = node.id ->
                        (sprintf "%s:%s" (Parseme_mwes.mwe_id_proj_to_string (mwe_id, proj)) (Parseme_mwes.item_to_string parseme_item)):: acc
                      | _::tail when List.mem_assoc node.id tail ->
-                      let proj = List.assoc node.id tail in
+                       let proj = List.assoc node.id tail in
                        (Parseme_mwes.mwe_id_proj_to_string (mwe_id, proj)) :: acc
 
                      | l -> acc
@@ -1095,15 +1123,15 @@ module Conllx = struct
              | [] -> "*"
              | l -> String.concat ";" l in
 
-           bprintf buff "%s\n" (Node.to_conll ~config ~profile head deprel deps parseme_mwe node)
+           bprintf buff "%s\n" (Node.to_conll ~config ~columns head deprel deps parseme_mwe node)
 
         ) t_without_root.nodes in
     ()
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string ~config ?(profile = Conllx_profile.default) t =
+  let to_string ?(config=Conllx_config.default) ?(columns=Conllx_columns.default) t =
     let buff = Buffer.create 32 in
-    to_buff ~config ~profile buff t;
+    to_buff ~config ~columns buff t;
     Buffer.contents buff
 
 end
@@ -1112,35 +1140,43 @@ end
 module Conllx_corpus = struct
 
   type t = {
-    profile: Conllx_profile.t;
+    columns: Conllx_columns.t;
     data: (string * Conllx.t) array;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let empty = { profile = []; data = [||] }
+  let empty = { columns = []; data = [||] }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let get_data t = t.data
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string ~config t =
+  let to_string ?(config=Conllx_config.default) ?columns t =
+    (* if the columns argument is given, it has priority on internal columms of the corpus *)
+    let columns = match columns with Some c -> c | None -> t.columns in
     let buff = Buffer.create 32 in
-    bprintf buff "%s\n" (Conllx_profile.to_string t.profile);
+    bprintf buff "%s\n" (Conllx_columns.to_string columns);
     Array.iter
       (fun (_,conll) ->
          let sent_id = Conllx.get_sent_id_opt conll in
-         Conllx.to_buff ?sent_id ~config ~profile:t.profile buff conll;
+         Conllx.to_buff ?sent_id ~config ~columns:t.columns buff conll;
       ) t.data;
     Buffer.contents buff
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_lines ~config ?file lines =
+  let of_lines ~config ?columns ?file lines =
     match lines with
     | [] -> empty
-    | ((line_num,h)::t) as all ->
-      let (profile, data_lines) = match Conllx_profile.of_string ?file ~line_num h with
-        | Some p -> (p,t)
-        | None -> (Conllx_profile.default, all) in
+    | ((line_num,head)::tail) as all ->
+      let (columns, data_lines) =
+        match (Conllx_columns.of_string ?file ~line_num head, columns) with
+        | (None, None) -> (Conllx_columns.default, all)
+        | (None, Some cols) -> (cols, all)
+        | (Some cols, None) -> (cols,tail)
+        | (Some c1, Some c2) when c1 = c2 -> (c1,tail)
+        | (Some c1, Some c2) ->
+          Error.error ?file ~line_num "Inconsistent columsn declaration\nin file   --> %s\nin config --> %s\n"
+            (Conllx_columns.to_string c1) (Conllx_columns.to_string c2) in
 
       let cpt = ref 0 in
       let res = ref [] in
@@ -1149,7 +1185,7 @@ module Conllx_corpus = struct
       let save_one () =
         begin
           try
-            let conll = Conllx.of_string_list ?file ~config ~profile !rev_locals in
+            let conll = Conllx.of_string_list ?file ~config ~columns !rev_locals in
             incr cpt;
             let base = match file with Some f -> Filename.basename f | None -> "stdin" in
             let sent_id = match Conllx.get_sent_id_opt conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
@@ -1171,22 +1207,254 @@ module Conllx_corpus = struct
         Error.warning ?file "No blank line at the end of the file";
         save_one ()
       );
-      { profile; data=Array.of_list (List.rev !res) }
+      { columns; data=Array.of_list (List.rev !res) }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load ~config file = of_lines ~config ~file (Misc.read_lines file)
+  let load ?(config=Conllx_config.default) ?columns file = of_lines ~config ?columns ~file (Misc.read_lines file)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load_list ~config file_list =
-      match List.map (load ~config) file_list with
-      | [] -> empty
-      | ({ profile }::tail) as l ->
-        if List.for_all (fun {profile=p} -> p = profile) tail
-        then { profile; data = Array.concat (List.map (fun c -> c.data) l) }
-        else Error.error "All files must have the same profile"
+  let load_list ?(config=Conllx_config.default) ?columns file_list =
+    match List.map (load ~config ?columns) file_list with
+    | [] -> empty
+    | ({ columns }::tail) as l ->
+      if List.for_all (fun {columns=p} -> p = columns) tail
+      then { columns; data = Array.concat (List.map (fun c -> c.data) l) }
+      else Error.error "All files must have the same columns declaration"
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let read ~config () = of_lines ~config (Misc.read_stdin ())
+  let read ?(config=Conllx_config.default) ?columns () = of_lines ~config ?columns (Misc.read_stdin ())
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let sizes t =
+    (
+      Array.length t.data,
+      Array.fold_left (fun acc (_,conll) -> acc + Conllx.size conll) 0 t.data
+    )
 
 end
 
+(* ======================================================================================================================== *)
+module Conllx_stat = struct
+  module String_map = Map.Make (String)
+  module String_set = Set.Make (String)
+
+  type key = Upos | Xpos
+
+  type t = ((int String_map.t) String_map.t) String_map.t    (* keys are label --> gov --> dep *)
+
+  let get_labels map = String_map.fold (fun label _ acc -> String_set.add label acc) map String_set.empty
+
+  let get_tags map =
+    String_map.fold
+      (fun _ map2 acc ->
+         String_map.fold
+           (fun gov map3 acc2 ->
+              String_map.fold
+                (fun dep _ acc3 ->
+                   String_set.add dep acc3
+                ) map3 (String_set.add gov acc2)
+           ) map2 acc
+      ) map String_set.empty
+
+  let add3 dep stat3 =
+    let old = try String_map.find dep stat3 with Not_found -> 0 in
+    String_map.add dep (old+1) stat3
+
+  let add2 gov dep stat2 =
+    let old = try String_map.find gov stat2 with Not_found -> String_map.empty in
+    String_map.add gov (add3 dep old) stat2
+
+  let add label gov dep stat =
+    let old = try String_map.find label stat with Not_found -> String_map.empty in
+    String_map.add label (add2 gov dep old) stat
+
+  let map_add_conll ~config key conll map =
+    let edges = conll.Conllx.edges in
+    List.fold_left
+      (fun acc edge ->
+         let gov_node = Conllx.find_node edge.Edge.src conll.nodes in
+         let dep_node = Conllx.find_node edge.Edge.tar conll.nodes in
+         let gov_pos = match List.assoc_opt (match key with Upos -> "upos" | Xpos -> "xpos") gov_node.Node.feats with Some x -> x | _ -> "_" in
+         let dep_pos = match List.assoc_opt (match key with Upos -> "upos" | Xpos -> "xpos") dep_node.Node.feats with Some x -> x | _ -> "_" in
+         let label = Label.to_string ~config edge.label in
+         add label gov_pos dep_pos acc
+      ) map edges
+
+  let build ?(config=Conllx_config.default) key corpus =
+    Array.fold_left
+      (fun acc (_,conll) ->
+         map_add_conll ~config key conll acc
+      ) String_map.empty corpus.Conllx_corpus.data
+
+  let dump map =
+    String_map.iter
+      (fun label map2 ->
+         String_map.iter
+           (fun gov map3 ->
+              String_map.iter
+                (fun dep value ->
+                   Printf.printf "%s -[%s]-> %s ==> %d\n" gov label dep value
+                ) map3
+           ) map2
+      ) map
+
+  let get map gov label dep =
+    try Some (map |> (String_map.find label) |> (String_map.find gov) |> (String_map.find dep))
+    with Not_found -> None
+
+  let get_total_gov map label gov =
+    try
+      let map_dep = map |> (String_map.find label) |> (String_map.find gov) in
+      Some (String_map.fold (fun _ x acc -> x + acc) map_dep 0)
+    with Not_found -> None
+
+  let get_total_dep map label dep =
+    try
+      let map_map_gov = map |> (String_map.find label)  in
+      match
+        String_map.fold
+          (fun _ map acc ->
+             match String_map.find_opt dep map with
+             | None -> acc
+             | Some x -> x+acc
+          ) map_map_gov 0 with
+      | 0 -> None
+      | i -> Some i
+    with Not_found -> None
+
+  let get_total map label =
+    String_map.fold (fun _ map acc1 ->
+        String_map.fold (fun _ x acc2 -> x + acc2) map acc1
+      ) (String_map.find label map) 0
+
+  let count_compare (tag1,count1) (tag2,count2) =
+    match (count1, count2) with
+    | (Some i, Some j) -> Stdlib.compare j i
+    | (None, Some _) -> 1
+    | (Some _, None) -> -1
+    | (None, None) -> Stdlib.compare tag1 tag2
+
+  let table buff corpus_id map label =
+    let tags = get_tags map in
+    let govs = String_set.fold
+        (fun gov acc -> (gov, get_total_gov map label gov) :: acc
+        ) tags [] in
+    let sorted_govs = List.sort count_compare govs in
+
+    let deps = String_set.fold
+        (fun dep acc -> (dep, get_total_dep map label dep) :: acc
+        ) tags [] in
+    let sorted_deps = List.sort count_compare deps in
+
+    bprintf buff "							<table>\n";
+    bprintf buff "								<colgroup/>\n";
+    String_set.iter (fun _ -> bprintf buff "								<colgroup/>\n") tags;
+    bprintf buff "								<thead>\n";
+    bprintf buff "									<tr>\n";
+    bprintf buff "										<th>\n";
+    bprintf buff "											<span>DEP⇨</span>\n";
+    bprintf buff "											<br>\n";
+    bprintf buff "											<span>⇩GOV</span>\n";
+    bprintf buff "										</th>\n";
+    bprintf buff "										<th><b>TOTAL</b></th>\n";
+    List.iter (fun (dep,_) -> bprintf buff "										<th>%s</th>\n" dep) sorted_deps;
+    bprintf buff "									</tr>\n";
+    bprintf buff "								</thead>\n";
+    bprintf buff "								<tbody>\n";
+
+
+    bprintf buff "									<tr>\n";
+    bprintf buff "										<th><b>TOTAL</b></th>\n";
+    bprintf buff "										<td class=\"total\"><a href=\"../?corpus=%s&relation=%s\" class=\"btn btn-warning\" target=\"_blank\">%d</a></td>\n" corpus_id label(get_total map label);
+    List.iter (fun (dep,count) ->
+        bprintf buff "										<td class=\"total\">%s</td>\n"
+          (match count with
+           | Some i ->
+             let url = sprintf "../?corpus=%s&relation=%s&target=%s" corpus_id label dep in
+             sprintf "<a href=\"%s\" class=\"btn btn-success\" target=\"_blank\">%d</a>" url i
+           | None -> "")
+      ) sorted_deps;
+    bprintf buff "									</tr>\n";
+
+    List.iter (fun (gov, count) ->
+        bprintf buff "									<tr>\n";
+        bprintf buff "										<th>%s</th>\n" gov;
+
+        bprintf buff "										<td class=\"total\">%s</td>\n"
+          (match count with
+           | Some i ->
+             let url = sprintf "../?corpus=%s&relation=%s&source=%s" corpus_id label gov in
+             sprintf "<a href=\"%s\" class=\"btn btn-success\" target=\"_blank\">%d</a>" url i
+           | None -> "");
+
+        List.iter (fun (dep,_) ->
+            bprintf buff "										<td>%s</td>\n"
+              (match get map gov label dep with
+               | Some i ->
+                 let url = sprintf "../?corpus=%s&relation=%s&source=%s&target=%s" corpus_id label gov dep in
+                 sprintf "<a href=\"%s\" class=\"btn btn-primary\" target=\"_blank\">%d</a>" url i
+               | None -> "")
+          ) sorted_deps;
+        bprintf buff "									</tr>\n";
+      ) sorted_govs;
+    bprintf buff "								</tbody>\n";
+    bprintf buff "							</table>\n";
+    ()
+
+  let escape_dot s =
+    s
+    |> Str.global_replace (Str.regexp "\\.") "__"
+    |> Str.global_replace (Str.regexp ":") "__"
+    |> Str.global_replace (Str.regexp "@") "___"
+
+  let to_html corpus_id map =
+    let labels = get_labels map in
+    let buff = Buffer.create 32 in
+    bprintf buff "<!DOCTYPE html>\n";
+    bprintf buff "<html lang=\"en\">\n";
+    bprintf buff "<head>\n";
+    bprintf buff "	<meta charset=\"utf-8\">\n";
+    bprintf buff "	<title>%s</title>\n" corpus_id;
+    bprintf buff "	<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n";
+    bprintf buff "	<script src=\"https://code.jquery.com/jquery-3.4.1.min.js\"> </script>\n";
+    bprintf buff "	<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\" integrity=\"sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u\" crossorigin=\"anonymous\">\n";
+    bprintf buff "	<script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js\" integrity=\"sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa\" crossorigin=\"anonymous\"></script>\n";
+    bprintf buff "	<link rel=\"stylesheet\" type=\"text/css\" href=\"../css/tables.css\">\n";
+    bprintf buff "</head>\n";
+    bprintf buff "<body>\n";
+    bprintf buff "	<div class=\"container\">\n";
+    bprintf buff "		<div class=\"row\">\n";
+    bprintf buff "			<h1>%s</h1>\n" corpus_id;
+    bprintf buff "			<div role=\"tabpanel\">\n";
+    bprintf buff "				<div class=\"col-sm-2\" style=\"height: 100vh; overflow-y: auto;\">\n";
+    bprintf buff "					<ul class=\"nav nav-pills brand-pills nav-stacked\" role=\"tablist\">\n";
+    String_set.iter
+      (fun label ->
+         let esc = escape_dot label in
+         bprintf buff "						<li role=\"presentation\" class=\"brand-nav\"><a href=\"#%s\" aria-controls=\"#%s\" data-toggle=\"tab\">%s [%d]</a></li>\n"
+           esc esc label (get_total map label)
+      ) labels;
+
+    bprintf buff "					</ul>\n";
+    bprintf buff "				</div>\n";
+    bprintf buff "				<div class=\"col-sm-10\">\n";
+    bprintf buff "					<div class=\"tab-content\">\n";
+
+    String_set.iter
+      (fun label ->
+         bprintf buff "						<div class=\"tab-pane\" id=\"%s\">\n" (escape_dot label);
+         table buff corpus_id map label;
+         bprintf buff "						</div>\n";
+      ) labels;
+
+    bprintf buff "					</div>\n";
+    bprintf buff "				</div>\n";
+    bprintf buff "			</div>\n";
+    bprintf buff "		</div>\n";
+    bprintf buff "	</div>\n";
+    bprintf buff "</body>\n";
+    bprintf buff "</html>\n";
+
+    Buffer.contents buff
+
+end
