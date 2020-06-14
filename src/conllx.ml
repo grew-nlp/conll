@@ -180,15 +180,17 @@ end
 (* ==================================================================================================== *)
 module Conllx_config = struct
   type t = {
+    name: string;
     core: string;                     (* name of the required part (no join symbol) *)
     extensions: (string * char) list; (* (field_name, join symbol) *)                  (* UD, SUD *)
     prefixes: (string * char) list;   (* (kind_value, prefix) *)                       (* Seq *)
     feats: string list;               (* feature values in FEATS column *)
-    deps: string option;              (* edge feature value name for DEPS column *)    (* EUD *)
+    deps: (string * char) option;   (* edge feature value name for DEPS column, prefix for compact notation *)    (* EUD *)
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let default = {
+    name = "default";
     core = "rel";
     extensions = [];
     prefixes = [];
@@ -212,24 +214,27 @@ module Conllx_config = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let ud = { (* covers also eud *)
+    name="ud";
     core = "1";
     extensions = [ ("2",':')];
     prefixes = [];
     feats = ud_features;
-    deps = Some "enhanced";
+    deps = Some ("enhanced", 'E');
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let future_ud = { (* covers also eud *)
+    name="ud";
     core = "rel";
     extensions = [ ("subrel",':')];
     prefixes = [];
     feats = ud_features;
-    deps = Some "enhanced";
+    deps = Some ("enhanced", 'E');
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let sud = {
+    name="sud";
     core = "1";
     extensions = [ ("2",':'); ("deep", '@') ];
     prefixes = [];
@@ -239,15 +244,17 @@ module Conllx_config = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let future_sud = {
+    name="sud";
     core = "rel";
     extensions = [ ("subrel",':'); ("deep", '@') ];
     prefixes = [];
     feats = ud_features;
-    deps = Some "enhanced";
+    deps = None;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let sequoia = {
+    name="sequoia";
     core = "1";
     extensions = [ ("2",':') ];
     prefixes = [ ( "deep", 'D'); ("surf", 'S') ];
@@ -262,8 +269,8 @@ module Conllx_config = struct
     | "sequoia" -> sequoia
     | "ud" -> ud
     | "sud" -> sud
-    | "orfeo" -> default
-    | s -> Error.error "Unknown config `%s` (available values are: `ud`, `sud`, `sequoia`, `orfeo` or `core`)" s
+    | "default" | "orfeo" -> default
+    | s -> Error.error "Unknown config `%s` (available values are: `default`, `ud`, `sud`, `sequoia`, `orfeo`)" s
 end
 
 
@@ -582,7 +589,7 @@ module Node = struct
 end
 
 (* ==================================================================================================== *)
-module Label = struct
+module Conllx_label = struct
 
   type t = string String_map.t
 
@@ -599,12 +606,30 @@ module Label = struct
       | None -> raise Long (* no core relation *)
       | Some rel ->
         let t = String_map.remove config.core t in
-        let prefix_string = match String_map.find_opt "kind" t with
-          | None -> ""
+
+        let (t,pref_deps) =
+          match config.deps with
+          | Some (deps_feat_name, pref) ->
+            begin
+              match String_map.find_opt deps_feat_name t with
+              | Some "yes" -> (String_map.remove deps_feat_name t, Some pref)
+              | Some _ -> raise Long (* unexpected value for deps_feat_name *)
+              | _ -> (t,None)
+            end
+          | None -> (t,None) in
+
+        let pref_kind = match String_map.find_opt "kind" t with
+          | None -> None
           | Some k -> match List.assoc_opt k config.prefixes with
             | None -> raise Long (* unknown "kind" value *)
-            | Some p -> sprintf "%c:" p in
+            | Some p -> Some p in
         let t = String_map.remove "kind" t in
+
+        let prefix_string = match (pref_deps, pref_kind) with
+          | (Some _, Some _) -> Error.error "BUG: Prefix confict, please report"
+          | (Some c, None) | (None, Some c) -> sprintf "%c:" c
+          | (None, None) -> "" in
+
         let (remaining, extensions_string) = List.fold_left
             (fun (acc_rem, acc_ext_string) (name, sym) ->
                match String_map.find_opt name t with
@@ -617,13 +642,16 @@ module Label = struct
     with Long -> to_string_long t
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string ?(deps=false) ~config s =
-    let (kind_opt, pos) =
+  let of_string ~config s =
+    let (pref_feat_opt, pos) =
       if String.length s > 1 && s.[1] = ':'
       then
-        match List.find_opt (fun (_,sym) -> sym = s.[0]) config.Conllx_config.prefixes with
-        | Some (v,_) -> (Some ("kind", v), 2)
-        | None -> (None, 0)
+        match config.Conllx_config.deps with
+        | Some (efn, pref_deps) when pref_deps = s.[0] -> (Some (efn, "yes"), 2)
+        | _ ->
+          match List.find_opt (fun (_,sym) -> sym = s.[0]) config.prefixes with
+          | Some (v,_) -> (Some ("kind", v), 2)
+          | None -> (None, 0)
       else (None, 0) in
 
     let rec loop feat p = function
@@ -634,8 +662,14 @@ module Label = struct
         | Some new_pos -> String_map.add feat (CCString.Sub.copy (CCString.Sub.make s p (new_pos-p))) (loop next (new_pos+1) tail) in
 
     loop config.core pos config.extensions
-    |> (fun x -> match kind_opt with Some (f,v) -> String_map.add f v x | None -> x)
-    |> (fun x -> match (deps, config.deps) with (true, Some efn) -> String_map.add efn "yes" x | _ -> x)
+    |> (fun x -> match pref_feat_opt with Some (f,v) -> String_map.add f v x | None -> x)
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let of_string_deps ?file ?sent_id ?line_num ~config s =
+    let pre_label = of_string ~config s in
+    match config.deps with
+    | Some (deps_feat_name,_) -> String_map.add deps_feat_name "yes" pre_label
+    | None -> Error.error ?file ?sent_id ?line_num "No secondary edges expected with config: %s" config.name
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json t = `Assoc (List.map (fun (x,y) -> (x,`String y)) (String_map.to_list t))
@@ -665,12 +699,12 @@ end
 module Edge = struct
   type t = {
     src: Id.t;
-    label: Label.t;
+    label: Conllx_label.t;
     tar: Id.t;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string ~config e = sprintf "%s -[%s]-> %s" (Id.to_string e.src) (Label.to_string ~config e.label) (Id.to_string e.tar)
+  let to_string ~config e = sprintf "%s -[%s]-> %s" (Id.to_string e.src) (Conllx_label.to_string ~config e.label) (Id.to_string e.tar)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let id_map mapping t =
@@ -681,7 +715,7 @@ module Edge = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let compare ~config e1 e2 =
     match Id.compare e1.src e2.src with
-    | 0 -> Stdlib.compare (Label.to_string ~config e1.label) (Label.to_string ~config e2.label)
+    | 0 -> Stdlib.compare (Conllx_label.to_string ~config e1.label) (Conllx_label.to_string ~config e2.label)
     | n -> n
   let is_tar id edge = edge.tar = id
 
@@ -703,7 +737,7 @@ module Edge = struct
         match (src_opt, label_opt) with
         | (Some srcs, Some labels) ->
           let src_id_list = List.map Id.of_string (Str.split (Str.regexp "|") srcs) in
-          let label_list = List.map (Label.of_string ~config) (Str.split (Str.regexp "|") labels) in
+          let label_list = List.map (Conllx_label.of_string ~config) (Str.split (Str.regexp "|") labels) in
           begin
             try List.map2 (fun src label -> { src; label; tar}) src_id_list label_list
             with Invalid_argument _ -> Error.error ?file ?sent_id ?line_num "different number of items in HEAD/DEPREL spec"
@@ -717,7 +751,7 @@ module Edge = struct
         List.fold_left
           (fun acc sec ->
              match Str.bounded_split (Str.regexp ":") sec 2 with
-             | [src_string;label] -> { src=Id.of_string src_string; label = Label.of_string ~deps:true ~config label; tar} :: acc
+             | [src_string;label] -> { src=Id.of_string src_string; label = Conllx_label.of_string_deps ?file ?sent_id ?line_num ~config label; tar} :: acc
              | _ -> Error.error ?file ?sent_id ?line_num "Cannot parse secondary edges %s" sec
           ) head_dep_edges (Str.split (Str.regexp "|") deps)
 
@@ -729,7 +763,7 @@ module Edge = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json t = `Assoc [
       ("src", `String (Id.to_string t.src));
-      ("label", Label.to_json t.label);
+      ("label", Conllx_label.to_json t.label);
       ("tar", `String (Id.to_string t.tar));
     ]
 
@@ -739,7 +773,7 @@ module Edge = struct
     try
       {
         src = Id.Raw (json |> member "src" |> to_string);
-        label = json |> member "label" |> Label.of_json;
+        label = json |> member "label" |> Conllx_label.of_json;
         tar = Id.Raw (json |> member "tar" |> to_string);
       }
     with Type_error _ -> Error.error ~fct:"Edge.of_json" ~data:json "illformed json"
@@ -751,7 +785,7 @@ module Edge = struct
   let split ?(config=Conllx_config.sud) edge_list =
     match config.deps with
     | None -> (edge_list, [])
-    | Some deps_efn ->
+    | Some (deps_efn,_) ->
       let rec loop basic deps = function
         | [] -> (basic,deps)
         | edge::tail ->
@@ -1100,12 +1134,12 @@ module Conllx = struct
              | [] -> ("_", "_")
              | l -> (
                  String.concat "|" (List.map (fun e -> Id.to_string e.Edge.src) l),
-                 String.concat "|" (List.map (fun e -> Label.to_string ~config e.Edge.label) l)
+                 String.concat "|" (List.map (fun e -> Conllx_label.to_string ~config e.Edge.label) l)
                ) in
            let deps =
              match List.sort (Edge.compare ~config) (List.filter (Edge.is_tar node.Node.id) desp_edges) with
              | [] -> "_"
-             | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Label.to_string ~config e.Edge.label)) l) in
+             | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Conllx_label.to_string ~config e.Edge.label)) l) in
 
            let parseme_mwe =
              match
@@ -1276,7 +1310,7 @@ module Conllx_stat = struct
          let dep_node = Conllx.find_node edge.Edge.tar conll.nodes in
          let gov_pos = match List.assoc_opt (match key with Upos -> "upos" | Xpos -> "xpos") gov_node.Node.feats with Some x -> x | _ -> "_" in
          let dep_pos = match List.assoc_opt (match key with Upos -> "upos" | Xpos -> "xpos") dep_node.Node.feats with Some x -> x | _ -> "_" in
-         let label = Label.to_string ~config edge.label in
+         let label = Conllx_label.to_string ~config edge.label in
          add label gov_pos dep_pos acc
       ) map edges
 

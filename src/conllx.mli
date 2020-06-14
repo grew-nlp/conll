@@ -21,9 +21,30 @@ module Conllx_config: sig
 
   val default: t
 
-  (** [build] from a constant value. Known values are: "sequoia", "ud", "sud", "orfeo" *)
+  (** [build] from a constant value. Known values are: "default", "sequoia", "ud", "sud", "orfeo".
+      Raises [Error] for unknown value. *)
   val build: string -> t
 end
+
+
+module Conllx_label : sig
+  type t
+
+  val of_json: Yojson.Basic.t -> t
+
+  val to_json: t -> Yojson.Basic.t
+
+  (** [to_string ~config t] tries to print a compact representation of the label.
+      The "long" representation "f=u,g=v" is returned if not possible.
+      NB: maybe a "(string * string) result" type would be more precise for output? *)
+  val to_string: config: Conllx_config.t -> t -> string
+
+  (** [of_string ~config t] parse the compact label representation.
+      Must not be used with a long representation! *)
+  val of_string: config: Conllx_config.t -> string -> t
+end
+
+
 
 module Conllx : sig
   type t
