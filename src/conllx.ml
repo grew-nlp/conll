@@ -271,6 +271,8 @@ module Conllx_config = struct
     | "sud" -> sud
     | "default" | "orfeo" -> default
     | s -> Error.error "Unknown config `%s` (available values are: `default`, `ud`, `sud`, `sequoia`, `orfeo`)" s
+
+  let get_name t = t.name
 end
 
 
@@ -637,9 +639,12 @@ module Conllx_label = struct
                | None -> (acc_rem, acc_ext_string)
             ) (t,"") config.extensions in
         if String_map.is_empty remaining
-        then prefix_string ^ rel ^ extensions_string
+        then Ok (prefix_string ^ rel ^ extensions_string)
         else raise Long (* there are more feature that cannot be encoded *)
-    with Long -> to_string_long t
+    with Long -> Error (to_string_long t)
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let to_string_robust ~config t = match to_string ~config t with Ok s | Error s -> s
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string ~config s =
@@ -658,7 +663,7 @@ module Conllx_label = struct
       | [] -> String_map.singleton feat (CCString.drop p s)
       | (next,sym) :: tail ->
         match String.index_from_opt s p sym with
-        | None -> String_map.singleton feat (CCString.drop p s)
+        | None -> loop feat p tail
         | Some new_pos -> String_map.add feat (CCString.Sub.copy (CCString.Sub.make s p (new_pos-p))) (loop next (new_pos+1) tail) in
 
     loop config.core pos config.extensions
@@ -702,9 +707,6 @@ module Edge = struct
     label: Conllx_label.t;
     tar: Id.t;
   }
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string ~config e = sprintf "%s -[%s]-> %s" (Id.to_string e.src) (Conllx_label.to_string ~config e.label) (Id.to_string e.tar)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let id_map mapping t =
@@ -1134,12 +1136,12 @@ module Conllx = struct
              | [] -> ("_", "_")
              | l -> (
                  String.concat "|" (List.map (fun e -> Id.to_string e.Edge.src) l),
-                 String.concat "|" (List.map (fun e -> Conllx_label.to_string ~config e.Edge.label) l)
+                 String.concat "|" (List.map (fun e -> Conllx_label.to_string_robust ~config e.Edge.label) l)
                ) in
            let deps =
              match List.sort (Edge.compare ~config) (List.filter (Edge.is_tar node.Node.id) desp_edges) with
              | [] -> "_"
-             | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Conllx_label.to_string ~config e.Edge.label)) l) in
+             | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Conllx_label.to_string_robust ~config e.Edge.label)) l) in
 
            let parseme_mwe =
              match
@@ -1310,8 +1312,9 @@ module Conllx_stat = struct
          let dep_node = Conllx.find_node edge.Edge.tar conll.nodes in
          let gov_pos = match List.assoc_opt (match key with Upos -> "upos" | Xpos -> "xpos") gov_node.Node.feats with Some x -> x | _ -> "_" in
          let dep_pos = match List.assoc_opt (match key with Upos -> "upos" | Xpos -> "xpos") dep_node.Node.feats with Some x -> x | _ -> "_" in
-         let label = Conllx_label.to_string ~config edge.label in
-         add label gov_pos dep_pos acc
+         match Conllx_label.to_string ~config edge.label with
+         | Ok label -> add label gov_pos dep_pos acc
+         | _ -> acc
       ) map edges
 
   let build ?(config=Conllx_config.default) key corpus =
