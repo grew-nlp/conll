@@ -1,3 +1,6 @@
+## 1.6.7 (2020/06/16)
+  * Make some evolution on Conllx naming
+
 ## 1.6.6 (2020/06/08)
   * put the name of “DEPS” feature in config
 
