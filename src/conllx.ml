@@ -395,7 +395,7 @@ module Node = struct
           (fun (acc_id_opt, acc_form, acc_feats) col item ->
              match (col, acc_id_opt) with
              | (Column.ID, None) -> (Some (Id.of_string item), acc_form, acc_feats)
-             | (Column.ID, _) -> Error.error "Dup id"
+             | (Column.ID, Some id) -> Error.error ?file ?sent_id ?line_num "Duplicate id `%s`" (Id.to_string id)
              | (Column.FORM, _) ->
                (acc_id_opt, item, acc_feats)
              | (Column.LEMMA, _) ->
@@ -415,7 +415,7 @@ module Node = struct
              | _ -> (acc_id_opt, acc_form, acc_feats)
           ) (None, "" ,[]) columns item_list in
       match id_opt with
-      | None -> Error.error "No id"
+      | None -> Error.error ?file ?sent_id ?line_num "No id"
       | Some id -> { id; form; feats = List.sort Feat.compare feats; wordform=None; textform=None; }
     with Invalid_argument _ ->
       Error.error ?file ?sent_id ?line_num
@@ -450,7 +450,7 @@ module Node = struct
       let form = match (id, form_opt) with
         | (_, Some f) -> f
         | (Simple 0, None) -> "__ROOT__"
-        | (_, None) -> Error.error ~fct:"Node.of_json" "missing form" in
+        | (_, None) -> Error.error ~fct:"Node.of_json" ~data:json "missing form" in
       {
         id;
         form;
@@ -458,7 +458,7 @@ module Node = struct
         wordform = (try Some (json |> member "wordform" |> to_string) with Type_error _ -> None);
         textform = (try Some (json |> member "textform" |> to_string) with Type_error _ -> None);
       }
-    with Type_error _ -> Error.error ~fct:"Node.of_json" "illformed json"
+    with Type_error _ -> Error.error ~fct:"Node.of_json" ~data:json "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_conll ~config ~columns head deprel deps parseme_mwe t =
@@ -499,7 +499,7 @@ module Node = struct
       (fun item ->
          match Str.split (Str.regexp_string "::") item with
          | [si; sj; feats] -> ((int_of_string si, int_of_string sj), Misc.parse_features feats)
-         | _ -> Error.error "mwt_misc_of_string"
+         | _ -> Error.error ~fct: "mwt_misc_of_string" "Cannot parse `%s`" s
       )  (Str.split (Str.regexp_string "||") s)
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -550,8 +550,12 @@ module Node = struct
     let find_original_textform i =
       match List.find_opt (fun node -> node.id = Id.Simple i) node_list with
       | Some node ->
-        (match node.textform with Some tf -> unescape_form tf | None -> Error.error "wordform")
-      | None -> Error.error ~fct:"find_original_textform" "wordform node %d" i in
+        begin
+          match node.textform with
+          | Some tf -> unescape_form tf
+          | None -> Error.error ~fct:"find_original_textform" "No `wordform` feature"
+        end
+      | None -> Error.error ~fct:"find_original_textform" "Cannot find node `%d`" i in
 
     let mwts =
       List.map
@@ -628,7 +632,7 @@ module Conllx_label = struct
         let t = String_map.remove "kind" t in
 
         let prefix_string = match (pref_deps, pref_kind) with
-          | (Some _, Some _) -> Error.error "BUG: Prefix confict, please report"
+          | (Some _, Some _) -> Error.error ~fct:"Conllx.to_string" "BUG: Prefix confict, please report input=`%s`" (to_string_long t)
           | (Some c, None) | (None, Some c) -> sprintf "%c:" c
           | (None, None) -> "" in
 
@@ -754,7 +758,7 @@ module Edge = struct
           (fun acc sec ->
              match Str.bounded_split (Str.regexp ":") sec 2 with
              | [src_string;label] -> { src=Id.of_string src_string; label = Conllx_label.of_string_deps ?file ?sent_id ?line_num ~config label; tar} :: acc
-             | _ -> Error.error ?file ?sent_id ?line_num "Cannot parse secondary edges %s" sec
+             | _ -> Error.error ?file ?sent_id ?line_num "Cannot parse secondary edges `%s`" sec
           ) head_dep_edges (Str.split (Str.regexp "|") deps)
 
     with Invalid_argument _ ->
@@ -1109,7 +1113,7 @@ module Conllx = struct
       {
         meta = json |> member "meta" |> to_list |> List.map (fun j -> (j |> member "key" |> to_string, j |> member "value" |> to_string));
         nodes = token_nodes |> List.map Node.of_json;
-        order = json |> member "order" |> to_list |> List.map (function `String s -> Id.Raw s | _ -> Error.error ~fct:"Conllx.of_json" "illformed json (order field)");
+        order = json |> member "order" |> to_list |> List.map (function `String s -> Id.Raw s | _ -> Error.error ~data:json ~fct:"Conllx.of_json" "illformed json (order field)");
         edges = token_edges;
         parseme_mwes;
       }
