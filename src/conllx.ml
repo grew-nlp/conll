@@ -968,6 +968,10 @@ module Conllx = struct
   let get_sent_id_opt t = List.assoc_opt "sent_id" t.meta
 
   (* ---------------------------------------------------------------------------------------------------- *)
+  let set_sent_id new_sent_id t =
+    { t with meta = ("sent_id", new_sent_id) :: (List.remove_assoc "sent_id" t.meta) }
+
+  (* ---------------------------------------------------------------------------------------------------- *)
   let parse_meta (_,t) =
     match Str.bounded_split (Str.regexp "# *\\| *= *") t 2 with
     | [key;value] -> (key,value)

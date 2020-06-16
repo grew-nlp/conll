@@ -52,6 +52,8 @@ module Conllx : sig
 
   val get_meta: t -> (string * string) list
 
+  val set_sent_id: string -> t -> t
+
   val of_json: Yojson.Basic.t -> t
 
   val to_json: t -> Yojson.Basic.t
@@ -60,6 +62,7 @@ module Conllx : sig
 
   val of_string: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> string -> t
 end
+
 
 module Conllx_corpus : sig
   type t
