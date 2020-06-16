@@ -816,14 +816,14 @@ module Parseme_mwes = struct
   *)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let mwe_id_proj_of_string s =
+  let mwe_id_proj_of_string ?file ?sent_id ~line_num s =
     try
       match Str.bounded_split (Str.regexp "/") s 2 with
       | [id] -> (int_of_string id, Full)
       | [id; "1"] -> (int_of_string id, Proj_1)
       | [id; "2"] -> (int_of_string id, Proj_2)
-      | _ -> Error.error "Cannot parse mwe_id: %s" s
-    with Failure _ -> Error.error "Cannot parse mwe_id: %s" s
+      | _ -> Error.error ?file ?sent_id ~line_num "Cannot parse mwe_id: %s" s
+    with Failure _ -> Error.error ?file ?sent_id ~line_num "Cannot parse mwe_id: %s" s
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let mwe_id_proj_to_string (mwe_id,proj) =
@@ -851,7 +851,7 @@ module Parseme_mwes = struct
   let item_to_json id item : Yojson.Basic.t = `Assoc (
       CCList.filter_map CCFun.id  [
         Some ("id", `String (sprintf "PARSEME_%d" id));
-        (match item.parseme with ""  -> Error.error "Illegal MWE, no parseme fiela" | s -> Some ("parseme", `String s));
+        (match item.parseme with ""  -> Error.error "Illegal MWE, no parseme field" | s -> Some ("parseme", `String s));
         (match item.mwepos with Some x -> Some ("mwepos", `String x) | None -> None);
         (match item.label with Some x -> Some ("label", `String x) | None -> None);
         (match item.criterion with Some x -> Some ("criterion", `String x) | None -> None)
@@ -870,6 +870,11 @@ module Parseme_mwes = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let item_of_string s =
     match Str.split (Str.regexp "|") s with
+
+    (* usage of the PARSEME:MWE field in PARSEME project *)
+    | [one] -> { empty with parseme="MWE"; mwepos= Some "VERB"; label=Some one }
+
+    (* usage of the PARSEME:MWE field in PARSEME-FR project *)
     | [m;kl;c] ->
       let mwepos = match m with "_" -> None | s -> Some s in
       let (parseme, label) =
@@ -903,7 +908,7 @@ module Parseme_mwes = struct
              (fun acc2 mwe_item ->
                 match Str.bounded_split (Str.regexp ":") mwe_item 2 with
                 | [id_proj] ->
-                  let (mwe_id, proj) = mwe_id_proj_of_string id_proj in
+                  let (mwe_id, proj) = mwe_id_proj_of_string ?file ?sent_id ~line_num id_proj in
                   begin
                     match Int_map.find_opt mwe_id acc2 with
                     | None -> Int_map.add mwe_id {empty with ids = [(node_id, proj)] } acc2
@@ -911,7 +916,7 @@ module Parseme_mwes = struct
                   end
                 | [id_proj; desc] ->
                   begin
-                    let (mwe_id, proj) = mwe_id_proj_of_string id_proj in
+                    let (mwe_id, proj) = mwe_id_proj_of_string ?file ?sent_id ~line_num id_proj in
                     let new_item = item_of_string desc in
                     match Int_map.find_opt mwe_id acc2 with
                     | None -> Int_map.add mwe_id {new_item with ids = [(node_id, proj)] } acc2

@@ -1,3 +1,6 @@
+## 1.6.9 (2020/06/16)
+  * Generalize PARSEME:MWE columns to cover PARSEME data
+
 ## 1.6.8 (2020/06/16)
   * Accept feature without value in the MISC column
 
