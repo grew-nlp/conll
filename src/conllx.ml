@@ -66,7 +66,7 @@ module Misc = struct
   (* ---------------------------------------------------------------------------------------------------- *)
 
   (* "f=v|g=w" --> [("f", "v"); ("g", "w")] *)
-  let parse_features ?(misc=false) ?file ?sent_id ?line_num s =
+  let parse_features ?file ?sent_id ?line_num s =
     match s with
     | "_" -> []
     | _ ->
@@ -75,7 +75,8 @@ module Misc = struct
            match Str.bounded_full_split (Str.regexp "=") feat 2 with
            | [Str.Text f; Str.Delim "="; Str.Text v] -> (f, v)
            | [Str.Text f; Str.Delim "="] -> (f, "")
-           | [Str.Text f] when misc -> (f,"__NOVALUE__") (* accept features without values in MISC column *)
+           (* accept features without values. This happens in MISC column in a few UD corpora and in FEATS column in PARSEME-TR@1.1 *)
+           | [Str.Text f] -> (f,"__NOVALUE__")
            | _ -> Error.error ?file ?sent_id ?line_num "Unknown feat %s" feat
         ) (Str.split (Str.regexp "|") s)
 
@@ -323,7 +324,7 @@ module Id = struct
     loop (Simple (-1), id_list)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string s =
+  let of_string  ?file ?sent_id ?line_num s =
     try
       match Str.bounded_full_split (Str.regexp "[.-]") s 2 with
       | [Str.Text string_id] -> Simple (int_of_string string_id)
@@ -331,8 +332,8 @@ module Id = struct
         Mwt (int_of_string string_init,int_of_string string_final)
       | [Str.Text string_base; Str.Delim "."; Str.Text string_sub] ->
         Empty (int_of_string string_base,int_of_string string_sub)
-      | _ -> Error.error "Cannot parse id %s" s
-    with Failure _ -> Error.error "Cannot parse id %s" s
+      | _ -> Error.error  ?file ?sent_id ?line_num "Cannot parse id %s" s
+    with Failure _ -> Error.error  ?file ?sent_id ?line_num "Cannot parse id %s" s
 end
 
 (* ==================================================================================================== *)
@@ -395,7 +396,7 @@ module Node = struct
         List.fold_left2
           (fun (acc_id_opt, acc_form, acc_feats) col item ->
              match (col, acc_id_opt) with
-             | (Column.ID, None) -> (Some (Id.of_string item), acc_form, acc_feats)
+             | (Column.ID, None) -> (Some (Id.of_string  ?file ?sent_id ?line_num item), acc_form, acc_feats)
              | (Column.ID, Some id) -> Error.error ?file ?sent_id ?line_num "Duplicate id `%s`" (Id.to_string id)
              | (Column.FORM, _) ->
                (acc_id_opt, item, acc_feats)
@@ -406,7 +407,7 @@ module Node = struct
              | (Column.XPOS, _) ->
                (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("xpos", item) :: acc_feats)
              | (Column.FEATS,_) -> (acc_id_opt, acc_form, (Misc.parse_features ?file ?sent_id ?line_num item) @ acc_feats)
-             | (Column.MISC,_) -> (acc_id_opt, acc_form, (Misc.parse_features ~misc:true ?file ?sent_id ?line_num item) @ acc_feats)
+             | (Column.MISC,_) -> (acc_id_opt, acc_form, (Misc.parse_features ?file ?sent_id ?line_num item) @ acc_feats)
              | (Column.ORFEO_START, _) ->
                (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("_start", item) :: acc_feats)
              | (Column.ORFEO_STOP, _) ->
@@ -742,8 +743,15 @@ module Edge = struct
 
       let head_dep_edges =
         match (src_opt, label_opt) with
+
+        (* PARSEME-SL@1.1 has the pair ("-", "-") as HEAD/DEPREL *)
+        | (Some "-", Some "-") -> []
+
+        (* PARSEME-IT@1.1 and PARSEME-IT@1.1 has the pair ("0", "_") as HEAD/DEPREL *)
+        | (Some "0", None) -> [{ src=Id.of_string  ?file ?sent_id ?line_num "0"; label=Conllx_label.of_string ~config "root"; tar }]
+
         | (Some srcs, Some labels) ->
-          let src_id_list = List.map Id.of_string (Str.split (Str.regexp "|") srcs) in
+          let src_id_list = List.map (Id.of_string  ?file ?sent_id ?line_num) (Str.split (Str.regexp "|") srcs) in
           let label_list = List.map (Conllx_label.of_string ~config) (Str.split (Str.regexp "|") labels) in
           begin
             try List.map2 (fun src label -> { src; label; tar}) src_id_list label_list
@@ -758,7 +766,7 @@ module Edge = struct
         List.fold_left
           (fun acc sec ->
              match Str.bounded_split (Str.regexp ":") sec 2 with
-             | [src_string;label] -> { src=Id.of_string src_string; label = Conllx_label.of_string_deps ?file ?sent_id ?line_num ~config label; tar} :: acc
+             | [src_string;label] -> { src=Id.of_string  ?file ?sent_id ?line_num src_string; label = Conllx_label.of_string_deps ?file ?sent_id ?line_num ~config label; tar} :: acc
              | _ -> Error.error ?file ?sent_id ?line_num "Cannot parse secondary edges `%s`" sec
           ) head_dep_edges (Str.split (Str.regexp "|") deps)
 
@@ -971,7 +979,20 @@ module Conllx = struct
   let wordform_down t = { t with nodes = Node.wordform_down t.nodes}
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let get_sent_id_opt t = List.assoc_opt "sent_id" t.meta
+  let get_sent_id_opt_meta meta =
+    match List.assoc_opt "sent_id" meta with
+    | Some id -> Some id
+    | None -> match List.assoc_opt "source_sent_id" meta with
+      | Some id ->
+        begin
+          match Str.split (Str.regexp " ") id with
+          | [_; _; id] -> Some id
+          | _ -> None
+        end
+      | None -> None
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let get_sent_id_opt t = get_sent_id_opt_meta t.meta
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let set_sent_id new_sent_id t =
@@ -984,11 +1005,11 @@ module Conllx = struct
     | _ -> ("", t)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let check_edge nodes edge =
+  let check_edge ?file ?sent_id nodes edge =
     match (List.exists (fun n -> n.Node.id = edge.Edge.src) nodes, List.exists (fun n -> n.Node.id = edge.Edge.tar) nodes) with
     | (true, true) -> ()
-    | (false, _) -> Error.error "Unknown identifier `%s`" (Id.to_string edge.Edge.src)
-    | (_, false) -> Error.error "Unknown identifier `%s`" (Id.to_string edge.Edge.tar)
+    | (false, _) -> Error.error ?file ?sent_id "Unknown identifier `%s`" (Id.to_string edge.Edge.src)
+    | (_, false) -> Error.error ?file ?sent_id "Unknown identifier `%s`" (Id.to_string edge.Edge.tar)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string_list ~config ?file ~columns string_list_rev =
@@ -996,7 +1017,7 @@ module Conllx = struct
       List.partition (fun (_,l) -> l <> "" && l.[0] = '#') string_list_rev in
 
     let meta = List.map parse_meta meta_lines in
-    let sent_id = List.assoc_opt "sent_id" meta in
+    let sent_id = get_sent_id_opt_meta meta in
 
     let (nodes_without_root, edges, parseme_mwes) =
       List.fold_left
@@ -1022,7 +1043,7 @@ module Conllx = struct
         | {Node.id=id}::tail -> loop (Id_set.add id used_ids) tail in
       try
         loop Id_set.empty nodes;
-        List.iter (check_edge nodes) edges;
+        List.iter (check_edge ?file ?sent_id nodes) edges;
       with Conllx_error e -> Error.reraise ?sent_id ?file e
     end;
     {

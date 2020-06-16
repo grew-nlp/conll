@@ -1,3 +1,6 @@
+## 1.6.10 (2020/06/16)
+  * more robust handling of corpus (for PARSEME corpora)
+
 ## 1.6.9 (2020/06/16)
   * Generalize PARSEME:MWE columns to cover PARSEME data
 
