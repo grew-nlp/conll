@@ -66,7 +66,7 @@ module Misc = struct
   (* ---------------------------------------------------------------------------------------------------- *)
 
   (* "f=v|g=w" --> [("f", "v"); ("g", "w")] *)
-  let parse_features ?file ?sent_id ?line_num s =
+  let parse_features ?(misc=false) ?file ?sent_id ?line_num s =
     match s with
     | "_" -> []
     | _ ->
@@ -75,6 +75,7 @@ module Misc = struct
            match Str.bounded_full_split (Str.regexp "=") feat 2 with
            | [Str.Text f; Str.Delim "="; Str.Text v] -> (f, v)
            | [Str.Text f; Str.Delim "="] -> (f, "")
+           | [Str.Text f] when misc -> (f,"__NOVALUE__") (* accept features without values in MISC column *)
            | _ -> Error.error ?file ?sent_id ?line_num "Unknown feat %s" feat
         ) (Str.split (Str.regexp "|") s)
 
@@ -405,7 +406,7 @@ module Node = struct
              | (Column.XPOS, _) ->
                (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("xpos", item) :: acc_feats)
              | (Column.FEATS,_) -> (acc_id_opt, acc_form, (Misc.parse_features ?file ?sent_id ?line_num item) @ acc_feats)
-             | (Column.MISC,_) -> (acc_id_opt, acc_form, (Misc.parse_features ?file ?sent_id ?line_num item) @ acc_feats)
+             | (Column.MISC,_) -> (acc_id_opt, acc_form, (Misc.parse_features ~misc:true ?file ?sent_id ?line_num item) @ acc_feats)
              | (Column.ORFEO_START, _) ->
                (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("_start", item) :: acc_feats)
              | (Column.ORFEO_STOP, _) ->

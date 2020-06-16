@@ -1,3 +1,6 @@
+## 1.6.8 (2020/06/16)
+  * Accept feature without value in the MISC column
+
 ## 1.6.7 (2020/06/16)
   * Make some evolution on Conllx naming
 

@@ -275,6 +275,36 @@ let _ =
       with
       | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
     end
+  | ["sud_of_json"] ->
+    begin
+      try
+        let json = Yojson.Basic.from_channel stdin in
+        let conll = Conllx.of_json json in
+        Printf.printf "%s\n" (Conllx.to_string ~config:(Conllx_config.build "sud") conll)
+      with
+      | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
+    end
+
+  | ["ud_to_json"] ->
+    begin
+      try
+        let cx = Conllx_corpus.read ~config:(Conllx_config.build "ud") () in
+        Array.iter (fun (_,conllx) ->
+            let json = Conllx.to_json conllx in
+            Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
+          ) (Conllx_corpus.get_data cx)
+      with
+      | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
+    end
+  | ["ud_of_json"] ->
+    begin
+      try
+        let json = Yojson.Basic.from_channel stdin in
+        let conll = Conllx.of_json json in
+        Printf.printf "%s\n" (Conllx.to_string ~config:(Conllx_config.build "ud") conll)
+      with
+      | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
+    end
 
   | ["seq_to_json"] ->
     begin
@@ -287,17 +317,6 @@ let _ =
       with
       | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
     end
-
-  | ["sud_of_json"] ->
-    begin
-      try
-        let json = Yojson.Basic.from_channel stdin in
-        let conll = Conllx.of_json json in
-        Printf.printf "%s\n" (Conllx.to_string ~config:(Conllx_config.build "sud") conll)
-      with
-      | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
-    end
-
   | ["seq_of_json"] ->
     begin
       try
