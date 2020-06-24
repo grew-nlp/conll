@@ -811,7 +811,7 @@ module Edge = struct
 end
 
 (* ==================================================================================================== *)
-module Parseme_mwes = struct
+module Parseme = struct
 
   type proj = Full | Proj_1 | Proj_2
 
@@ -942,7 +942,7 @@ module Conllx = struct
     nodes: Node.t list;
     order: Id.t list;
     edges: Edge.t list;
-    parseme_mwes: Parseme_mwes.t;
+    parseme: Parseme.t;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1019,13 +1019,13 @@ module Conllx = struct
     let meta = List.map parse_meta meta_lines in
     let sent_id = get_sent_id_opt_meta meta in
 
-    let (nodes_without_root, edges, parseme_mwes) =
+    let (nodes_without_root, edges, parseme) =
       List.fold_left
         (fun (acc_nodes, acc_edges, acc_mwes)  (line_num,graph_line) ->
            let item_list = Str.split (Str.regexp "\t") graph_line in
            let node = Node.of_item_list ?file ?sent_id ~line_num ~columns item_list in
            let edge_list = Edge.of_item_list ?file ?sent_id ~line_num ~config ~columns node.Node.id item_list in
-           let new_acc_mwes = Parseme_mwes.update ?file ?sent_id ~line_num ~columns node.Node.id item_list acc_mwes in
+           let new_acc_mwes = Parseme.update ?file ?sent_id ~line_num ~columns node.Node.id item_list acc_mwes in
            (
              node::acc_nodes,
              (edge_list @ acc_edges),
@@ -1051,7 +1051,7 @@ module Conllx = struct
       nodes;
       order = []; (* [order] is computed after textform/wordform because of MWT "nodes" *)
       edges;
-      parseme_mwes; (* TODO: need cleaning (ids order) *)
+      parseme; (* TODO: need cleaning (ids order) *)
     }
     |> textform_up
     |> wordform_up
@@ -1065,8 +1065,8 @@ module Conllx = struct
 
     let new_nodes = List.map (Node.id_map mapping) t.nodes in
     let new_edges = List.map (Edge.id_map mapping) t.edges in
-    let new_parseme_mwes = Int_map.map (Parseme_mwes.id_map mapping) t.parseme_mwes in
-    { t with nodes = new_nodes; edges=new_edges; parseme_mwes=new_parseme_mwes }
+    let new_parseme = Int_map.map (Parseme.id_map mapping) t.parseme in
+    { t with nodes = new_nodes; edges=new_edges; parseme=new_parseme }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) s =
@@ -1082,12 +1082,12 @@ module Conllx = struct
     let (nodes, edges) =
       Int_map.fold
         (fun mwe_id mwe_item (acc_nodes, acc_edges) ->
-           ((Parseme_mwes.item_to_json mwe_id mwe_item) :: acc_nodes,
+           ((Parseme.item_to_json mwe_id mwe_item) :: acc_nodes,
             List.fold_left (fun acc (token_id,proj) ->
                 let pre_label = match proj with
-                  | Parseme_mwes.Proj_1 -> ["proj", `String "1"]
-                  | Parseme_mwes.Proj_2 -> ["proj", `String "2"]
-                  | Parseme_mwes.Full -> [] in
+                  | Parseme.Proj_1 -> ["proj", `String "1"]
+                  | Parseme.Proj_2 -> ["proj", `String "2"]
+                  | Parseme.Full -> [] in
                 `Assoc [
                   ("src", `String (sprintf "PARSEME_%d" mwe_id));
                   ("label", `Assoc (("parseme", `String mwe_item.parseme) :: pre_label));
@@ -1095,7 +1095,7 @@ module Conllx = struct
                 ] :: acc
               ) acc_edges mwe_item.ids
            )
-        ) t.parseme_mwes (token_nodes, token_edges) in
+        ) t.parseme (token_nodes, token_edges) in
 
     `Assoc
       (CCList.filter_map
@@ -1120,7 +1120,7 @@ module Conllx = struct
     let all_edges = json |> member "edges" |> to_list |> List.map Edge.of_json in
     let (parseme_edges, token_edges) = List.partition (function e when String_map.mem "parseme" e.Edge.label -> true | _ -> false) all_edges in
 
-    let parseme_mwes =
+    let parseme =
       CCList.foldi
         (fun acc i parseme_node ->
            let node_id = parseme_node |> member "id" |> to_string in
@@ -1131,13 +1131,13 @@ module Conllx = struct
                     (
                       token_edge.Edge.tar,
                       match String_map.find_opt "proj" token_edge.Edge.label with
-                      | Some "1" -> Parseme_mwes.Proj_1
-                      | Some "2" -> Parseme_mwes.Proj_2
-                      | _ -> Parseme_mwes.Full
+                      | Some "1" -> Parseme.Proj_1
+                      | Some "2" -> Parseme.Proj_2
+                      | _ -> Parseme.Full
                     ) :: acc2
                   else acc2
                ) [] parseme_edges in
-           Int_map.add (i+1) (Parseme_mwes.item_of_json tokens parseme_node) acc
+           Int_map.add (i+1) (Parseme.item_of_json tokens parseme_node) acc
         ) Int_map.empty (List.rev parseme_nodes) in
 
     try
@@ -1146,7 +1146,7 @@ module Conllx = struct
         nodes = token_nodes |> List.map Node.of_json;
         order = json |> member "order" |> to_list |> List.map (function `String s -> Id.Raw s | _ -> Error.error ~data:json ~fct:"Conllx.of_json" "illformed json (order field)");
         edges = token_edges;
-        parseme_mwes;
+        parseme;
       }
     with Type_error _ -> Error.error ~fct:"Conllx.of_json" "illformed json"
 
@@ -1182,15 +1182,15 @@ module Conllx = struct
              match
                (Int_map.fold
                   (fun mwe_id parseme_item acc ->
-                     match parseme_item.Parseme_mwes.ids with
+                     match parseme_item.Parseme.ids with
                      | (head, proj)::_ when head = node.id ->
-                       (sprintf "%s:%s" (Parseme_mwes.mwe_id_proj_to_string (mwe_id, proj)) (Parseme_mwes.item_to_string parseme_item)):: acc
+                       (sprintf "%s:%s" (Parseme.mwe_id_proj_to_string (mwe_id, proj)) (Parseme.item_to_string parseme_item)):: acc
                      | _::tail when List.mem_assoc node.id tail ->
                        let proj = List.assoc node.id tail in
-                       (Parseme_mwes.mwe_id_proj_to_string (mwe_id, proj)) :: acc
+                       (Parseme.mwe_id_proj_to_string (mwe_id, proj)) :: acc
 
                      | l -> acc
-                  ) t_without_root.parseme_mwes []) with
+                  ) t_without_root.parseme []) with
              | [] -> "*"
              | l -> String.concat ";" l in
 
