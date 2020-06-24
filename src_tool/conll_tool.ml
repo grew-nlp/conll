@@ -267,7 +267,7 @@ let _ =
   | ["sud_to_json"] ->
     begin
       try
-        let cx = Conllx_corpus.read ~config:(Conllx_config.build "sud") () in
+        let cx = Conllx_corpus.read_stdin ~config:(Conllx_config.build "sud") () in
         Array.iter (fun (_,conllx) ->
             let json = Conllx.to_json conllx in
             Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
@@ -288,7 +288,7 @@ let _ =
   | ["ud_to_json"] ->
     begin
       try
-        let cx = Conllx_corpus.read ~config:(Conllx_config.build "ud") () in
+        let cx = Conllx_corpus.read_stdin ~config:(Conllx_config.build "ud") () in
         Array.iter (fun (_,conllx) ->
             let json = Conllx.to_json conllx in
             Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)
@@ -309,7 +309,7 @@ let _ =
   | ["seq_to_json"] ->
     begin
       try
-        let cx = Conllx_corpus.read ~config:(Conllx_config.build "sequoia") () in
+        let cx = Conllx_corpus.read_stdin ~config:(Conllx_config.build "sequoia") () in
         Array.iter (fun (_,conllx) ->
             let json = Conllx.to_json conllx in
             Printf.printf "%s\n" (Yojson.Basic.pretty_to_string json)

@@ -19,9 +19,7 @@ end
 module Conllx_config: sig
   type t
 
-  val default: t
-
-  (** [build] from a constant value. Known values are: "default", "sequoia", "ud", "sud", "orfeo".
+  (** [build] from a constant value. Known values are: "basic", "sequoia", "ud", "sud", "orfeo".
       Raises [Error] for unknown value. *)
   val build: string -> t
 
@@ -53,6 +51,7 @@ module Conllx : sig
   val get_meta: t -> (string * string) list
 
   val set_sent_id: string -> t -> t
+  val get_sent_id_opt: t -> string option
 
   val of_json: Yojson.Basic.t -> t
 
@@ -71,7 +70,7 @@ module Conllx_corpus : sig
 
   val load_list: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> string list -> t
 
-  val read: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> unit -> t
+  val read_stdin: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> unit -> t
 
   val to_string: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> t -> string
 

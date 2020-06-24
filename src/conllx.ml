@@ -104,7 +104,6 @@ module Misc = struct
       done;
       assert false
     with End_of_file -> List.rev !res
-
 end
 
 (* ==================================================================================================== *)
@@ -191,8 +190,8 @@ module Conllx_config = struct
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let default = {
-    name = "default";
+  let basic = {
+    name = "basic";
     core = "rel";
     extensions = [];
     prefixes = [];
@@ -271,8 +270,8 @@ module Conllx_config = struct
     | "sequoia" -> sequoia
     | "ud" -> ud
     | "sud" -> sud
-    | "default" | "orfeo" -> default
-    | s -> Error.error "Unknown config `%s` (available values are: `default`, `ud`, `sud`, `sequoia`, `orfeo`)" s
+    | "basic" | "orfeo" -> basic
+    | s -> Error.error "Unknown config `%s` (available values are: `basic`, `ud`, `sud`, `sequoia`, `orfeo`)" s
 
   let get_name t = t.name
 end
@@ -1001,6 +1000,7 @@ module Conllx = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let parse_meta (_,t) =
     match Str.bounded_split (Str.regexp "# *\\| *= *") t 2 with
+    | [""; _] -> ("", t)
     | [key;value] -> (key,value)
     | _ -> ("", t)
 
@@ -1012,7 +1012,7 @@ module Conllx = struct
     | (_, false) -> Error.error ?file ?sent_id "Unknown identifier `%s`" (Id.to_string edge.Edge.tar)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string_list ~config ?file ~columns string_list_rev =
+  let of_string_list_rev ~config ?file ~columns string_list_rev =
     let (meta_lines, graph_lines_rev) =
       List.partition (fun (_,l) -> l <> "" && l.[0] = '#') string_list_rev in
 
@@ -1069,10 +1069,10 @@ module Conllx = struct
     { t with nodes = new_nodes; edges=new_edges; parseme_mwes=new_parseme_mwes }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string ?(config=Conllx_config.default) ?(columns=Conllx_columns.default) s =
+  let of_string ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) s =
     match List.rev (List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s)) with
-    | (_,"") :: t -> of_string_list ~config ~columns t (* remove pending empty line, if any *)
-    | l -> of_string_list ~columns ~config l
+    | (_,"") :: t -> of_string_list_rev ~config ~columns t (* remove pending empty line, if any *)
+    | l -> of_string_list_rev ~columns ~config l
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json (t: t) : Yojson.Basic.t =
@@ -1200,7 +1200,7 @@ module Conllx = struct
     ()
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string ?(config=Conllx_config.default) ?(columns=Conllx_columns.default) t =
+  let to_string ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) t =
     let buff = Buffer.create 32 in
     to_buff ~config ~columns buff t;
     Buffer.contents buff
@@ -1222,7 +1222,7 @@ module Conllx_corpus = struct
   let get_data t = t.data
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string ?(config=Conllx_config.default) ?columns t =
+  let to_string ?(config=Conllx_config.basic) ?columns t =
     (* if the columns argument is given, it has priority on internal columms of the corpus *)
     let columns = match columns with Some c -> c | None -> t.columns in
     let buff = Buffer.create 32 in
@@ -1256,7 +1256,7 @@ module Conllx_corpus = struct
       let save_one () =
         begin
           try
-            let conll = Conllx.of_string_list ?file ~config ~columns !rev_locals in
+            let conll = Conllx.of_string_list_rev ?file ~config ~columns !rev_locals in
             incr cpt;
             let base = match file with Some f -> Filename.basename f | None -> "stdin" in
             let sent_id = match Conllx.get_sent_id_opt conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
@@ -1281,10 +1281,10 @@ module Conllx_corpus = struct
       { columns; data=Array.of_list (List.rev !res) }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load ?(config=Conllx_config.default) ?columns file = of_lines ~config ?columns ~file (Misc.read_lines file)
+  let load ?(config=Conllx_config.basic) ?columns file = of_lines ~config ?columns ~file (Misc.read_lines file)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load_list ?(config=Conllx_config.default) ?columns file_list =
+  let load_list ?(config=Conllx_config.basic) ?columns file_list =
     match List.map (load ~config ?columns) file_list with
     | [] -> empty
     | ({ columns }::tail) as l ->
@@ -1293,7 +1293,7 @@ module Conllx_corpus = struct
       else Error.error "All files must have the same columns declaration"
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let read ?(config=Conllx_config.default) ?columns () = of_lines ~config ?columns (Misc.read_stdin ())
+  let read_stdin ?(config=Conllx_config.basic) ?columns () = of_lines ~config ?columns (Misc.read_stdin ())
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let sizes t =
@@ -1352,7 +1352,7 @@ module Conllx_stat = struct
          | _ -> acc
       ) map edges
 
-  let build ?(config=Conllx_config.default) key corpus =
+  let build ?(config=Conllx_config.basic) key corpus =
     Array.fold_left
       (fun acc (_,conll) ->
          map_add_conll ~config key conll acc
