@@ -9,6 +9,9 @@ module Conllx_columns : sig
   (* # global.columns = ID FORM LEMMA UPOS XPOS FEATS HEAD DEPREL DEPS PARSEME:MWE *)
   val cupt: t
 
+  (* # global.columns = ID FORM LEMMA UPOS XPOS FEATS HEAD DEPREL DEPS PARSEME:MWE FRSEMCOR:NOUN *)
+  val frsemcor: t
+
   (* # global.columns = ID FORM LEMMA UPOS XPOS FEATS HEAD DEPREL DEPS MISC ORFEO:START ORFEO:STOP ORFEO:SPEAKER *)
   val orfeo: t
 

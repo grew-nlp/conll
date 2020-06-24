@@ -110,7 +110,7 @@ end
 module Column = struct
   type t = ID | FORM | LEMMA | UPOS | XPOS | FEATS | HEAD | DEPREL | DEPS | MISC
          | PARSEME_MWE
-         | SEMCOR_NOUN
+         | FRSEMCOR_NOUN
          | ORFEO_START
          | ORFEO_STOP
          | ORFEO_SPEAKER
@@ -128,7 +128,7 @@ module Column = struct
     | DEPS -> "DEPS"
     | MISC -> "MISC"
     | PARSEME_MWE -> "PARSEME:MWE"
-    | SEMCOR_NOUN -> "SEMCOR:NOUN"
+    | FRSEMCOR_NOUN -> "FRSEMCOR:NOUN"
     | ORFEO_START -> "ORFEO:START"
     | ORFEO_STOP -> "ORFEO:STOP"
     | ORFEO_SPEAKER -> "ORFEO:SPEAKER"
@@ -146,7 +146,7 @@ module Column = struct
     | "DEPS" -> DEPS
     | "MISC" -> MISC
     | "PARSEME:MWE" -> PARSEME_MWE
-    | "SEMCOR:NOUN" -> SEMCOR_NOUN
+    | "FRSEMCOR:NOUN" -> FRSEMCOR_NOUN
     | "ORFEO:START" -> ORFEO_START
     | "ORFEO:STOP" -> ORFEO_STOP
     | "ORFEO:SPEAKER" -> ORFEO_SPEAKER
@@ -161,6 +161,7 @@ module Conllx_columns = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let default = [Column.ID; FORM; LEMMA; UPOS; XPOS; FEATS; HEAD; DEPREL; DEPS; MISC]
   let cupt = [Column.ID; FORM; LEMMA; UPOS; XPOS; FEATS; HEAD; DEPREL; DEPS; MISC; PARSEME_MWE]
+  let frsemcor = [Column.ID; FORM; LEMMA; UPOS; XPOS; FEATS; HEAD; DEPREL; DEPS; MISC; PARSEME_MWE; FRSEMCOR_NOUN]
   let orfeo = [Column.ID; FORM; LEMMA; UPOS; XPOS; FEATS; HEAD; DEPREL; DEPS; MISC; ORFEO_START; ORFEO_STOP; ORFEO_SPEAKER]
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -462,7 +463,7 @@ module Node = struct
     with Type_error _ -> Error.error ~fct:"Node.of_json" ~data:json "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_conll ~config ~columns head deprel deps parseme_mwe t =
+  let to_conll ~config ~columns head deprel deps parseme_mwe frsemcor t =
     String.concat "\t"
       (List.map (function
            | Column.ID -> Id.to_string t.id
@@ -476,10 +477,10 @@ module Node = struct
            | Column.DEPS -> deps
            | Column.MISC -> Feat.string_feats ~config true t.feats
            | Column.PARSEME_MWE -> parseme_mwe
+           | Column.FRSEMCOR_NOUN -> frsemcor
            | Column.ORFEO_START -> (match List.assoc_opt "_start" t.feats with Some l -> l | None -> "_")
            | Column.ORFEO_STOP -> (match List.assoc_opt "_stop" t.feats with Some l -> l | None -> "_")
            | Column.ORFEO_SPEAKER -> (match List.assoc_opt "_speaker" t.feats with Some l -> l | None -> "_")
-           | _ -> "_"
          ) columns)
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -721,9 +722,15 @@ module Edge = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let compare ~config e1 e2 =
-    match Id.compare e1.src e2.src with
-    | 0 -> Stdlib.compare (Conllx_label.to_string ~config e1.label) (Conllx_label.to_string ~config e2.label)
-    | n -> n
+    match (String_map.find_opt "kind" e1.label, String_map.find_opt "kind" e2.label) with
+    | (Some "surf", None) | (None, Some "deep") | (Some "surf", Some "deep") -> -1
+    | (None, Some "surf") | (Some "deep", None) | (Some "deep", Some "surf") -> 1
+    | _ ->
+      match Id.compare e1.src e2.src with
+      | 0 -> Stdlib.compare (Conllx_label.to_string ~config e1.label) (Conllx_label.to_string ~config e2.label)
+      | n -> n
+
+  (* ---------------------------------------------------------------------------------------------------- *)
   let is_tar id edge = edge.tar = id
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -852,6 +859,11 @@ module Parseme = struct
   let empty = { mwepos = None; parseme = ""; label = None; criterion = None; ids = []; }
 
   (* ---------------------------------------------------------------------------------------------------- *)
+  let item_sort t = { t with ids = List.sort (fun (x,_) (y,_) -> Id.compare x y) t.ids }
+  (* NB: the order used of order on Id but order given in the order Conllx field should be used
+         but in this context, the orders are equivalent. TOCHECK! *)
+
+  (* ---------------------------------------------------------------------------------------------------- *)
   let id_map mapping t = { t with ids = List.map (fun (x,y) -> (List.assoc x mapping,y)) t.ids }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -903,6 +915,8 @@ module Parseme = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   type t = item Int_map.t
 
+  let sort = Int_map.map item_sort
+
   (* ---------------------------------------------------------------------------------------------------- *)
   let update ?file ?sent_id ~line_num ~columns node_id item_list t =
     List.fold_left2
@@ -935,6 +949,127 @@ module Parseme = struct
       ) t columns item_list
 end
 
+
+(* ==================================================================================================== *)
+module Frsemcor = struct
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  type item = {
+    frsemcor: string;
+    head: Id.t option;
+    tokens: Id.t list; (* ordered list of ids *)
+  }
+
+  let empty = { frsemcor=""; head=None; tokens=[] }
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let id_map mapping t =
+    { t with
+      head = (match t.head with None -> None | Some id -> Some (List.assoc id mapping));
+      tokens = List.map (fun x -> List.assoc x mapping) t.tokens
+    }
+
+(*
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let item_to_json id item : Yojson.Basic.t = `Assoc (
+      CCList.filter_map CCFun.id  [
+        Some ("id", `String (sprintf "PARSEME_%d" id));
+        (match item.parseme with ""  -> Error.error "Illegal MWE, no parseme field" | s -> Some ("parseme", `String s));
+        (match item.mwepos with Some x -> Some ("mwepos", `String x) | None -> None);
+        (match item.label with Some x -> Some ("label", `String x) | None -> None);
+        (match item.criterion with Some x -> Some ("criterion", `String x) | None -> None)
+      ]
+    )
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let item_of_json ids json =
+    let open Yojson.Basic.Util in
+    let parseme = json |> member "parseme" |> to_string in
+    let mwepos = try Some (json |> member "mwepos" |> to_string) with _ -> None in
+    let label = try Some (json |> member "label" |> to_string) with _ -> None  in
+    let criterion = try Some (json |> member "criterion" |> to_string) with _ -> None in
+    { parseme; mwepos; label; criterion; ids }
+*)
+
+(*
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let item_of_string s =
+    match Str.split (Str.regexp "|") s with
+
+    (* usage of the PARSEME:MWE field in PARSEME project *)
+    | [one] -> { empty with parseme="MWE"; mwepos= Some "VERB"; label=Some one }
+
+    (* usage of the PARSEME:MWE field in PARSEME-FR project *)
+    | [m;kl;c] ->
+      let mwepos = match m with "_" -> None | s -> Some s in
+      let (parseme, label) =
+        match Str.split (Str.regexp "-") kl with
+        | [k] -> (k, None)
+        | [k; l] -> (k, Some l)
+        | _ -> Error.error "Cannot parse PARSEME:MWE %s" s in
+      let criterion = match c with "_" -> None | s -> Some s in
+      { mwepos; parseme; label; criterion; ids=[] }
+    | _ -> Error.error "Cannot parse PARSEME:MWE %s" s
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let item_to_string item =
+    sprintf "%s|%s|%s"
+      (match item.mwepos with None -> "_" | Some s -> s)
+      (match item.label with None -> item.parseme | Some s -> sprintf "%s-%s" item.parseme s)
+      (match item.criterion with None -> "_" | Some s -> s)
+*)
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  type t = item Int_map.t
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+
+  (* use negative number for mono-token semcor annotation *)
+  let last_fresh_sem_id = ref 0
+  let get_fresh_sem_id () = decr last_fresh_sem_id; !last_fresh_sem_id
+
+  let update ?file ?sent_id ~line_num ~columns node_id item_list t =
+    List.fold_left2
+      (fun acc col item ->
+         match (col, item) with
+         | (Column.FRSEMCOR_NOUN, "*") -> acc
+         | (Column.FRSEMCOR_NOUN, s) ->
+           let sem_items = Str.split (Str.regexp ";") s in
+           List.fold_left
+             (fun acc2 sem_item ->
+                match Str.bounded_split (Str.regexp ":") sem_item 2 with
+                | [one] ->
+                  begin
+                    match int_of_string_opt one with
+                    | Some sem_id ->
+                      begin
+                        match Int_map.find_opt sem_id acc2 with
+                        | None -> Int_map.add sem_id {empty with tokens = [node_id] } acc2
+                        | Some item -> Int_map.add sem_id { item with tokens = node_id :: item.tokens } acc2
+                      end
+                    | None ->
+                      Int_map.add (get_fresh_sem_id ()) { empty with frsemcor=one; head = Some node_id} acc2
+                  end
+                (* | [id_proj] ->
+                   let (mwe_id, proj) = mwe_id_proj_of_string ?file ?sent_id ~line_num id_proj in
+                   begin
+                    match Int_map.find_opt mwe_id acc2 with
+                    | None -> Int_map.add mwe_id {empty with ids = [(node_id, proj)] } acc2
+                    | Some item -> Int_map.add mwe_id { item with ids = (node_id, proj) :: item.ids } acc2
+                   end *)
+                | [string_sem_id; frsemcor] ->
+                  begin
+                    let sem_id = int_of_string string_sem_id in
+                    match Int_map.find_opt sem_id acc2 with
+                    | None -> Int_map.add sem_id {empty with frsemcor; head = Some node_id } acc2
+                    | Some item -> Int_map.add sem_id { item with frsemcor; head = Some node_id } acc2
+                  end
+                | _ -> Error.error "cannot parse FRSEMCOR_NOUN"
+             ) acc sem_items
+         | _ -> acc
+      ) t columns item_list
+end
+
 (* ==================================================================================================== *)
 module Conllx = struct
   type t = {
@@ -943,6 +1078,7 @@ module Conllx = struct
     order: Id.t list;
     edges: Edge.t list;
     parseme: Parseme.t;
+    frsemcor: Frsemcor.t;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1019,19 +1155,21 @@ module Conllx = struct
     let meta = List.map parse_meta meta_lines in
     let sent_id = get_sent_id_opt_meta meta in
 
-    let (nodes_without_root, edges, parseme) =
+    let (nodes_without_root, edges, parseme, frsemcor) =
       List.fold_left
-        (fun (acc_nodes, acc_edges, acc_mwes)  (line_num,graph_line) ->
+        (fun (acc_nodes, acc_edges, acc_parseme, acc_frsemcor)  (line_num,graph_line) ->
            let item_list = Str.split (Str.regexp "\t") graph_line in
            let node = Node.of_item_list ?file ?sent_id ~line_num ~columns item_list in
            let edge_list = Edge.of_item_list ?file ?sent_id ~line_num ~config ~columns node.Node.id item_list in
-           let new_acc_mwes = Parseme.update ?file ?sent_id ~line_num ~columns node.Node.id item_list acc_mwes in
+           let new_acc_parseme = Parseme.update ?file ?sent_id ~line_num ~columns node.Node.id item_list acc_parseme in
+           let new_acc_frsemcor = Frsemcor.update ?file ?sent_id ~line_num ~columns node.Node.id item_list acc_frsemcor in
            (
              node::acc_nodes,
              (edge_list @ acc_edges),
-             new_acc_mwes
+             new_acc_parseme,
+             new_acc_frsemcor
            )
-        ) ([],[],Int_map.empty) graph_lines_rev in
+        ) ([],[],Int_map.empty,Int_map.empty) graph_lines_rev in
 
     let nodes = Node.conll_root :: nodes_without_root in
 
@@ -1051,7 +1189,8 @@ module Conllx = struct
       nodes;
       order = []; (* [order] is computed after textform/wordform because of MWT "nodes" *)
       edges;
-      parseme; (* TODO: need cleaning (ids order) *)
+      parseme;
+      frsemcor;
     }
     |> textform_up
     |> wordform_up
@@ -1063,10 +1202,11 @@ module Conllx = struct
     let is_empty id = Node.is_empty (find_node id t.nodes) in
     let mapping = Id.normalise_list is_empty t.order in
 
-    let new_nodes = List.map (Node.id_map mapping) t.nodes in
-    let new_edges = List.map (Edge.id_map mapping) t.edges in
-    let new_parseme = Int_map.map (Parseme.id_map mapping) t.parseme in
-    { t with nodes = new_nodes; edges=new_edges; parseme=new_parseme }
+    let nodes = List.map (Node.id_map mapping) t.nodes in
+    let edges = List.map (Edge.id_map mapping) t.edges in
+    let parseme = Int_map.map (Parseme.id_map mapping) t.parseme in
+    let frsemcor = Int_map.map (Frsemcor.id_map mapping) t.frsemcor in
+    { t with nodes; edges; parseme; frsemcor }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) s =
@@ -1076,9 +1216,11 @@ module Conllx = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json (t: t) : Yojson.Basic.t =
-    let token_nodes = List.map Node.to_json t.nodes in
-    let token_edges = List.map Edge.to_json t.edges in
 
+    let nodes = List.map Node.to_json t.nodes in
+    let edges = List.map Edge.to_json t.edges in
+
+    (* replace old values of nodes, edges with new ones, taking into account parseme *)
     let (nodes, edges) =
       Int_map.fold
         (fun mwe_id mwe_item (acc_nodes, acc_edges) ->
@@ -1095,7 +1237,33 @@ module Conllx = struct
                 ] :: acc
               ) acc_edges mwe_item.ids
            )
-        ) t.parseme (token_nodes, token_edges) in
+        ) t.parseme (nodes, edges) in
+
+    (* replace old values of nodes, edges with new ones, taking into account frsemcor *)
+    let (nodes, edges) =
+      Int_map.fold
+        (fun sem_id sem_item (acc_nodes, acc_edges) ->
+           match sem_item.Frsemcor.head with
+           | None ->
+             let sent_id = List.assoc_opt "sent_id" t.meta in
+             Error.error ?sent_id "No head for id `%d`" sem_id
+           | Some head ->
+             let node_id = sprintf "FRSEMCOR_%d" sem_id in
+             let new_node = `Assoc [("id",`String node_id); ("frsemcor", `String sem_item.frsemcor)] in
+             (
+               new_node :: acc_nodes,
+               `Assoc [("src", `String node_id); ("label", `Assoc [("frsemcor", `String "head")]); ("tar", `String (Id.to_string head));] ::
+               (List.fold_left
+                  (fun acc token_id ->
+                     `Assoc [
+                       ("src", `String node_id);
+                       ("label", `Assoc [("frsemcor", `String "yes")]);
+                       ("tar", `String (Id.to_string token_id));
+                     ] :: acc
+                  ) acc_edges sem_item.Frsemcor.tokens
+               )
+             )
+        ) t.frsemcor (nodes, edges) in
 
     `Assoc
       (CCList.filter_map
@@ -1115,10 +1283,29 @@ module Conllx = struct
   let of_json json =
     let open Yojson.Basic.Util in
     let all_nodes = json |> member "nodes" |> to_list  in
-    let (parseme_nodes, token_nodes) = List.partition (function `Assoc l when List.mem_assoc "parseme" l -> true | _ -> false) all_nodes in
+    let (token_nodes, parseme_nodes, frsemcor_nodes) =
+      List.fold_left
+        (fun (token_acc, parseme_acc, frsemcor_acc) node ->
+           match node with
+           | `Assoc l when List.mem_assoc "parseme" l -> (token_acc, node::parseme_acc, frsemcor_acc)
+           | `Assoc l when List.mem_assoc "frsemcor" l -> (token_acc, parseme_acc, node::frsemcor_acc)
+           | _ -> (node :: token_acc, parseme_acc, frsemcor_acc)
+        ) ([],[],[]) all_nodes in
+
+    (* let (parseme_nodes, token_nodes) = List.partition (function `Assoc l when List.mem_assoc "parseme" l -> true | _ -> false) all_nodes in *)
 
     let all_edges = json |> member "edges" |> to_list |> List.map Edge.of_json in
-    let (parseme_edges, token_edges) = List.partition (function e when String_map.mem "parseme" e.Edge.label -> true | _ -> false) all_edges in
+
+    let (token_edges, parseme_edges, frsemcor_edges) =
+      List.fold_left
+        (fun (token_acc, parseme_acc, frsemcor_acc) edge ->
+           match edge with
+           | _ when String_map.mem "parseme" edge.Edge.label -> (token_acc, edge::parseme_acc, frsemcor_acc)
+           | _ when String_map.mem "frsemcor" edge.Edge.label -> (token_acc, parseme_acc, edge::frsemcor_acc)
+           | _ -> (edge :: token_acc, parseme_acc, frsemcor_acc)
+        ) ([],[],[]) all_edges in
+
+    (* let (parseme_edges, token_edges) = List.partition (function e when String_map.mem "parseme" e.Edge.label -> true | _ -> false) all_edges in *)
 
     let parseme =
       CCList.foldi
@@ -1138,7 +1325,32 @@ module Conllx = struct
                   else acc2
                ) [] parseme_edges in
            Int_map.add (i+1) (Parseme.item_of_json tokens parseme_node) acc
-        ) Int_map.empty (List.rev parseme_nodes) in
+        ) Int_map.empty parseme_nodes in
+
+    let frsemcor =
+      CCList.foldi
+        (fun acc i frsemcor_node ->
+           let node_id = frsemcor_node |> member "id" |> to_string in
+
+           let (head, not_head) =
+             List.fold_left
+               (fun (acc_head, acc_not_head) edge ->
+                  if Id.to_string edge.Edge.src = node_id
+                  then
+                    begin
+                      match String_map.find_opt "frsemcor" edge.Edge.label with
+                      | Some "head" -> (edge.Edge.tar::acc_head, acc_not_head)
+                      | _ -> (acc_head, edge.Edge.tar::acc_not_head)
+                    end
+                  else (acc_head, acc_not_head)
+               ) ([],[]) frsemcor_edges in
+
+           let frsemcor_item =
+             match (head,not_head) with
+             | ([head], tokens) -> { Frsemcor.frsemcor = frsemcor_node |> member "frsemcor" |> to_string; head = Some head; tokens }
+             | (l,_) -> Error.error "Not one head -> %d" (List.length head) in
+           Int_map.add (i+1) frsemcor_item acc
+        ) Int_map.empty (List.rev frsemcor_nodes) in
 
     try
       {
@@ -1147,11 +1359,30 @@ module Conllx = struct
         order = json |> member "order" |> to_list |> List.map (function `String s -> Id.Raw s | _ -> Error.error ~data:json ~fct:"Conllx.of_json" "illformed json (order field)");
         edges = token_edges;
         parseme;
+        frsemcor;
       }
     with Type_error _ -> Error.error ~fct:"Conllx.of_json" "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
+  let order_mwes t =
+
+    let order_mwe mwe =
+      let ordered_ids =
+        List.fold_right
+          (fun id acc ->
+             match List.assoc_opt id mwe.Parseme.ids  with
+             | Some v -> (id,v) :: acc
+             | None -> acc
+          ) t.order [] in
+      { mwe with ids = ordered_ids } in
+
+    { t with parseme = Int_map.map order_mwe t.parseme }
+
+  (* ---------------------------------------------------------------------------------------------------- *)
   let to_buff ?sent_id ~config ~columns buff t =
+
+    let t = order_mwes t in
+
     let down_t = t |> normalise_ids |> wordform_down |> textform_down in
 
     let t_without_root = { down_t with nodes = List.filter (fun node -> not (Node.is_conll_root node)) down_t.nodes} in
@@ -1164,17 +1395,19 @@ module Conllx = struct
 
     let _ = List.iter
         (fun node ->
-           let (basic_edges, desp_edges) = Edge.split ~config t_without_root.edges in
+           let (basic_edges, deps_edges) = Edge.split ~config t_without_root.edges in
 
            let (head,deprel) =
              match List.filter (Edge.is_tar node.Node.id) basic_edges with
              | [] -> ("_", "_")
-             | l -> (
+             | l ->
+               let l = List.sort (Edge.compare ~config) l in
+               (
                  String.concat "|" (List.map (fun e -> Id.to_string e.Edge.src) l),
                  String.concat "|" (List.map (fun e -> Conllx_label.to_string_robust ~config e.Edge.label) l)
                ) in
            let deps =
-             match List.sort (Edge.compare ~config) (List.filter (Edge.is_tar node.Node.id) desp_edges) with
+             match List.sort (Edge.compare ~config) (List.filter (Edge.is_tar node.Node.id) deps_edges) with
              | [] -> "_"
              | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Conllx_label.to_string_robust ~config e.Edge.label)) l) in
 
@@ -1188,13 +1421,24 @@ module Conllx = struct
                      | _::tail when List.mem_assoc node.id tail ->
                        let proj = List.assoc node.id tail in
                        (Parseme.mwe_id_proj_to_string (mwe_id, proj)) :: acc
-
                      | l -> acc
                   ) t_without_root.parseme []) with
              | [] -> "*"
              | l -> String.concat ";" l in
 
-           bprintf buff "%s\n" (Node.to_conll ~config ~columns head deprel deps parseme_mwe node)
+           let frsemcor = match
+               (Int_map.fold
+                  (fun mwe_id frsemcor_item acc ->
+                     match (frsemcor_item.Frsemcor.head, frsemcor_item.Frsemcor.tokens) with
+                     | (Some h, []) when h = node.id -> frsemcor_item.Frsemcor.frsemcor :: acc
+                     | (Some h, tokens) when h=node.id -> (sprintf "%d:%s" mwe_id frsemcor_item.Frsemcor.frsemcor) :: acc
+                     | (_,tokens) when List.mem node.id tokens -> (sprintf "%d" mwe_id) :: acc
+                     | l -> acc
+                  ) t_without_root.frsemcor []) with
+           | [] -> "*"
+           | l -> String.concat ";" l in
+
+           bprintf buff "%s\n" (Node.to_conll ~config ~columns head deprel deps parseme_mwe frsemcor node)
 
         ) t_without_root.nodes in
     ()

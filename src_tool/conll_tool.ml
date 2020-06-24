@@ -322,7 +322,7 @@ let _ =
       try
         let json = Yojson.Basic.from_channel stdin in
         let conll = Conllx.of_json json in
-        Printf.printf "%s\n" (Conllx.to_string ~config:(Conllx_config.build "sequoia") ~columns:Conllx_columns.cupt conll)
+        Printf.printf "%s\n" (Conllx.to_string ~config:(Conllx_config.build "sequoia") ~columns:Conllx_columns.frsemcor conll)
       with
       | Conllx_error js -> printf " === Conllx_error === \n%s\n ====================\n" (Yojson.Basic.pretty_to_string js)
     end
