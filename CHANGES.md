@@ -1,3 +1,6 @@
+## 1.6.11 (2020/06/25)
+  * FRSEMCOR
+
 ## 1.6.10 (2020/06/16)
   * more robust handling of corpus (for PARSEME corpora)
 
