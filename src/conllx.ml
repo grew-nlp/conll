@@ -1553,8 +1553,6 @@ module Conllx_stat = struct
   module String_map = Map.Make (String)
   module String_set = Set.Make (String)
 
-  type key = Upos | Xpos
-
   type t = ((int String_map.t) String_map.t) String_map.t    (* keys are label --> gov --> dep *)
 
   let get_labels map = String_map.fold (fun label _ acc -> String_set.add label acc) map String_set.empty
@@ -1583,23 +1581,41 @@ module Conllx_stat = struct
     let old = try String_map.find label stat with Not_found -> String_map.empty in
     String_map.add label (add2 gov dep old) stat
 
-  let map_add_conll ~config key conll map =
+  let map_add_conll ~config (key,subkey_opt) conll map =
     let edges = conll.Conllx.edges in
     List.fold_left
       (fun acc edge ->
          let gov_node = Conllx.find_node edge.Edge.src conll.nodes in
          let dep_node = Conllx.find_node edge.Edge.tar conll.nodes in
-         let gov_pos = match List.assoc_opt (match key with Upos -> "upos" | Xpos -> "xpos") gov_node.Node.feats with Some x -> x | _ -> "_" in
-         let dep_pos = match List.assoc_opt (match key with Upos -> "upos" | Xpos -> "xpos") dep_node.Node.feats with Some x -> x | _ -> "_" in
+         let gov_value =
+           match List.assoc_opt key gov_node.Node.feats with
+           | Some x -> x
+           | None ->
+             match subkey_opt with
+             | None -> "_"
+             | Some subkey ->
+               match List.assoc_opt subkey gov_node.Node.feats with
+               | Some x -> x
+               | None -> "_" in
+         let dep_value =
+           match List.assoc_opt key dep_node.Node.feats with
+           | Some x -> x
+           | None ->
+             match subkey_opt with
+             | None -> "_"
+             | Some subkey ->
+               match List.assoc_opt subkey dep_node.Node.feats with
+               | Some x -> x
+               | None -> "_" in
          match Conllx_label.to_string ~config edge.label with
-         | Ok label -> add label gov_pos dep_pos acc
+         | Ok label -> add label gov_value dep_value acc
          | _ -> acc
       ) map edges
 
-  let build ?(config=Conllx_config.basic) key corpus =
+  let build ?(config=Conllx_config.basic) (key,subkey_opt) corpus =
     Array.fold_left
       (fun acc (_,conll) ->
-         map_add_conll ~config key conll acc
+         map_add_conll ~config (key,subkey_opt) conll acc
       ) String_map.empty corpus.Conllx_corpus.data
 
   let dump map =
@@ -1650,7 +1666,48 @@ module Conllx_stat = struct
     | (Some _, None) -> -1
     | (None, None) -> Stdlib.compare tag1 tag2
 
-  let table buff corpus_id map label =
+  let  url_encode url =
+    let buff = Buffer.create 32 in
+    String.iter
+      (function
+        | ' ' -> bprintf buff "%s" "%20"
+        | '/' -> bprintf buff "%s" "%2F"
+        | '=' -> bprintf buff "%s" "%3D"
+        | '[' -> bprintf buff "%s" "%5B"
+        | ']' -> bprintf buff "%s" "%5D"
+        | '{' -> bprintf buff "%s" "%7B"
+        | '}' -> bprintf buff "%s" "%7D"
+        | '|' -> bprintf buff "%s" "%7C"
+        | '<' -> bprintf buff "%s" "%3C"
+        | '>' -> bprintf buff "%s" "%3E"
+        | ';' -> bprintf buff "%s" "%3B"
+        | '\n' -> bprintf buff "%s" "%0A"
+        | '\"' -> bprintf buff "%s" "%22"
+        | c -> bprintf buff "%c" c
+        ) url;
+    Buffer.contents buff
+
+  let url relation (key,subkey_opt) gov_opt dep_opt =
+    let gov_item =
+      match gov_opt with
+      | None -> ""
+      | Some value ->
+        match subkey_opt with
+        | None -> sprintf "GOV [%s=\"%s\"]; " key value
+        | Some subkey -> sprintf "GOV [%s=\"%s\"/%s=\"%s\"]; " key value subkey value in
+
+    let dep_item =
+      match dep_opt with
+      | None -> ""
+      | Some value ->
+        match subkey_opt with
+        | None -> sprintf "DEP [%s=\"%s\"]; " key value
+        | Some subkey -> sprintf "DEP [%s=\"%s\"/%s=\"%s\"]; " key value subkey value in
+
+    let pattern = sprintf "pattern { GOV -[%s]-> DEP; %s%s}" relation gov_item dep_item in
+    url_encode pattern
+
+  let table buff corpus_id (key,subkey_opt) map label =
     let tags = get_tags map in
     let govs = String_set.fold
         (fun gov acc -> (gov, get_total_gov map label gov) :: acc
@@ -1681,12 +1738,14 @@ module Conllx_stat = struct
 
     bprintf buff "									<tr>\n";
     bprintf buff "										<th><b>TOTAL</b></th>\n";
-    bprintf buff "										<td class=\"total\"><a href=\"../?corpus=%s&relation=%s\" class=\"btn btn-warning\" target=\"_blank\">%d</a></td>\n" corpus_id label(get_total map label);
+    bprintf buff "										<td class=\"total\"><a href=\"../?corpus=%s&pattern=%s\" class=\"btn btn-warning\" target=\"_blank\">%d</a></td>\n"
+      corpus_id (url label (key,subkey_opt) None None) (get_total map label);
     List.iter (fun (dep,count) ->
         bprintf buff "										<td class=\"total\">%s</td>\n"
           (match count with
            | Some i ->
-             let url = sprintf "../?corpus=%s&relation=%s&target=%s" corpus_id label dep in
+             (* let url = sprintf "../?corpus=%s&relation=%s&target=%s" corpus_id label dep in *)
+             let url = sprintf "../?corpus=%s&pattern=%s" corpus_id (url label (key,subkey_opt) None (Some dep)) in
              sprintf "<a href=\"%s\" class=\"btn btn-success\" target=\"_blank\">%d</a>" url i
            | None -> "")
       ) sorted_deps;
@@ -1699,7 +1758,8 @@ module Conllx_stat = struct
         bprintf buff "										<td class=\"total\">%s</td>\n"
           (match count with
            | Some i ->
-             let url = sprintf "../?corpus=%s&relation=%s&source=%s" corpus_id label gov in
+             (* let url = sprintf "../?corpus=%s&relation=%s&source=%s" corpus_id label gov in *)
+             let url = sprintf "../?corpus=%s&pattern=%s" corpus_id (url label (key,subkey_opt) (Some gov) None) in
              sprintf "<a href=\"%s\" class=\"btn btn-success\" target=\"_blank\">%d</a>" url i
            | None -> "");
 
@@ -1707,7 +1767,8 @@ module Conllx_stat = struct
             bprintf buff "										<td>%s</td>\n"
               (match get map gov label dep with
                | Some i ->
-                 let url = sprintf "../?corpus=%s&relation=%s&source=%s&target=%s" corpus_id label gov dep in
+                 (* let url = sprintf "../?corpus=%s&relation=%s&source=%s&target=%s" corpus_id label gov dep in *)
+                 let url = sprintf "../?corpus=%s&pattern=%s" corpus_id (url label (key,subkey_opt) (Some gov) (Some dep)) in
                  sprintf "<a href=\"%s\" class=\"btn btn-primary\" target=\"_blank\">%d</a>" url i
                | None -> "")
           ) sorted_deps;
@@ -1723,7 +1784,7 @@ module Conllx_stat = struct
     |> Str.global_replace (Str.regexp ":") "__"
     |> Str.global_replace (Str.regexp "@") "___"
 
-  let to_html corpus_id map =
+  let to_html corpus_id (key,subkey_opt) map =
     let labels = get_labels map in
     let buff = Buffer.create 32 in
     bprintf buff "<!DOCTYPE html>\n";
@@ -1759,7 +1820,7 @@ module Conllx_stat = struct
     String_set.iter
       (fun label ->
          bprintf buff "						<div class=\"tab-pane\" id=\"%s\">\n" (escape_dot label);
-         table buff corpus_id map label;
+         table buff corpus_id (key,subkey_opt) map label;
          bprintf buff "						</div>\n";
       ) labels;
 

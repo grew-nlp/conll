@@ -86,12 +86,10 @@ end
 module Conllx_stat : sig
   type t
 
-  type key = Upos | Xpos
-
-  val build: ?config: Conllx_config.t -> key -> Conllx_corpus.t -> t
+  val build: ?config: Conllx_config.t -> (string * string option) -> Conllx_corpus.t -> t
 
   val dump: t -> unit
 
   (* build the table file. Args: corpus_id stat *)
-  val to_html: string -> t -> string
+  val to_html: string-> (string * string option) -> t -> string
 end
