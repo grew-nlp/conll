@@ -1,3 +1,6 @@
+## 1.6.12 (2020/08/05)
+  * change Corpus_stat to take into account key/subkey
+
 ## 1.6.11 (2020/06/25)
   * FRSEMCOR
 
