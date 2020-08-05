@@ -375,10 +375,10 @@ module Node = struct
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let conll_root = { id = Id.Simple 0; form="__ROOT__"; feats=[]; wordform=None; textform=None;}
+  let conll_root = { id = Id.Simple 0; form="__0__"; feats=[]; wordform=None; textform=None;}
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let is_conll_root t = t.form = "__ROOT__"
+  let is_conll_root t = t.form = "__0__"
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let compare ?file ?sent_id n1 n2 = Id.compare ?file ?sent_id n1.id n2.id
@@ -451,7 +451,7 @@ module Node = struct
       let form_opt = try Some (json |> member "form" |> to_string) with Type_error _ -> None in
       let form = match (id, form_opt) with
         | (_, Some f) -> f
-        | (Simple 0, None) -> "__ROOT__"
+        | (Simple 0, None) -> "__0__"
         | (_, None) -> Error.error ~fct:"Node.of_json" ~data:json "missing form" in
       {
         id;
@@ -515,7 +515,7 @@ module Node = struct
     let mwt_misc = ref [] in
     let rec loop to_underscore = function
       | [] -> []
-      | ({ form="__ROOT__" } as node) :: tail -> node :: (loop to_underscore tail)
+      | ({ form="__0__" } as node) :: tail -> node :: (loop to_underscore tail)
       | ({ id=Id.Empty _; _ } as node) :: tail -> { node with textform = Some "_"} :: (loop to_underscore tail)
       | { id=Id.Mwt (init,final); form; feats; _} :: next :: tail ->
         (match feats with [] -> () | l -> mwt_misc := ((init,final),l) :: !mwt_misc);
@@ -574,7 +574,7 @@ module Node = struct
     List.map
       (fun node ->
          match (node.id, List.assoc_opt "wordform" node.feats) with
-         | _ when node.form = "__ROOT__" -> node
+         | _ when node.form = "__0__" -> node
          | (_, Some wf) -> { node with wordform = Some wf; feats = List.remove_assoc "wordform" node.feats }
          | (Empty _, _) -> { node with wordform = Some "_" }
          | (_, None) -> { node with wordform = Some (escape_form node.form) }

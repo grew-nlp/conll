@@ -1,3 +1,6 @@
+# 1.7.0 (2020/08/05)
+  * Change "__ROOT__" to "__0__" (see https://gitlab.inria.fr/grew/grew_match/issues/21)
+
 ## 1.6.12 (2020/08/05)
   * change Corpus_stat to take into account key/subkey
 
