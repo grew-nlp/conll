@@ -969,56 +969,6 @@ module Frsemcor = struct
       tokens = List.map (fun x -> List.assoc x mapping) t.tokens
     }
 
-(*
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let item_to_json id item : Yojson.Basic.t = `Assoc (
-      CCList.filter_map CCFun.id  [
-        Some ("id", `String (sprintf "PARSEME_%d" id));
-        (match item.parseme with ""  -> Error.error "Illegal MWE, no parseme field" | s -> Some ("parseme", `String s));
-        (match item.mwepos with Some x -> Some ("mwepos", `String x) | None -> None);
-        (match item.label with Some x -> Some ("label", `String x) | None -> None);
-        (match item.criterion with Some x -> Some ("criterion", `String x) | None -> None)
-      ]
-    )
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let item_of_json ids json =
-    let open Yojson.Basic.Util in
-    let parseme = json |> member "parseme" |> to_string in
-    let mwepos = try Some (json |> member "mwepos" |> to_string) with _ -> None in
-    let label = try Some (json |> member "label" |> to_string) with _ -> None  in
-    let criterion = try Some (json |> member "criterion" |> to_string) with _ -> None in
-    { parseme; mwepos; label; criterion; ids }
-*)
-
-(*
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let item_of_string s =
-    match Str.split (Str.regexp "|") s with
-
-    (* usage of the PARSEME:MWE field in PARSEME project *)
-    | [one] -> { empty with parseme="MWE"; mwepos= Some "VERB"; label=Some one }
-
-    (* usage of the PARSEME:MWE field in PARSEME-FR project *)
-    | [m;kl;c] ->
-      let mwepos = match m with "_" -> None | s -> Some s in
-      let (parseme, label) =
-        match Str.split (Str.regexp "-") kl with
-        | [k] -> (k, None)
-        | [k; l] -> (k, Some l)
-        | _ -> Error.error "Cannot parse PARSEME:MWE %s" s in
-      let criterion = match c with "_" -> None | s -> Some s in
-      { mwepos; parseme; label; criterion; ids=[] }
-    | _ -> Error.error "Cannot parse PARSEME:MWE %s" s
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let item_to_string item =
-    sprintf "%s|%s|%s"
-      (match item.mwepos with None -> "_" | Some s -> s)
-      (match item.label with None -> item.parseme | Some s -> sprintf "%s-%s" item.parseme s)
-      (match item.criterion with None -> "_" | Some s -> s)
-*)
-
   (* ---------------------------------------------------------------------------------------------------- *)
   type t = item Int_map.t
 
@@ -1325,7 +1275,7 @@ module Conllx = struct
                   else acc2
                ) [] parseme_edges in
            Int_map.add (i+1) (Parseme.item_of_json tokens parseme_node) acc
-        ) Int_map.empty parseme_nodes in
+        ) Int_map.empty (List.rev parseme_nodes) in
 
     let frsemcor =
       CCList.foldi
@@ -1424,7 +1374,7 @@ module Conllx = struct
                      | l -> acc
                   ) t_without_root.parseme []) with
              | [] -> "*"
-             | l -> String.concat ";" l in
+             | l -> String.concat ";" (List.rev l) in
 
            let frsemcor = match
                (Int_map.fold
