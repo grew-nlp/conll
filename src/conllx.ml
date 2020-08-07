@@ -1,5 +1,12 @@
 open Printf
 
+(* ==================================================================================================== *)
+let lowercase_compare s1 s2 = Stdlib.compare (CCString.lowercase_ascii s1) (CCString.lowercase_ascii s2)
+
+module String_map = CCMap.Make (struct type t=string let compare = lowercase_compare end)
+module String_set = Set.Make (String)
+module Int_map = CCMap.Make (Int)
+
 exception Conllx_error of Yojson.Basic.t
 
 (* ==================================================================================================== *)
@@ -56,9 +63,6 @@ module Error = struct
     raise (Conllx_error new_json)
 end
 
-(* ==================================================================================================== *)
-module String_map = CCMap.Make (String)
-module Int_map = CCMap.Make (Int)
 
 (* ==================================================================================================== *)
 module Misc = struct
@@ -66,7 +70,9 @@ module Misc = struct
   (* ---------------------------------------------------------------------------------------------------- *)
 
   (* "f=v|g=w" --> [("f", "v"); ("g", "w")] *)
-  let parse_features ?file ?sent_id ?line_num s =
+
+
+  (* let parse_features ?file ?sent_id ?line_num s =
     match s with
     | "_" -> []
     | _ ->
@@ -79,6 +85,21 @@ module Misc = struct
            | [Str.Text f] -> (f,"__NOVALUE__")
            | _ -> Error.error ?file ?sent_id ?line_num "Unknown feat %s" feat
         ) (Str.split (Str.regexp "|") s)
+ *)
+
+  let parse_features ?file ?sent_id ?line_num s init =
+    match s with
+    | "_" -> init
+    | _ ->
+      List.fold_left
+        (fun acc fv ->
+           match Str.bounded_full_split (Str.regexp "=") fv 2 with
+           | [Str.Text f; Str.Delim "="; Str.Text v] -> String_map.add f v acc
+           | [Str.Text f; Str.Delim "="] -> String_map.add f "" acc
+           (* accept features without values. This happens in MISC column in a few UD corpora and in FEATS column in PARSEME-TR@1.1 *)
+           | [Str.Text f] -> String_map.add f "__NOVALUE__" acc
+           | _ -> Error.error ?file ?sent_id ?line_num "Unknown feat %s" fv
+        ) init (Str.split (Str.regexp "|") s)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let read_lines name =
@@ -359,10 +380,10 @@ module Feat = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let compare (f1,_) (f2,_) = Stdlib.compare (CCString.lowercase_ascii f1) (CCString.lowercase_ascii f2)
 
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string = function
-    | [] -> "_"
-    | l -> String.concat "|" (List.map (fun (f,v) -> f^"="^v) l)
+  let to_string feats =
+    if String_map.is_empty feats
+    then "_"
+    else String.concat "|" (String_map.fold (fun k v acc -> (k^"="^v) :: acc) feats [])
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let string_feats ~config misc feats =
@@ -374,7 +395,38 @@ module Feat = struct
           | (f,_) when List.mem f config.feats -> not misc
           | _ -> misc
         ) feats in
-    to_string filtered_feats
+    match filtered_feats with
+    | [] -> "_"
+    | l -> String.concat "|" (List.map (fun (f,v) -> f^"="^v) l)
+
+  let string_feats ~config misc feats =
+    let feat_list =
+      String_map.fold (fun key value acc ->
+          match key with
+          | "lemma" | "upos" | "xpos" -> acc
+          | s when s.[0] = '_' -> acc (* TODO: DOC *)
+          | _ when config.Conllx_config.feats = [] ->
+            begin
+              if misc
+              then acc
+              else (key,value) :: acc
+            end
+          | f when List.mem f config.feats ->
+            begin
+              if misc
+              then acc
+              else (key,value) :: acc
+            end
+          | _ ->
+            begin
+              if misc
+              then (key,value) :: acc
+              else acc
+            end
+        ) feats [] in
+    match feat_list with
+    | [] -> "_"
+    | l -> String.concat "|" (List.map (fun (f,v) -> f^"="^v) l)
 end
 
 (* ==================================================================================================== *)
@@ -383,13 +435,13 @@ module Node = struct
   type t = {
     id: Id.t;
     form: string;
-    feats: (string * string) list;
+    feats: string String_map.t;
     wordform: string option;
     textform: string option;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let conll_root = { id = Id.Simple 0; form="__0__"; feats=[]; wordform=None; textform=None;}
+  let conll_root = { id = Id.Simple 0; form="__0__"; feats=String_map.empty; wordform=None; textform=None;}
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let is_conll_root t = t.form = "__0__"
@@ -412,24 +464,26 @@ module Node = struct
              | (Column.FORM, _) ->
                (acc_id_opt, item, acc_feats)
              | (Column.LEMMA, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("lemma", item) :: acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> String_map.add "lemma" item acc_feats)
              | (Column.UPOS, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("upos", item) :: acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> String_map.add "upos" item acc_feats)
              | (Column.XPOS, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("xpos", item) :: acc_feats)
-             | (Column.FEATS,_) -> (acc_id_opt, acc_form, (Misc.parse_features ?file ?sent_id ?line_num item) @ acc_feats)
-             | (Column.MISC,_) -> (acc_id_opt, acc_form, (Misc.parse_features ?file ?sent_id ?line_num item) @ acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> String_map.add "xpos" item acc_feats)
+             | (Column.FEATS,_) -> (acc_id_opt, acc_form, Misc.parse_features ?file ?sent_id ?line_num item acc_feats)
+             | (Column.MISC,_) -> (acc_id_opt, acc_form, Misc.parse_features ?file ?sent_id ?line_num item acc_feats)
+             (* | (Column.FEATS,_) -> (acc_id_opt, acc_form, List.fold_left (fun acc (k,v) -> String_map.add k v acc) acc_feats (Misc.parse_features ?file ?sent_id ?line_num item))
+             | (Column.MISC,_) -> (acc_id_opt, acc_form, List.fold_left (fun acc (k,v) -> String_map.add k v acc) acc_feats (Misc.parse_features ?file ?sent_id ?line_num item)) *)
              | (Column.ORFEO_START, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("_start", item) :: acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> String_map.add "_start" item acc_feats)
              | (Column.ORFEO_STOP, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("_stop", item) :: acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> String_map.add "_stop" item acc_feats)
              | (Column.ORFEO_SPEAKER, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> ("_speaker", item) :: acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> String_map.add "_speaker" item acc_feats)
              | _ -> (acc_id_opt, acc_form, acc_feats)
-          ) (None, "" ,[]) columns item_list in
+          ) (None, "" ,String_map.empty) columns item_list in
       match id_opt with
       | None -> Error.error ?file ?sent_id ?line_num "No id"
-      | Some id -> { id; form; feats = List.sort Feat.compare feats; wordform=None; textform=None; }
+      | Some id -> { id; form; feats; wordform=None; textform=None; }
     with Invalid_argument _ ->
       Error.error ?file ?sent_id ?line_num
         "Wrong number of fields: %d instead of %d expected"
@@ -443,7 +497,7 @@ module Node = struct
           :: (Some ("form", `String t.form))
           :: (CCOpt.map (fun v -> ("textform", `String v)) t.textform)
           :: (CCOpt.map (fun v -> ("wordform", `String v)) t.wordform)
-          :: (List.map (fun (f,v) -> Some (f, `String v)) t.feats)
+          :: (String_map.fold (fun (f:string) v acc -> Some (f, `String v) :: acc) t.feats [])
         ))
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -451,13 +505,15 @@ module Node = struct
     let open Yojson.Basic.Util in
     try
       let feats =
-        List.sort Feat.compare
-          (CCList.filter_map
-             (function
-               | ("id",_) | ("form",_) |  ("wordform",_) |  ("textform",_) -> None
-               | (k,v) -> Some (k, v |> to_string)
-             ) (json |> to_assoc)
-          )  in
+        List.fold_right
+          (fun (k,v) acc ->
+             match k with
+             | "id" | "form" |  "wordform" |  "textform" -> acc
+             | _ -> String_map.add k (v |> to_string) acc
+          ) (json |> to_assoc) String_map.empty in
+
+
+
       let id = Id.Raw (json |> member "id" |> to_string) in
       let form_opt = try Some (json |> member "form" |> to_string) with Type_error _ -> None in
       let form = match (id, form_opt) with
@@ -479,9 +535,9 @@ module Node = struct
       (List.map (function
            | Column.ID -> Id.to_string t.id
            | Column.FORM -> t.form
-           | Column.LEMMA -> (match List.assoc_opt "lemma" t.feats with Some l -> l | None -> "_")
-           | Column.UPOS -> (match List.assoc_opt "upos" t.feats with Some l -> l | None -> "_")
-           | Column.XPOS -> (match List.assoc_opt "xpos" t.feats with Some l -> l | None -> "_")
+           | Column.LEMMA -> (match String_map.find_opt "lemma" t.feats with Some l -> l | None -> "_")
+           | Column.UPOS -> (match String_map.find_opt "upos" t.feats with Some l -> l | None -> "_")
+           | Column.XPOS -> (match String_map.find_opt "xpos" t.feats with Some l -> l | None -> "_")
            | Column.FEATS -> Feat.string_feats ~config false t.feats
            | Column.HEAD -> head
            | Column.DEPREL -> deprel
@@ -489,13 +545,13 @@ module Node = struct
            | Column.MISC -> Feat.string_feats ~config true t.feats
            | Column.PARSEME_MWE -> parseme_mwe
            | Column.FRSEMCOR_NOUN -> frsemcor
-           | Column.ORFEO_START -> (match List.assoc_opt "_start" t.feats with Some l -> l | None -> "_")
-           | Column.ORFEO_STOP -> (match List.assoc_opt "_stop" t.feats with Some l -> l | None -> "_")
-           | Column.ORFEO_SPEAKER -> (match List.assoc_opt "_speaker" t.feats with Some l -> l | None -> "_")
+           | Column.ORFEO_START -> (match String_map.find_opt "_start" t.feats with Some l -> l | None -> "_")
+           | Column.ORFEO_STOP -> (match String_map.find_opt "_stop" t.feats with Some l -> l | None -> "_")
+           | Column.ORFEO_SPEAKER -> (match String_map.find_opt "_speaker" t.feats with Some l -> l | None -> "_")
          ) columns)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  type mwt_misc = ((int * int) * (string * string) list) list
+  type mwt_misc = ((int * int) * string String_map.t) list
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let mwt_misc_to_string (mwt_misc: mwt_misc) =
@@ -511,7 +567,9 @@ module Node = struct
     List.map
       (fun item ->
          match Str.split (Str.regexp_string "::") item with
-         | [si; sj; feats] -> ((int_of_string si, int_of_string sj), Misc.parse_features feats)
+         | [si; sj; string_feats] ->
+          let xxx = Misc.parse_features string_feats String_map.empty in
+           ((int_of_string si, int_of_string sj), xxx)
          | _ -> Error.error ~fct: "mwt_misc_of_string" "Cannot parse `%s`" s
       )  (Str.split (Str.regexp_string "||") s)
 
@@ -529,7 +587,10 @@ module Node = struct
       | ({ form="__0__" } as node) :: tail -> node :: (loop to_underscore tail)
       | ({ id=Id.Empty _; _ } as node) :: tail -> { node with textform = Some "_"} :: (loop to_underscore tail)
       | { id=Id.Mwt (init,final); form; feats; _} :: next :: tail ->
-        (match feats with [] -> () | l -> mwt_misc := ((init,final),l) :: !mwt_misc);
+        begin
+          if not (String_map.is_empty feats)
+          then  mwt_misc := ((init,final),feats) :: !mwt_misc
+        end;
         let new_to_underscore = (CCList.range (init+1) final) @ to_underscore in
         {next with textform = Some (escape_form form)} :: (loop new_to_underscore tail)
       | ({ id=Id.Simple i; _ } as node) :: tail when List.mem i to_underscore ->
@@ -574,7 +635,7 @@ module Node = struct
       List.map
         (fun (i,j) ->
            match List.assoc_opt (i,j) mwt_misc with
-           | None -> { id=Id.Mwt (i,j); form=unescape_form (find_original_textform i); feats=[]; wordform=None; textform=None }
+           | None -> { id=Id.Mwt (i,j); form=unescape_form (find_original_textform i); feats=String_map.empty; wordform=None; textform=None }
            | Some feats -> { id=Id.Mwt (i,j); form=unescape_form (find_original_textform i); feats; wordform=None; textform=None }
         ) (loop (None, decr_in_span)) in
 
@@ -584,9 +645,9 @@ module Node = struct
   let wordform_up node_list =
     List.map
       (fun node ->
-         match (node.id, List.assoc_opt "wordform" node.feats) with
+         match (node.id, String_map.find_opt "wordform" node.feats) with
          | _ when node.form = "__0__" -> node
-         | (_, Some wf) -> { node with wordform = Some wf; feats = List.remove_assoc "wordform" node.feats }
+         | (_, Some wf) -> { node with wordform = Some wf; feats = String_map.remove "wordform" node.feats }
          | (Empty _, _) -> { node with wordform = Some "__EMPTY__" }
          | (_, None) -> { node with wordform = Some (escape_form node.form) }
       ) node_list
@@ -598,8 +659,8 @@ module Node = struct
          match node.wordform with
          | Some "__EMPTY__" -> { node with wordform = None }
          | Some wf when (unescape_form wf) <> node.form ->
-           { node with wordform = None; feats = List.sort Feat.compare (("wordform", wf) :: node.feats) }
-         | Some wf -> { node with wordform = None }
+           { node with wordform = None; feats = String_map.add "wordform" wf node.feats }
+         | Some _ -> { node with wordform = None }
          | None -> { node with wordform = None }
       ) node_list
 
@@ -1596,8 +1657,6 @@ end
 
 (* ======================================================================================================================== *)
 module Conllx_stat = struct
-  module String_map = Map.Make (String)
-  module String_set = Set.Make (String)
 
   type t = ((int String_map.t) String_map.t) String_map.t    (* keys are label --> gov --> dep *)
 
@@ -1634,23 +1693,23 @@ module Conllx_stat = struct
          let gov_node = Conllx.find_node edge.Edge.src conll.nodes in
          let dep_node = Conllx.find_node edge.Edge.tar conll.nodes in
          let gov_value =
-           match List.assoc_opt key gov_node.Node.feats with
+           match String_map.find_opt key gov_node.Node.feats with
            | Some x -> x
            | None ->
              match subkey_opt with
              | None -> "_"
              | Some subkey ->
-               match List.assoc_opt subkey gov_node.Node.feats with
+               match String_map.find_opt subkey gov_node.Node.feats with
                | Some x -> x
                | None -> "_" in
          let dep_value =
-           match List.assoc_opt key dep_node.Node.feats with
+           match String_map.find_opt key dep_node.Node.feats with
            | Some x -> x
            | None ->
              match subkey_opt with
              | None -> "_"
              | Some subkey ->
-               match List.assoc_opt subkey dep_node.Node.feats with
+               match String_map.find_opt subkey dep_node.Node.feats with
                | Some x -> x
                | None -> "_" in
          match Conllx_label.to_string ~config edge.label with
