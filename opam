@@ -14,7 +14,7 @@ depends: [
   "ocaml" { >= "4.07.0"}
   "ANSITerminal"
   "libcaml-log"
-  "containers { < "3.0" } "
+  "containers" { < "3.0" }
   "yojson"
 ]
 synopsis: "An ocaml library to load conll corpus files"
