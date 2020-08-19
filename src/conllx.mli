@@ -3,6 +3,8 @@ exception Conllx_error of Yojson.Basic.t
 module Conllx_columns : sig
   type t
 
+  val to_string: t -> string
+
   (* # global.columns = ID FORM LEMMA UPOS XPOS FEATS HEAD DEPREL DEPS MISC *)
   val default: t
 

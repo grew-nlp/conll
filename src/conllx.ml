@@ -340,6 +340,9 @@ end
 module Id_set = Set.Make (struct type t = Id.t let compare = Stdlib.compare end)
 
 (* ==================================================================================================== *)
+module Id_map = Map.Make (struct type t = Id.t let compare = Stdlib.compare end)
+
+(* ==================================================================================================== *)
 module Feat = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -956,8 +959,8 @@ module Frsemcor = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   type item = {
     frsemcor: string;
-    head: Id.t option;
-    tokens: Id.t list; (* ordered list of ids *)
+    head: Id.t option; (* there is always an head but option in used during construction when head is unknown *)
+    tokens: Id.t list; (* ordered list of ids different from head *)
   }
 
   let empty = { frsemcor=""; head=None; tokens=[] }
@@ -1232,17 +1235,20 @@ module Conllx = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_json json =
     let open Yojson.Basic.Util in
+
+    let order = json |> member "order" |> to_list |> List.map (function `String s -> Id.Raw s | _ -> Error.error ~data:json ~fct:"Conllx.of_json" "illformed json (order field)") in
+
+    let positions = CCList.foldi (fun acc i id -> Id_map.add id i acc) Id_map.empty order in
+
     let all_nodes = json |> member "nodes" |> to_list  in
     let (token_nodes, parseme_nodes, frsemcor_nodes) =
-      List.fold_left
-        (fun (token_acc, parseme_acc, frsemcor_acc) node ->
+      List.fold_right
+        (fun node (token_acc, parseme_acc, frsemcor_acc) ->
            match node with
            | `Assoc l when List.mem_assoc "parseme" l -> (token_acc, node::parseme_acc, frsemcor_acc)
            | `Assoc l when List.mem_assoc "frsemcor" l -> (token_acc, parseme_acc, node::frsemcor_acc)
            | _ -> (node :: token_acc, parseme_acc, frsemcor_acc)
-        ) ([],[],[]) all_nodes in
-
-    (* let (parseme_nodes, token_nodes) = List.partition (function `Assoc l when List.mem_assoc "parseme" l -> true | _ -> false) all_nodes in *)
+        ) all_nodes ([],[],[]) in
 
     let all_edges = json |> member "edges" |> to_list |> List.map Edge.of_json in
 
@@ -1255,14 +1261,12 @@ module Conllx = struct
            | _ -> (edge :: token_acc, parseme_acc, frsemcor_acc)
         ) ([],[],[]) all_edges in
 
-    (* let (parseme_edges, token_edges) = List.partition (function e when String_map.mem "parseme" e.Edge.label -> true | _ -> false) all_edges in *)
-
-    let parseme =
-      CCList.foldi
-        (fun acc i parseme_node ->
+    let parseme_items_unordered =
+      List.map
+        (fun parseme_node ->
            let node_id = parseme_node |> member "id" |> to_string in
-           let tokens = List.fold_left
-               (fun acc2 token_edge ->
+           let tokens = List.fold_right
+               (fun token_edge acc2 ->
                   if Id.to_string token_edge.Edge.src = node_id
                   then
                     (
@@ -1273,16 +1277,37 @@ module Conllx = struct
                       | _ -> Parseme.Full
                     ) :: acc2
                   else acc2
-               ) [] parseme_edges in
-           Int_map.add (i+1) (Parseme.item_of_json tokens parseme_node) acc
-        ) Int_map.empty (List.rev parseme_nodes) in
+               ) parseme_edges [] in
+           Parseme.item_of_json tokens parseme_node
+        ) parseme_nodes in
 
-    let frsemcor =
+    let rec compare_list l1 l2 = match (l1, l2) with
+      | [],[] -> 0
+      | [], _ -> -1
+      | _, [] -> 1
+      | (h1,_)::t1, (h2,_)::t2 ->
+        match Stdlib.compare (Id_map.find h1 positions) (Id_map.find h2 positions) with
+        | 0 -> compare_list t1 t2
+        | x -> x in
+
+    let parseme_items = List.sort
+        (fun p1 p2 -> compare_list p1.Parseme.ids p2.ids
+        ) parseme_items_unordered in
+
+    let parseme =
       CCList.foldi
-        (fun acc i frsemcor_node ->
+        (fun acc i item -> Int_map.add (i+1) item acc)
+        Int_map.empty
+        parseme_items in
+
+
+
+    let (frsemcor_singleton, frsemcor_multi_unordered) =
+      List.fold_left
+        (fun (acc_singleton, acc_multi) frsemcor_node ->
            let node_id = frsemcor_node |> member "id" |> to_string in
 
-           let (head, not_head) =
+           let (head_list, not_head_list) =
              List.fold_left
                (fun (acc_head, acc_not_head) edge ->
                   if Id.to_string edge.Edge.src = node_id
@@ -1295,18 +1320,55 @@ module Conllx = struct
                   else (acc_head, acc_not_head)
                ) ([],[]) frsemcor_edges in
 
-           let frsemcor_item =
-             match (head,not_head) with
-             | ([head], tokens) -> { Frsemcor.frsemcor = frsemcor_node |> member "frsemcor" |> to_string; head = Some head; tokens }
-             | (l,_) -> Error.error "Not one head -> %d" (List.length head) in
-           Int_map.add (i+1) frsemcor_item acc
-        ) Int_map.empty (List.rev frsemcor_nodes) in
+           match (head_list,not_head_list) with
+           | ([head], []) ->
+             ({ Frsemcor.frsemcor = frsemcor_node |> member "frsemcor" |> to_string; head = Some head; tokens=[] } :: acc_singleton, acc_multi)
+           | ([head], tokens) ->
+             (acc_singleton, { Frsemcor.frsemcor = frsemcor_node |> member "frsemcor" |> to_string; head = Some head; tokens } :: acc_multi)
+           | (l,_) -> Error.error "Not one head -> %d" (List.length head_list)
+        ) ([],[]) frsemcor_nodes in
+
+    let rec compare_list l1 l2 = match (l1, l2) with
+      | [],[] -> 0
+      | [], _ -> -1
+      | _, [] -> 1
+      | h1::t1, h2::t2 ->
+        match Stdlib.compare (Id_map.find h1 positions) (Id_map.find h2 positions) with
+        | 0 -> compare_list t1 t2
+        | x -> x in
+
+    let frsemcor_multi = List.sort
+        (fun m1 m2 ->
+           match (m1.Frsemcor.head, m2.head) with
+           | (Some h1, Some h2) -> (* ordering: == 1 ==> by head *)
+             begin
+               match Stdlib.compare (Id_map.find h1 positions) (Id_map.find h2 positions) with
+               | 0 -> (* ordering: same head == 2 ==> by label *)
+                 begin
+                   match Stdlib.compare m1.Frsemcor.frsemcor m2.Frsemcor.frsemcor with
+                   | 0 -> (* ordering: same head, same label == 3 ==> compare tokens *)
+                     compare_list m1.Frsemcor.tokens m2.Frsemcor.tokens
+                   | x -> x
+                 end
+               | x -> x
+             end
+           | _ -> 0
+        ) frsemcor_multi_unordered in
+
+    let frsemcor =
+      CCList.foldi
+        (fun acc i item -> Int_map.add (i+1) item acc)
+        (CCList.foldi
+           (fun acc i item -> Int_map.add (-i-1) item acc)
+           Int_map.empty
+           frsemcor_singleton)
+        frsemcor_multi in
 
     try
       {
         meta = json |> member "meta" |> to_list |> List.map (fun j -> (j |> member "key" |> to_string, j |> member "value" |> to_string));
         nodes = token_nodes |> List.map Node.of_json;
-        order = json |> member "order" |> to_list |> List.map (function `String s -> Id.Raw s | _ -> Error.error ~data:json ~fct:"Conllx.of_json" "illformed json (order field)");
+        order;
         edges = token_edges;
         parseme;
         frsemcor;
@@ -1634,7 +1696,7 @@ module Conllx_stat = struct
         | '\n' -> bprintf buff "%s" "%0A"
         | '\"' -> bprintf buff "%s" "%22"
         | c -> bprintf buff "%c" c
-        ) url;
+      ) url;
     Buffer.contents buff
 
   let url relation (key,subkey_opt) gov_opt dep_opt =
