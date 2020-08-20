@@ -187,7 +187,7 @@ module Conllx_config = struct
     extensions: (string * char) list; (* (field_name, join symbol) *)                  (* UD, SUD *)
     prefixes: (string * char) list;   (* (kind_value, prefix) *)                       (* Seq *)
     feats: string list;               (* feature values in FEATS column *)
-    deps: (string * char) option;   (* edge feature value name for DEPS column, prefix for compact notation *)    (* EUD *)
+    deps: (string * char) option;     (* edge feature value name for DEPS column, prefix for compact notation *)    (* EUD *)
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -602,6 +602,7 @@ end
 (* ==================================================================================================== *)
 module Conllx_label = struct
 
+  (* feature structures for edge labels *)
   type t = string String_map.t
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -673,7 +674,7 @@ module Conllx_label = struct
       | (next,sym) :: tail ->
         match String.index_from_opt s p sym with
         | None -> loop feat p tail
-        | Some new_pos -> String_map.add feat (CCString.Sub.copy (CCString.Sub.make s p (new_pos-p))) (loop next (new_pos+1) tail) in
+        | Some new_pos -> String_map.add feat (String.sub s p (new_pos-p)) (loop next (new_pos+1) tail) in
 
     loop config.core pos config.extensions
     |> (fun x -> match pref_feat_opt with Some (f,v) -> String_map.add f v x | None -> x)

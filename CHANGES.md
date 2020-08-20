@@ -1,3 +1,6 @@
+## 1.7.2 (2020/08/20)
+  * Resolve incompatibility with containers 3.0
+
 ## 1.7.1 (2020/08/07)
   * Impose containers version less than 3
 
