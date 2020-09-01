@@ -284,22 +284,27 @@ module Id = struct
     | Simple of int
     | Mwt of int * int   (* (3,4) --> "3-4" *)
     | Empty of int * int (* (8,2) --> "8.2" *)
+    | Unordered of string
     | Raw of string (* when built from json *)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let base = function Simple i | Mwt (i,_) | Empty (i,_) -> i | Raw _ -> failwith "Raw id"
+  let base = function
+    | Simple i | Mwt (i,_) | Empty (i,_) -> Some i
+    | Unordered _ -> None
+    | Raw _ -> failwith "Raw id"
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_string = function
     | Simple id -> sprintf "%d" id
     | Mwt (init,final) -> sprintf "%d-%d" init final
     | Empty (base,sub) -> sprintf "%d.%d" base sub
-    | Raw s -> s
+    | Unordered s -> sprintf "_%s" s
+    | Raw s -> sprintf "##%s##" s
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let compare ?file ?sent_id t1 t2 =
-    match Stdlib.compare (base t1) (base t2) with
-    | 0 ->
+    match (base t1, base t2) with
+    | (Some i, Some j) when i=j ->
       begin
         match (t1, t2) with
         | (Mwt _, Simple _) -> -1 | (Simple _, Mwt _) -> 1
@@ -309,7 +314,10 @@ module Id = struct
         | (Empty (_,sub1), Empty (_,sub2)) -> Stdlib.compare sub1 sub2
         | _ -> Error.error ?file ?sent_id "Invalid arg in Id.compare <%s> <%s>" (to_string t1) (to_string t2)
       end
-    | n -> n
+    | (Some i, Some j) -> Stdlib.compare i j
+    | (None, Some _) -> 1
+    | (Some _, None) -> 1
+    | _ -> Stdlib.compare t1 t2
 
   (* ---------------------------------------------------------------------------------------------------- *)
 
@@ -319,7 +327,12 @@ module Id = struct
       | (_,[]) -> []
       | (Simple pos, head::tail) when is_empty head -> let new_id = Empty (pos, 1) in (head,new_id) :: (loop (new_id,tail))
       | (Empty (pos,i), head::tail) when is_empty head -> let new_id = Empty (pos,i+1) in (head,new_id) :: (loop (new_id,tail))
-      | (id, head::tail) -> let new_id = Simple ((base id)+1) in (head,new_id) :: (loop (new_id,tail))
+      | (id, head::tail) ->
+      begin
+        match base id with
+        | Some pos -> let new_id = Simple (pos + 1) in (head,new_id) :: (loop (new_id,tail))
+        | None -> Error.error "BUG: normalise_list, please report"
+      end
     in
     loop (Simple (-1), id_list)
 
