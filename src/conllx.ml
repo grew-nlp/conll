@@ -299,7 +299,7 @@ module Id = struct
     | Mwt (init,final) -> sprintf "%d-%d" init final
     | Empty (base,sub) -> sprintf "%d.%d" base sub
     | Unordered s -> sprintf "_%s" s
-    | Raw s -> sprintf "##%s##" s
+    | Raw s -> sprintf "%s" s
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let compare ?file ?sent_id t1 t2 =
@@ -321,32 +321,31 @@ module Id = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
 
-  (* rebuild ids list to follow the given order (taking into account empty nodes) *)
-  let normalise_list is_empty id_list =
-    let rec loop = function
-      | (_,[]) -> []
-      | (Simple pos, head::tail) when is_empty head -> let new_id = Empty (pos, 1) in (head,new_id) :: (loop (new_id,tail))
-      | (Empty (pos,i), head::tail) when is_empty head -> let new_id = Empty (pos,i+1) in (head,new_id) :: (loop (new_id,tail))
-      | (id, head::tail) ->
-      begin
-        match base id with
-        | Some pos -> let new_id = Simple (pos + 1) in (head,new_id) :: (loop (new_id,tail))
-        | None -> Error.error "BUG: normalise_list, please report"
-      end
-    in
-    loop (Simple (-1), id_list)
+  (* mapping is the correpondance for ordered node to their new id, take into account Raw ==> Unordered *)
+  let map_id mapping id =
+    match List.assoc_opt id mapping with
+    | Some new_id -> new_id
+    | None ->
+      match id with
+      | Raw s -> Unordered s
+      | Unordered s -> Unordered s
+      | _ -> failwith "Check this !!!"
+
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string  ?file ?sent_id ?line_num s =
-    try
-      match Str.bounded_full_split (Str.regexp "[.-]") s 2 with
-      | [Str.Text string_id] -> Simple (int_of_string string_id)
-      | [Str.Text string_init; Str.Delim "-"; Str.Text string_final] ->
-        Mwt (int_of_string string_init,int_of_string string_final)
-      | [Str.Text string_base; Str.Delim "."; Str.Text string_sub] ->
-        Empty (int_of_string string_base,int_of_string string_sub)
-      | _ -> Error.error  ?file ?sent_id ?line_num "Cannot parse id %s" s
-    with Failure _ -> Error.error  ?file ?sent_id ?line_num "Cannot parse id %s" s
+  let of_string ?file ?sent_id ?line_num s =
+    if s <> "" && s.[0] = '_'
+    then Unordered (CCString.drop 1 s)
+    else
+      try
+        match Str.bounded_full_split (Str.regexp "[.-]") s 2 with
+        | [Str.Text string_id] -> Simple (int_of_string string_id)
+        | [Str.Text string_init; Str.Delim "-"; Str.Text string_final] ->
+          Mwt (int_of_string string_init,int_of_string string_final)
+        | [Str.Text string_base; Str.Delim "."; Str.Text string_sub] ->
+          Empty (int_of_string string_base,int_of_string string_sub)
+        | _ -> Error.error  ?file ?sent_id ?line_num "Cannot parse id %s" s
+      with Failure _ -> Error.error ?file ?sent_id ?line_num "Cannot parse id %s" s
 end
 
 (* ==================================================================================================== *)
@@ -400,10 +399,7 @@ module Node = struct
   let compare ?file ?sent_id n1 n2 = Id.compare ?file ?sent_id n1.id n2.id
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let id_map mapping t =
-    match List.assoc_opt t.id mapping with
-    | Some new_id -> {t with id = new_id}
-    | None -> t
+  let id_map mapping t = { t with id = Id.map_id mapping t.id}
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_item_list ?file ?sent_id ?line_num ~columns item_list =
@@ -733,8 +729,8 @@ module Edge = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let id_map mapping t =
-    let new_src = match List.assoc_opt t.src mapping with Some new_id -> new_id | None -> t.src in
-    let new_tar = match List.assoc_opt t.tar mapping with Some new_id -> new_id | None -> t.tar in
+    let new_src = Id.map_id mapping t.src in
+    let new_tar = Id.map_id mapping t.tar in
     {t with src=new_src; tar=new_tar }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -881,7 +877,7 @@ module Parseme = struct
          but in this context, the orders are equivalent. TOCHECK! *)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let id_map mapping t = { t with ids = List.map (fun (x,y) -> (List.assoc x mapping,y)) t.ids }
+  let id_map mapping t = { t with ids = List.map (fun (x,y) -> (Id.map_id mapping x,y)) t.ids }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let item_to_json id item : Yojson.Basic.t = `Assoc (
@@ -982,8 +978,8 @@ module Frsemcor = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let id_map mapping t =
     { t with
-      head = (match t.head with None -> None | Some id -> Some (List.assoc id mapping));
-      tokens = List.map (fun x -> List.assoc x mapping) t.tokens
+      head = (match t.head with None -> None | Some id -> Some (Id.map_id mapping id));
+      tokens = List.map (Id.map_id mapping) t.tokens
     }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1167,13 +1163,31 @@ module Conllx = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let normalise_ids t =
     let is_empty id = Node.is_empty (find_node id t.nodes) in
-    let mapping = Id.normalise_list is_empty t.order in
+
+    let mapping =
+      let rec loop = function
+        | (_,[]) -> []
+        | (Id.Simple pos, head::tail) when is_empty head -> let new_id = Id.Empty (pos, 1) in (head,new_id) :: (loop (new_id,tail))
+        | (Empty (pos,i), head::tail) when is_empty head -> let new_id = Id.Empty (pos,i+1) in (head,new_id) :: (loop (new_id,tail))
+        | (id, head::tail) ->
+          begin
+            match Id.base id with
+            | Some pos -> let new_id = Id.Simple (pos + 1) in (head,new_id) :: (loop (new_id,tail))
+            | None -> Error.error "BUG: normalise_list, please report"
+          end in
+      match t.order with
+      | [] -> []
+      | h::_ when Node.is_conll_root (find_node h t.nodes) -> loop (Simple (-1), t.order)
+      | _ -> loop (Simple 0, t.order) in
+
+
 
     let nodes = List.map (Node.id_map mapping) t.nodes in
     let edges = List.map (Edge.id_map mapping) t.edges in
     let parseme = Int_map.map (Parseme.id_map mapping) t.parseme in
     let frsemcor = Int_map.map (Frsemcor.id_map mapping) t.frsemcor in
-    { t with nodes; edges; parseme; frsemcor }
+    let order = List.map (Id.map_id mapping) t.order in
+    { t with nodes; edges; parseme; frsemcor; order; }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) s =
@@ -1250,7 +1264,11 @@ module Conllx = struct
   let of_json json =
     let open Yojson.Basic.Util in
 
-    let order = json |> member "order" |> to_list |> List.map (function `String s -> Id.Raw s | _ -> Error.error ~data:json ~fct:"Conllx.of_json" "illformed json (order field)") in
+    let order =
+      json
+      |> member "order"
+      |> to_list
+      |> List.map (function `String s -> Id.Raw s | _ -> Error.error ~data:json ~fct:"Conllx.of_json" "illformed json (order field)") in
 
     let positions = CCList.foldi (fun acc i id -> Id_map.add id i acc) Id_map.empty order in
 
@@ -1294,6 +1312,8 @@ module Conllx = struct
                ) parseme_edges [] in
            Parseme.item_of_json tokens parseme_node
         ) parseme_nodes in
+
+
 
     let rec compare_list l1 l2 = match (l1, l2) with
       | [],[] -> 0
@@ -1386,7 +1406,7 @@ module Conllx = struct
         edges = token_edges;
         parseme;
         frsemcor;
-      }
+      } |> normalise_ids
     with Type_error _ -> Error.error ~fct:"Conllx.of_json" "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1436,6 +1456,7 @@ module Conllx = struct
              match List.sort (Edge.compare ~config) (List.filter (Edge.is_tar node.Node.id) deps_edges) with
              | [] -> "_"
              | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Conllx_label.to_string_robust ~config e.Edge.label)) l) in
+
 
            let parseme_mwe =
              match
