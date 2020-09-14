@@ -525,7 +525,7 @@ module Node = struct
     let rec loop to_underscore = function
       | [] -> []
       | ({ form="__0__" } as node) :: tail -> node :: (loop to_underscore tail)
-      | ({ id=Id.Empty _; _ } as node) :: tail -> { node with textform = Some "_"} :: (loop to_underscore tail)
+      | ({ id=Id.Empty _; _ } as node) :: tail -> { node with textform = Some "__EMTPY__"} :: (loop to_underscore tail)
       | { id=Id.Mwt (init,final); form; feats; _} :: next :: tail ->
         (match feats with [] -> () | l -> mwt_misc := ((init,final),l) :: !mwt_misc);
         let new_to_underscore = (CCList.range (init+1) final) @ to_underscore in
@@ -585,7 +585,7 @@ module Node = struct
          match (node.id, List.assoc_opt "wordform" node.feats) with
          | _ when node.form = "__0__" -> node
          | (_, Some wf) -> { node with wordform = Some wf; feats = List.remove_assoc "wordform" node.feats }
-         | (Empty _, _) -> { node with wordform = Some "_" }
+         | (Empty _, _) -> { node with wordform = Some "__EMPTY__" }
          | (_, None) -> { node with wordform = Some (escape_form node.form) }
       ) node_list
 
@@ -601,7 +601,7 @@ module Node = struct
       ) node_list
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let is_empty t = t.wordform = Some "_" && t.textform = Some "_"
+  let is_empty t = t.wordform = Some "__EMPTY__" && t.textform = Some "_"
 end
 
 (* ==================================================================================================== *)
