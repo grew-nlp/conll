@@ -461,7 +461,7 @@ module Node = struct
       let form = match (id, form_opt) with
         | (_, Some f) -> f
         | (Simple 0, None) -> "__0__"
-        | (_, None) -> Error.error ~fct:"Node.of_json" ~data:json "missing form" in
+        | (_, None) -> "__NOFORM__" in
       {
         id;
         form;
