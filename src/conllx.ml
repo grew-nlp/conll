@@ -525,7 +525,7 @@ module Node = struct
     let rec loop to_underscore = function
       | [] -> []
       | ({ form="__0__" } as node) :: tail -> node :: (loop to_underscore tail)
-      | ({ id=Id.Empty _; _ } as node) :: tail -> { node with textform = Some "__EMTPY__"} :: (loop to_underscore tail)
+      | ({ id=Id.Empty _; _ } as node) :: tail -> { node with textform = Some "_"} :: (loop to_underscore tail)
       | { id=Id.Mwt (init,final); form; feats; _} :: next :: tail ->
         (match feats with [] -> () | l -> mwt_misc := ((init,final),l) :: !mwt_misc);
         let new_to_underscore = (CCList.range (init+1) final) @ to_underscore in
