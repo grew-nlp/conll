@@ -260,10 +260,7 @@ module Conllx_config = struct
     core = "1";
     extensions = [ ("2",':') ];
     prefixes = [ ( "deep", 'D'); ("surf", 'S') ];
-    feats = [
-      "agent"; "cltype"; "component"; "def"; "diat"; "dl"; "dm"; "g";
-      "intrinsimp"; "m"; "mwehead"; "mwelemma"; "n"; "p"; "s"; "se"; "t"; "void"
-    ];
+    feats = []; (* Sequoia does not use the MISC column *)
     deps = None;
   }
 
