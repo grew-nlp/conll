@@ -594,10 +594,9 @@ module Node = struct
     List.map
       (fun node ->
          match node.wordform with
-         | Some "_" -> { node with wordform = None }
          | Some wf when (unescape_form wf) <> node.form ->
            { node with wordform = None; feats = List.sort Feat.compare (("wordform", wf) :: node.feats) }
-         | Some _ -> { node with wordform = None }
+         | Some wf -> { node with wordform = None }
          | None -> { node with wordform = None }
       ) node_list
 
