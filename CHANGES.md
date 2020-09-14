@@ -1,3 +1,7 @@
+## 1.7.3 (2020/09/14)
+  * Change empty node representation
+  * add unordered nodes to Conll output
+
 ## 1.7.2 (2020/08/20)
   * Resolve incompatibility with containers 3.0
 
