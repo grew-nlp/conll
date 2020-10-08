@@ -210,6 +210,8 @@ module Conllx_config = struct
     "PossPerson"; "PossedNumber"; "Prefix"; "PrepCase"; "PronType"; "PunctSide"; "PunctType"; "Reflex";
     "Style"; "Subcat"; "Tense"; "Typo"; "VerbForm"; "VerbType"; "Voice";
     "Number[psor]";
+
+    "Uninflect"; "Variant"; "Orth"; "Animacy[gram]";
     (* SUD features *)
     "Shared"; "Deixis"; "DeixisRef"; "FocusType"; "AdjType";
   ]
@@ -594,6 +596,7 @@ module Node = struct
     List.map
       (fun node ->
          match node.wordform with
+         | Some "__EMPTY__" -> { node with wordform = None }
          | Some wf when (unescape_form wf) <> node.form ->
            { node with wordform = None; feats = List.sort Feat.compare (("wordform", wf) :: node.feats) }
          | Some wf -> { node with wordform = None }
