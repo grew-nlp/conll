@@ -1737,6 +1737,7 @@ module Conllx_stat = struct
     let gov_item =
       match gov_opt with
       | None -> ""
+      | Some "_" -> sprintf "GOV [!%s]; " key
       | Some value ->
         match subkey_opt with
         | None -> sprintf "GOV [%s=\"%s\"]; " key value
@@ -1745,6 +1746,7 @@ module Conllx_stat = struct
     let dep_item =
       match dep_opt with
       | None -> ""
+      | Some "_" -> sprintf "DEP [!%s]; " key
       | Some value ->
         match subkey_opt with
         | None -> sprintf "DEP [%s=\"%s\"]; " key value
