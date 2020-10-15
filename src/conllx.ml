@@ -68,37 +68,24 @@ end
 module Misc = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
-
-  (* "f=v|g=w" --> [("f", "v"); ("g", "w")] *)
-
-
-  (* let parse_features ?file ?sent_id ?line_num s =
-    match s with
-    | "_" -> []
-    | _ ->
-      List.map
-        (fun feat ->
-           match Str.bounded_full_split (Str.regexp "=") feat 2 with
-           | [Str.Text f; Str.Delim "="; Str.Text v] -> (f, v)
-           | [Str.Text f; Str.Delim "="] -> (f, "")
-           (* accept features without values. This happens in MISC column in a few UD corpora and in FEATS column in PARSEME-TR@1.1 *)
-           | [Str.Text f] -> (f,"__NOVALUE__")
-           | _ -> Error.error ?file ?sent_id ?line_num "Unknown feat %s" feat
-        ) (Str.split (Str.regexp "|") s)
- *)
-
   let parse_features ?file ?sent_id ?line_num s init =
     match s with
     | "_" -> init
     | _ ->
+      let add f v acc =
+        match String_map.find_opt f acc with
+        | None -> String_map.add f v acc
+        | Some v' when v=v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the same value `%s`" f v
+        | Some v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the different values `%s` and `%s`" f v v'
+        in
       List.fold_left
         (fun acc fv ->
            match Str.bounded_full_split (Str.regexp "=") fv 2 with
-           | [Str.Text f; Str.Delim "="; Str.Text v] -> String_map.add f v acc
-           | [Str.Text f; Str.Delim "="] -> String_map.add f "" acc
+           | [Str.Text f; Str.Delim "="; Str.Text v] -> add f v acc
+           | [Str.Text f; Str.Delim "="] -> add f "" acc
            (* accept features without values. This happens in MISC column in a few UD corpora and in FEATS column in PARSEME-TR@1.1 *)
-           | [Str.Text f] -> String_map.add f "__NOVALUE__" acc
-           | _ -> Error.error ?file ?sent_id ?line_num "Unknown feat %s" fv
+           | [Str.Text f] -> add f "__NOVALUE__" acc
+           | _ -> Error.error ?file ?sent_id ?line_num "BUG: Unknown feat %s" fv
         ) init (Str.split (Str.regexp "|") s)
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -223,18 +210,23 @@ module Conllx_config = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let ud_features = [
-    (* UD morphology *)
-    "Abbr"; "AbsErgDatNumber"; "AbsErgDatPerson"; "AbsErgDatPolite"; "AdpType"; "AdvType"; "Animacy";
-    "Aspect"; "Case"; "Clusivity"; "ConjType"; "Definite"; "Degree"; "Echo"; "ErgDatGender"; "Evident";
-    "Foreign"; "Gender"; "Hyph"; "Mood"; "NameType"; "NounClass"; "NounType"; "NumForm"; "NumType";
-    "NumValue"; "Number"; "PartType"; "Person"; "Polarity"; "Polite"; "Poss"; "PossGender"; "PossNumber";
-    "PossPerson"; "PossedNumber"; "Prefix"; "PrepCase"; "PronType"; "PunctSide"; "PunctType"; "Reflex";
-    "Style"; "Subcat"; "Tense"; "Typo"; "VerbForm"; "VerbType"; "Voice";
-    "Number[psor]";
+    "Abbr"; "AdjType"; "AdpType"; "AdvType"; "Agent"; "Agglutination"; "Analyt"; "Animacy"; "Animacy[gram]";
+    "Animacy[obj]"; "Aspect"; "Case"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]";
+    "Compound"; "ConjType"; "Connegative"; "Contrast"; "Copula"; "Definite"; "Definite[obj]"; "Degree"; "Deixis";
+    "DeixisRef"; "Deriv"; "Derivation"; "Dialect"; "Distance"; "Echo"; "Emphatic"; "Evident"; "Focus"; "FocusType";
+    "Foreign"; "Form"; "Gender"; "Gender[abs]"; "Gender[acc]"; "Gender[ben]"; "Gender[dat]"; "Gender[erg]"; "Gender[obj]";
+    "Gender[psor]"; "HebBinyan"; "HebExistential"; "HebSource"; "Hyph"; "InfForm"; "Link"; "Mood"; "Morph"; "Mutation";
+    "NameType"; "NegationType"; "NounClass"; "NounClass[obj]"; "NounClass[subj]"; "NounForm"; "NounType"; "NumForm";
+    "NumType"; "NumValue"; "Number"; "Number[abs]"; "Number[acc]"; "Number[dat]"; "Number[erg]"; "Number[obj]";
+    "Number[psed]"; "Number[psor]"; "Number[subj]"; "Orth"; "PartForm"; "PartType"; "Person"; "Person[abs]"; "Person[acc]";
+    "Person[dat]"; "Person[erg]"; "Person[obj]"; "Person[psor]"; "Person[sdat]"; "Person[subj]"; "Polarity"; "Polite";
+    "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "PossNumber"; "PossPerson"; "Prefix"; "PrepCase";
+    "PrepForm"; "Preverb"; "PronType"; "Pun"; "PunctSide"; "PunctType"; "RefRole"; "Reflex"; "Register";
+    "Relative"; "Strength"; "Style"; "SubGender"; "Subcat"; "Tense"; "Topic"; "Typo"; "Uninflect"; "Valency"; "Variant";
+    "VerbClass"; "VerbForm"; "VerbType"; "Voice"; "Xtra";
 
-    "Uninflect"; "Variant"; "Orth"; "Animacy[gram]";
     (* SUD features *)
-    "Shared"; "Deixis"; "DeixisRef"; "FocusType"; "AdjType";
+    "Shared";
   ]
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -426,7 +418,7 @@ module Feat = struct
         ) feats [] in
     match feat_list with
     | [] -> "_"
-    | l -> String.concat "|" (List.map (fun (f,v) -> f^"="^v) l)
+    | l -> String.concat "|" (CCList.rev_map (fun (f,v) -> f^"="^v) l)
 end
 
 (* ==================================================================================================== *)
@@ -471,8 +463,6 @@ module Node = struct
                (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> String_map.add "xpos" item acc_feats)
              | (Column.FEATS,_) -> (acc_id_opt, acc_form, Misc.parse_features ?file ?sent_id ?line_num item acc_feats)
              | (Column.MISC,_) -> (acc_id_opt, acc_form, Misc.parse_features ?file ?sent_id ?line_num item acc_feats)
-             (* | (Column.FEATS,_) -> (acc_id_opt, acc_form, List.fold_left (fun acc (k,v) -> String_map.add k v acc) acc_feats (Misc.parse_features ?file ?sent_id ?line_num item))
-             | (Column.MISC,_) -> (acc_id_opt, acc_form, List.fold_left (fun acc (k,v) -> String_map.add k v acc) acc_feats (Misc.parse_features ?file ?sent_id ?line_num item)) *)
              | (Column.ORFEO_START, _) ->
                (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> String_map.add "_start" item acc_feats)
              | (Column.ORFEO_STOP, _) ->
@@ -508,11 +498,9 @@ module Node = struct
         List.fold_right
           (fun (k,v) acc ->
              match k with
-             | "id" | "form" |  "wordform" |  "textform" -> acc
+             | "id" | "form" | "wordform" | "textform" -> acc
              | _ -> String_map.add k (v |> to_string) acc
           ) (json |> to_assoc) String_map.empty in
-
-
 
       let id = Id.Raw (json |> member "id" |> to_string) in
       let form_opt = try Some (json |> member "form" |> to_string) with Type_error _ -> None in
