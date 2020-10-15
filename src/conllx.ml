@@ -1158,10 +1158,9 @@ module Conllx = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let parse_meta (_,t) =
-    match Str.bounded_split (Str.regexp "# *\\| *= *") t 2 with
-    | [""; _] -> ("", t)
-    | [key;value] -> (key,value)
-    | _ -> ("", t)
+    if Str.string_match (Str.regexp "# \\([^= ]*\\) = \\(.*\\)") t 0
+    then (Str.matched_group 1 t, Str.matched_group 2 t)
+    else ("", t)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let check_edge ?file ?sent_id nodes edge =
