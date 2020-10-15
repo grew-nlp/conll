@@ -11,8 +11,6 @@ exception Conllx_error of Yojson.Basic.t
 
 (* ==================================================================================================== *)
 module Error = struct
-  exception Skip
-  let robust = ref false
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let build_json ?file ?sent_id ?line_num ?fct ?data ?prev message =
@@ -40,9 +38,7 @@ module Error = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let error_ ?file ?sent_id ?line_num ?fct ?data ?prev message =
     let json = build_json ?file ?sent_id ?line_num ?fct ?data ?prev message in
-    if !robust
-    then (Printf.eprintf "%s\n" (Yojson.Basic.pretty_to_string json); raise Skip)
-    else raise (Conllx_error json)
+    raise (Conllx_error json)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let error ?file ?sent_id ?line_num ?fct ?data ?prev = Printf.ksprintf (error_ ?file ?sent_id ?line_num ?fct ?data ?prev)
@@ -77,7 +73,7 @@ module Misc = struct
         | None -> String_map.add f v acc
         | Some v' when v=v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the same value `%s`" f v
         | Some v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the different values `%s` and `%s`" f v v'
-        in
+      in
       List.fold_left
         (fun acc fv ->
            match Str.bounded_full_split (Str.regexp "=") fv 2 with
@@ -556,7 +552,7 @@ module Node = struct
       (fun item ->
          match Str.split (Str.regexp_string "::") item with
          | [si; sj; string_feats] ->
-          let xxx = Misc.parse_features string_feats String_map.empty in
+           let xxx = Misc.parse_features string_feats String_map.empty in
            ((int_of_string si, int_of_string sj), xxx)
          | _ -> Error.error ~fct: "mwt_misc_of_string" "Cannot parse `%s`" s
       )  (Str.split (Str.regexp_string "||") s)
@@ -1573,7 +1569,7 @@ module Conllx_corpus = struct
     Buffer.contents buff
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_lines ~config ?columns ?file lines =
+  let of_lines ~config ?log_file ?columns ?file lines =
     match lines with
     | [] -> empty
     | ((line_num,head)::tail) as all ->
@@ -1599,7 +1595,19 @@ module Conllx_corpus = struct
             let base = match file with Some f -> Filename.basename f | None -> "stdin" in
             let sent_id = match Conllx.get_sent_id_opt conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
             res := (sent_id,conll) :: !res
-          with Error.Skip -> ()
+          with (Conllx_error json) as e ->
+            begin
+              match log_file with
+              | None -> raise e
+              | Some f when Sys.file_exists f ->
+                let out_ch = open_out_gen [Open_append] 0o755 f in
+                Printf.fprintf out_ch "%s" (Yojson.Basic.pretty_to_string json);
+                close_out out_ch
+              | Some f ->
+                let out_ch = open_out f in
+                Printf.fprintf out_ch "%s" (Yojson.Basic.pretty_to_string json);
+                close_out out_ch
+            end
         end;
         rev_locals := [] in
 
@@ -1619,11 +1627,11 @@ module Conllx_corpus = struct
       { columns; data=Array.of_list (List.rev !res) }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load ?(config=Conllx_config.basic) ?columns file = of_lines ~config ?columns ~file (Misc.read_lines file)
+  let load ?(config=Conllx_config.basic) ?log_file ?columns file = of_lines ~config ?log_file ?columns ~file (Misc.read_lines file)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load_list ?(config=Conllx_config.basic) ?columns file_list =
-    match List.map (load ~config ?columns) file_list with
+  let load_list ?(config=Conllx_config.basic) ?log_file ?columns file_list =
+    match List.map (load ~config ?columns ?log_file) file_list with
     | [] -> empty
     | ({ columns }::tail) as l ->
       if List.for_all (fun {columns=p} -> p = columns) tail
@@ -1631,7 +1639,7 @@ module Conllx_corpus = struct
       else Error.error "All files must have the same columns declaration"
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let read_stdin ?(config=Conllx_config.basic) ?columns () = of_lines ~config ?columns (Misc.read_stdin ())
+  let read_stdin ?(config=Conllx_config.basic) ?log_file ?columns () = of_lines ~config ?log_file ?columns (Misc.read_stdin ())
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let sizes t =

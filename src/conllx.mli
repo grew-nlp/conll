@@ -71,11 +71,11 @@ end
 module Conllx_corpus : sig
   type t
 
-  val load: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> string -> t
+  val load: ?config: Conllx_config.t -> ?log_file: string -> ?columns: Conllx_columns.t -> string -> t
 
-  val load_list: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> string list -> t
+  val load_list: ?config: Conllx_config.t -> ?log_file: string -> ?columns: Conllx_columns.t -> string list -> t
 
-  val read_stdin: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> unit -> t
+  val read_stdin: ?config: Conllx_config.t -> ?log_file: string -> ?columns: Conllx_columns.t -> unit -> t
 
   val to_string: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> t -> string
 
