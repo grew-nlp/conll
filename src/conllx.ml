@@ -1163,7 +1163,7 @@ module Conllx = struct
 
     let (nodes_without_root, edges, parseme, frsemcor) =
       List.fold_left
-        (fun (acc_nodes, acc_edges, acc_parseme, acc_frsemcor)  (line_num,graph_line) ->
+        (fun (acc_nodes, acc_edges, acc_parseme, acc_frsemcor) (line_num,graph_line) ->
            let item_list = Str.split (Str.regexp "\t") graph_line in
            let node = Node.of_item_list ?file ?sent_id ~line_num ~columns item_list in
            let edge_list = Edge.of_item_list ?file ?sent_id ~line_num ~config ~columns node.Node.id item_list in
@@ -1233,10 +1233,30 @@ module Conllx = struct
     { t with nodes; edges; parseme; frsemcor; order; }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) s =
-    match List.rev (List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s)) with
+  let of_lines ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) lines =
+    let (lines, columns) =
+      match lines with
+      | [] -> ([], columns)
+      | (_,head)::tail ->
+        begin
+          match Conllx_columns.of_string head with
+          | Some c -> (tail, c)
+          | None -> (lines, columns)
+        end in
+
+    match List.rev lines with
     | (_,"") :: t -> of_string_list_rev ~config ~columns t (* remove pending empty line, if any *)
     | l -> of_string_list_rev ~columns ~config l
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let of_string ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) s =
+    let lines = List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s) in
+    of_lines ~config ~columns lines
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let load ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) file =
+    let lines = Misc.read_lines file in
+    of_lines ~config ~columns lines
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json (t: t) : Yojson.Basic.t =

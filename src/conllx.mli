@@ -65,6 +65,8 @@ module Conllx : sig
   val to_string: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> t -> string
 
   val of_string: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> string -> t
+
+  val load: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> string -> t
 end
 
 
