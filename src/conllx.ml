@@ -757,18 +757,6 @@ module Conllx_label = struct
     |> to_assoc
     |> (List.map (fun (k,v) -> k, to_string v))
     |> String_map.of_list
-
-  (* let _ =
-     printf "comp:aux@tense\n";
-     let l = of_string "comp:aux@tense" in
-     String_map.iter (fun f v -> printf "### %s = %s\n" f v) l;
-     printf "==> %s\n" (to_string l)
-
-     let _ =
-     printf "D:subj:obj\n";
-     let l = of_string ~config:Conllx_config.sequoia "D:subj:obj" in
-     String_map.iter (fun f v -> printf "### %s = %s\n" f v) l;
-     printf "==> %s\n" (to_string ~config:Conllx_config.sequoia l) *)
 end
 
 (* ==================================================================================================== *)
@@ -1094,6 +1082,8 @@ module Conllx = struct
     edges: Edge.t list;
     parseme: Parseme.t;
     frsemcor: Frsemcor.t;
+    modified_nodes: (Id.t  * string list) list;
+    modified_edges: (Id.t  * Conllx_label.t * Id.t) list;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1205,6 +1195,7 @@ module Conllx = struct
       edges;
       parseme;
       frsemcor;
+      modified_nodes = []; modified_edges = []; (* modified_… only used for output and not handled in input *)
     }
     |> textform_up
     |> wordform_up
@@ -1231,14 +1222,15 @@ module Conllx = struct
       | h::_ when Node.is_conll_root (find_node h t.nodes) -> loop (Simple (-1), t.order)
       | _ -> loop (Simple 0, t.order) in
 
-
-
-    let nodes = List.map (Node.id_map mapping) t.nodes in
-    let edges = List.map (Edge.id_map mapping) t.edges in
-    let parseme = Int_map.map (Parseme.id_map mapping) t.parseme in
-    let frsemcor = Int_map.map (Frsemcor.id_map mapping) t.frsemcor in
-    let order = List.map (Id.map_id mapping) t.order in
-    { t with nodes; edges; parseme; frsemcor; order; }
+    { t with
+      nodes = List.map (Node.id_map mapping) t.nodes;
+      edges = List.map (Edge.id_map mapping) t.edges;
+      parseme = Int_map.map (Parseme.id_map mapping) t.parseme;
+      frsemcor = Int_map.map (Frsemcor.id_map mapping) t.frsemcor;
+      order = List.map (Id.map_id mapping) t.order;
+      modified_nodes = List.map (fun (id,feats) -> (Id.map_id mapping id, feats)) t.modified_nodes;
+      modified_edges = List.map (fun (src,edge,tar) -> (Id.map_id mapping src, edge, Id.map_id mapping tar)) t.modified_edges;
+    }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_lines ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) lines =
@@ -1384,8 +1376,6 @@ module Conllx = struct
            Parseme.item_of_json tokens parseme_node
         ) parseme_nodes in
 
-
-
     let rec compare_list l1 l2 = match (l1, l2) with
       | [],[] -> 0
       | [], _ -> -1
@@ -1404,8 +1394,6 @@ module Conllx = struct
         (fun acc i item -> Int_map.add (i+1) item acc)
         Int_map.empty
         parseme_items in
-
-
 
     let (frsemcor_singleton, frsemcor_multi_unordered) =
       List.fold_left
@@ -1469,6 +1457,25 @@ module Conllx = struct
            frsemcor_singleton)
         frsemcor_multi in
 
+    let modified_nodes =
+      List.map
+        (fun modified_node ->
+           (
+             member "id" modified_node |> to_string |> (fun y -> Id.Raw y),
+             member "features" modified_node |> to_list |> (List.map to_string)
+           )
+        ) (json |> member "modified_nodes" |> to_list) in
+
+    let modified_edges =
+      List.map
+        (fun modified_node ->
+           (
+             member "src" modified_node |> to_string |> (fun y -> Id.Raw y),
+             member "edge" modified_node |> Conllx_label.of_json,
+             member "tar" modified_node |> to_string |> (fun y -> Id.Raw y)
+           )
+        ) (json |> member "modified_edges" |> to_list) in
+
     try
       {
         meta = json |> member "meta" |> to_list |> List.map (fun j -> (j |> member "key" |> to_string, j |> member "value" |> to_string));
@@ -1477,7 +1484,10 @@ module Conllx = struct
         edges = token_edges;
         parseme;
         frsemcor;
-      } |> normalise_ids
+        modified_nodes;
+        modified_edges;
+      }
+      |> normalise_ids
     with Type_error _ -> Error.error ~fct:"Conllx.of_json" "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1509,6 +1519,16 @@ module Conllx = struct
           | ("", meta) -> bprintf buff "%s\n" meta
           | (key,value) -> bprintf buff "# %s = %s\n" key value
         ) t_without_root.meta in
+
+    let _ = List.iter
+        (function (id, feats) ->
+           bprintf buff "# modified_node = %s:%s\n" (Id.to_string id) (String.concat "," feats)
+        ) t_without_root.modified_nodes in
+
+    let _ = List.iter
+        (function (src, edge, tar) ->
+           bprintf buff "# modified_edge = %s,%s,%s\n" (Id.to_string src) (Conllx_label.to_string_robust ~config edge) (Id.to_string tar)
+        ) t_without_root.modified_edges in
 
     let _ = List.iter
         (fun node ->
