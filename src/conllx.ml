@@ -1510,7 +1510,7 @@ module Conllx = struct
 
     let t = order_mwes t in
 
-    let down_t = t |> normalise_ids |> wordform_down |> textform_down in
+    let down_t = t |> wordform_down |> textform_down in
 
     let t_without_root = { down_t with nodes = List.filter (fun node -> not (Node.is_conll_root node)) down_t.nodes} in
 
