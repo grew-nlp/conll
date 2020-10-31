@@ -29,6 +29,8 @@ module Conllx_config: sig
   val build: string -> t
 
   val get_name: t -> string
+
+  val remove_from_feats: string -> t -> t
 end
 
 

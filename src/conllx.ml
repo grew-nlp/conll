@@ -206,20 +206,24 @@ module Conllx_config = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let ud_features = [
+    (* UD features collected from data folder on 2020/10/27 *)
     "Abbr"; "AdjType"; "AdpType"; "AdvType"; "Agent"; "Agglutination"; "Analyt"; "Animacy"; "Animacy[gram]";
     "Animacy[obj]"; "Aspect"; "Case"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]";
     "Compound"; "ConjType"; "Connegative"; "Contrast"; "Copula"; "Definite"; "Definite[obj]"; "Degree"; "Deixis";
     "DeixisRef"; "Deriv"; "Derivation"; "Dialect"; "Distance"; "Echo"; "Emphatic"; "Evident"; "Focus"; "FocusType";
     "Foreign"; "Form"; "Gender"; "Gender[abs]"; "Gender[acc]"; "Gender[ben]"; "Gender[dat]"; "Gender[erg]"; "Gender[obj]";
-    "Gender[psor]"; "HebBinyan"; "HebExistential"; "HebSource"; "Hyph"; "InfForm"; "Link"; "Mood"; "Morph"; "Mutation";
-    "NameType"; "NegationType"; "NounClass"; "NounClass[obj]"; "NounClass[subj]"; "NounForm"; "NounType"; "NumForm";
+    "Gender[psor]"; "Gender[subj]"; "HebBinyan"; "HebExistential"; "HebSource"; "Hyph"; "InfForm"; "Link"; "Mood"; "Morph"; "Mutation";
+    "NameType"; "NegationType"; "Nomzr"; "Noun"; "NounClass"; "NounClass[obj]"; "NounClass[subj]"; "NounForm"; "NounType"; "NumForm";
     "NumType"; "NumValue"; "Number"; "Number[abs]"; "Number[acc]"; "Number[dat]"; "Number[erg]"; "Number[obj]";
-    "Number[psed]"; "Number[psor]"; "Number[subj]"; "Orth"; "PartForm"; "PartType"; "Person"; "Person[abs]"; "Person[acc]";
+    "Number[psed]"; "Number[psor]"; "Number[subj]"; "Orth"; "PartForm"; "PartType"; "Person"; "Person12Pl"; "Person12Sg"; "Person[abs]"; "Person[acc]";
     "Person[dat]"; "Person[erg]"; "Person[obj]"; "Person[psor]"; "Person[sdat]"; "Person[subj]"; "Polarity"; "Polite";
-    "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "PossNumber"; "PossPerson"; "Prefix"; "PrepCase";
-    "PrepForm"; "Preverb"; "PronType"; "Pun"; "PunctSide"; "PunctType"; "RefRole"; "Reflex"; "Register";
+    "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "PossNumber"; "PossPerson"; "Possessed"; "Prefix"; "PrepCase";
+    "PrepForm"; "Preverb"; "PronClass"; "PronGend"; "PronNum"; "PronPers"; "PronType"; "Proper"; "Pun"; "PunctSide"; "PunctType"; "Red"; "RefRole"; "Reflex"; "Register";
+    (* "Rel"; declared  for Tupinamba but unused *)
     "Relative"; "Strength"; "Style"; "SubGender"; "Subcat"; "Tense"; "Topic"; "Typo"; "Uninflect"; "Valency"; "Variant";
     "VerbClass"; "VerbForm"; "VerbType"; "Voice"; "Xtra";
+
+
 
     (* SUD features *)
     "Shared";
@@ -283,6 +287,10 @@ module Conllx_config = struct
     | s -> Error.error "Unknown config `%s` (available values are: `basic`, `ud`, `sud`, `sequoia`, `orfeo`)" s
 
   let get_name t = t.name
+
+  let remove_from_feats feature_name config =
+    { config with feats = CCList.remove ~eq:(=) ~key:feature_name config.feats }
+
 end
 
 
