@@ -256,7 +256,7 @@ module Conllx_config = struct
     extensions = [ ("2",':'); ("deep", '@') ];
     prefixes = [];
     feats = ud_features;
-    deps = None;
+    deps = Some ("enhanced", 'E');
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1082,8 +1082,8 @@ module Conllx = struct
     edges: Edge.t list;
     parseme: Parseme.t;
     frsemcor: Frsemcor.t;
-    modified_nodes: (Id.t  * string list) list;
-    modified_edges: (Id.t  * Conllx_label.t * Id.t) list;
+    modified_nodes: (Id.t * string list) list;
+    modified_edges: (Id.t * Conllx_label.t * Id.t) list;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
