@@ -92,10 +92,20 @@ end
 module Conllx_stat : sig
   type t
 
-  val build: ?config: Conllx_config.t -> (string * string option) -> Conllx_corpus.t -> t
+  val build:
+    ?config: Conllx_config.t ->
+    (string * string option) -> (* gov clustering key. Ex: ("upos", None) *)
+    (string * string option) -> (* dev clustering key. Ex: ("ExtPos", Some "upos")  *)
+    Conllx_corpus.t ->
+    t
 
   val dump: t -> unit
 
   (* build the table file. Args: corpus_id stat *)
-  val to_html: string-> (string * string option) -> t -> string
+  val to_html:
+    string->
+    (string * string option) -> (* gov clustering key. Ex: ("upos", None) *)
+    (string * string option) -> (* dev clustering key. Ex: ("ExtPos", Some "upos")  *)
+    t ->
+    string
 end
