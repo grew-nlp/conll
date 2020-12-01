@@ -1326,18 +1326,18 @@ module Conllx = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_json json =
     let open Yojson.Basic.Util in
-
     let order =
-      json
-      |> member "order"
-      |> to_list
-      |> List.map (function `String s -> Id.Raw s | _ -> Error.error ~data:json ~fct:"Conllx.of_json" "illformed json (order field)") in
+      List.map (function
+          | `String s -> Id.Raw s
+          | _ -> Error.error ~data:json ~fct:"Conllx.of_json" "illformed json (order field)"
+        ) (try json |> member "order" |> to_list with Type_error _ -> []) in
 
     let positions = CCList.foldi (fun acc i id -> Id_map.add id i acc) Id_map.empty order in
 
-    let all_nodes = json |> member "nodes" |> to_list  in
+    let all_nodes = try json |> member "nodes" |> to_list with Type_error _ -> [] in
     let (token_nodes, parseme_nodes, frsemcor_nodes) =
       List.fold_right
+
         (fun node (token_acc, parseme_acc, frsemcor_acc) ->
            match node with
            | `Assoc l when List.mem_assoc "parseme" l -> (token_acc, node::parseme_acc, frsemcor_acc)
@@ -1345,7 +1345,7 @@ module Conllx = struct
            | _ -> (node :: token_acc, parseme_acc, frsemcor_acc)
         ) all_nodes ([],[],[]) in
 
-    let all_edges = json |> member "edges" |> to_list |> List.map Edge.of_json in
+    let all_edges = List.map Edge.of_json (try json |> member "edges" |> to_list with Type_error _ -> [])  in
 
     let (token_edges, parseme_edges, frsemcor_edges) =
       List.fold_left
@@ -1464,7 +1464,8 @@ module Conllx = struct
              member "id" modified_node |> to_string |> (fun y -> Id.Raw y),
              member "features" modified_node |> to_list |> (List.map to_string)
            )
-        ) (json |> member "modified_nodes" |> to_list) in
+        )
+        (try json |> member "modified_nodes" |> to_list with Type_error _ -> []) in
 
     let modified_edges =
       List.map
@@ -1474,21 +1475,24 @@ module Conllx = struct
              member "edge" modified_node |> Conllx_label.of_json,
              member "tar" modified_node |> to_string |> (fun y -> Id.Raw y)
            )
-        ) (json |> member "modified_edges" |> to_list) in
+        )
+        (try json |> member "modified_edges" |> to_list with Type_error _ -> []) in
 
-    try
-      {
-        meta = json |> member "meta" |> to_list |> List.map (fun j -> (j |> member "key" |> to_string, j |> member "value" |> to_string));
-        nodes = token_nodes |> List.map Node.of_json;
-        order;
-        edges = token_edges;
-        parseme;
-        frsemcor;
-        modified_nodes;
-        modified_edges;
-      }
-      |> normalise_ids
-    with Type_error _ -> Error.error ~fct:"Conllx.of_json" "illformed json"
+    let meta =
+      List.map
+        (fun j -> (j |> member "key" |> to_string, j |> member "value" |> to_string))
+        (try json |> member "meta" |> to_list with Type_error _ -> []) in
+    {
+      meta;
+      nodes = token_nodes |> List.map Node.of_json;
+      order;
+      edges = token_edges;
+      parseme;
+      frsemcor;
+      modified_nodes;
+      modified_edges;
+    }
+    |> normalise_ids
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let order_mwes t =
