@@ -29,11 +29,13 @@ module Error = struct
     `Assoc ((CCList.filter_map (fun x-> x) opt_list) @ prev_list)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let warning_ ?file ?sent_id ?line_num ?fct ?data ?prev message =
-    Printf.eprintf "%s\n" (Yojson.Basic.pretty_to_string (build_json ?file ?sent_id ?line_num ?fct ?data ?prev message))
+  let warning_ ?quiet ?file ?sent_id ?line_num ?fct ?data ?prev message =
+    match quiet with
+    | Some true -> ()
+    | _ -> Printf.eprintf "%s\n" (Yojson.Basic.pretty_to_string (build_json ?file ?sent_id ?line_num ?fct ?data ?prev message))
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let warning ?file ?sent_id ?line_num ?fct ?data ?prev = Printf.ksprintf (warning_ ?file ?sent_id ?line_num ?fct ?data ?prev)
+  let warning ?quiet ?file ?sent_id ?line_num ?fct ?data ?prev = Printf.ksprintf (warning_ ?quiet ?file ?sent_id ?line_num ?fct ?data ?prev)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let error_ ?file ?sent_id ?line_num ?fct ?data ?prev message =
@@ -1621,7 +1623,7 @@ module Conllx_corpus = struct
     Buffer.contents buff
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_lines ~config ?log_file ?columns ?file lines =
+  let of_lines ?(config=Conllx_config.basic) ?(quiet=false) ?log_file ?columns ?file lines =
     match lines with
     | [] -> empty
     | ((line_num,head)::tail) as all ->
@@ -1632,7 +1634,7 @@ module Conllx_corpus = struct
         | (Some cols, None) -> (cols,tail)
         | (Some c1, Some c2) when c1 = c2 -> (c1,tail)
         | (Some c1, Some c2) ->
-          Error.error ?file ~line_num "Inconsistent columsn declaration\nin file   --> %s\nin config --> %s\n"
+          Error.error ?file ~line_num "Inconsistent columsn declaration\nin file --> %s\nin config --> %s\n"
             (Conllx_columns.to_string c1) (Conllx_columns.to_string c2) in
 
       let cpt = ref 0 in
@@ -1666,14 +1668,14 @@ module Conllx_corpus = struct
       let _ =
         List.iter
           (fun (line_num,line) -> match line with
-             | "" when !rev_locals = [] -> Error.warning ?file ~line_num "Illegal blank line";
+             | "" when !rev_locals = [] -> Error.warning ~quiet ?file ~line_num "Illegal blank line";
              | "" -> save_one ()
              | _ -> rev_locals := (line_num,line) :: !rev_locals
           ) data_lines in
 
       if !rev_locals != []
       then (
-        Error.warning ?file "No blank line at the end of the file";
+        Error.warning ~quiet ?file "No blank line at the end of the file";
         save_one ()
       );
       { columns; data=Array.of_list (List.rev !res) }

@@ -79,6 +79,8 @@ module Conllx_corpus : sig
 
   val load_list: ?config: Conllx_config.t -> ?log_file: string -> ?columns: Conllx_columns.t -> string list -> t
 
+  val of_lines: ?config: Conllx_config.t -> ?quiet:bool -> ?log_file: string -> ?columns: Conllx_columns.t -> ?file: string -> (int * string) list -> t
+
   val read_stdin: ?config: Conllx_config.t -> ?log_file: string -> ?columns: Conllx_columns.t -> unit -> t
 
   val to_string: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> t -> string
