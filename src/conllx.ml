@@ -77,7 +77,7 @@ module Misc = struct
         | None -> String_map.add f v acc
         | Some v' when v=v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the same value `%s`" f v
         | Some v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the different values `%s` and `%s`" f v v'
-        in
+      in
       List.fold_left
         (fun acc fv ->
            match Str.bounded_full_split (Str.regexp "=") fv 2 with
@@ -556,7 +556,7 @@ module Node = struct
       (fun item ->
          match Str.split (Str.regexp_string "::") item with
          | [si; sj; string_feats] ->
-          let xxx = Misc.parse_features string_feats String_map.empty in
+           let xxx = Misc.parse_features string_feats String_map.empty in
            ((int_of_string si, int_of_string sj), xxx)
          | _ -> Error.error ~fct: "mwt_misc_of_string" "Cannot parse `%s`" s
       )  (Str.split (Str.regexp_string "||") s)
@@ -645,7 +645,8 @@ module Node = struct
     List.map
       (fun node ->
          match node.wordform with
-         | Some "__EMPTY__" -> { node with wordform = None }
+         | Some "__EMPTY__" ->
+           { node with wordform = None;feats = String_map.add "wordform" "__EMPTY__" node.feats }
          | Some wf when (unescape_form wf) <> node.form ->
            { node with wordform = None; feats = String_map.add "wordform" wf node.feats }
          | Some _ -> { node with wordform = None }
