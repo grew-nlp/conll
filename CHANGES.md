@@ -1,3 +1,6 @@
+## 1.7.4 (2021/02/15)
+  * More UD features
+
 ## 1.7.3 (2020/09/14)
   * Change empty node representation
   * add unordered nodes to Conll output
