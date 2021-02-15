@@ -195,7 +195,7 @@ module Conllx_config = struct
     "Number[psed]"; "Number[psor]"; "Number[subj]"; "Orth"; "PartForm"; "PartType"; "Person"; "Person12Pl"; "Person12Sg"; "Person[abs]"; "Person[acc]";
     "Person[dat]"; "Person[erg]"; "Person[obj]"; "Person[psor]"; "Person[sdat]"; "Person[subj]"; "Polarity"; "Polite";
     "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "PossNumber"; "PossPerson"; "Possessed"; "Prefix"; "PrepCase";
-    "PrepForm"; "Preverb"; "PronClass"; "PronGend"; "PronNum"; "PronPers"; "PronType"; "Proper"; "Pun"; "PunctSide"; "PunctType"; "Red"; "RefRole"; "Reflex"; "Register";
+    "PrepForm"; "Preverb"; "PronClass"; "PronGend"; "PronNum"; "PronPers"; "PronType"; "Pun"; "PunctSide"; "PunctType"; "Red"; "RefRole"; "Reflex"; "Register";
     (* "Rel"; declared  for Tupinamba but unused *)
     "Relative"; "Strength"; "Style"; "SubGender"; "Subcat"; "Tense"; "Topic"; "Typo"; "Uninflect"; "Valency"; "Variant";
     "VerbClass"; "VerbForm"; "VerbType"; "Voice"; "Xtra";
