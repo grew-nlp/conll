@@ -1,3 +1,7 @@
+## 1.7.5 (2021/02/24)
+  * deal with Number[psor]
+  * function of_lines
+
 ## 1.7.4 (2021/02/15)
   * More UD features
 
