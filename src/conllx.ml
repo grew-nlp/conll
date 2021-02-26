@@ -1113,7 +1113,7 @@ module Conllx = struct
   let get_meta t = t.meta
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let size t = List.length t.nodes
+  let size t = (List.length t.nodes) - 1 (* Do not count the dummy __0__ node *)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let find_node id t =
