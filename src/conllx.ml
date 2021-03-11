@@ -507,30 +507,32 @@ module Node = struct
         (List.length item_list) (List.length columns)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_json t = `Assoc (
-      CCList.filter_map CCFun.id
-        (
-          (Some ("id", `String (Id.to_string t.id)))
-          :: (Some ("form", `String t.form))
-          :: (CCOpt.map (fun v -> ("textform", `String v)) t.textform)
-          :: (CCOpt.map (fun v -> ("wordform", `String v)) t.wordform)
-          :: (Fs_map.fold (fun (f:string) v acc -> Some (f, `String v) :: acc) t.feats [])
-        ))
+  let to_json_item t =
+    (Id.to_string t.id,
+     `Assoc (
+       CCList.filter_map CCFun.id
+         (
+           (Some ("form", `String t.form))
+           :: (CCOpt.map (fun v -> ("textform", `String v)) t.textform)
+           :: (CCOpt.map (fun v -> ("wordform", `String v)) t.wordform)
+           :: (Fs_map.fold (fun (f:string) v acc -> Some (f, `String v) :: acc) t.feats [])
+         ))
+    )
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_json (json: Yojson.Basic.t) =
+  let of_json_item (id,json_fs) =
     let open Yojson.Basic.Util in
     try
       let feats =
         List.fold_right
           (fun (k,v) acc ->
              match k with
-             | "id" | "form" | "wordform" | "textform" -> acc
+             | "form" | "wordform" | "textform" -> acc
              | _ -> Fs_map.add k (v |> to_string) acc
-          ) (json |> to_assoc) Fs.empty in
+          ) (json_fs |> to_assoc) Fs.empty in
 
-      let id = Id.Raw (json |> member "id" |> to_string) in
-      let form_opt = try Some (json |> member "form" |> to_string) with Type_error _ -> None in
+      let id = Id.Raw id in
+      let form_opt = try Some (json_fs |> member "form" |> to_string) with Type_error _ -> None in
       let form = match (id, form_opt) with
         | (_, Some f) -> f
         | (Simple 0, None) -> "__0__"
@@ -539,10 +541,10 @@ module Node = struct
         id;
         form;
         feats;
-        wordform = (try Some (json |> member "wordform" |> to_string) with Type_error _ -> None);
-        textform = (try Some (json |> member "textform" |> to_string) with Type_error _ -> None);
+        wordform = (try Some (json_fs |> member "wordform" |> to_string) with Type_error _ -> None);
+        textform = (try Some (json_fs |> member "textform" |> to_string) with Type_error _ -> None);
       }
-    with Type_error _ -> Error.error ~fct:"Node.of_json" ~data:json "illformed json"
+    with Type_error _ -> Error.error ~fct:"Node.of_json" ~data:json_fs "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_conll ~config ~columns head deprel deps parseme_mwe frsemcor t =
@@ -943,14 +945,16 @@ module Parseme = struct
   let id_map mapping t = { t with ids = List.map (fun (x,y) -> (Id.map_id mapping x,y)) t.ids }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let item_to_json id item : Yojson.Basic.t = `Assoc (
-      CCList.filter_map CCFun.id  [
-        Some ("id", `String (sprintf "PARSEME_%d" id));
-        (match item.parseme with ""  -> Error.error "Illegal MWE, no parseme field" | s -> Some ("parseme", `String s));
-        (match item.mwepos with Some x -> Some ("mwepos", `String x) | None -> None);
-        (match item.label with Some x -> Some ("label", `String x) | None -> None);
-        (match item.criterion with Some x -> Some ("criterion", `String x) | None -> None)
-      ]
+  let item_to_json_item id item : (string * Yojson.Basic.t) =
+    (sprintf "PARSEME_%d" id,
+     `Assoc (
+       CCList.filter_map CCFun.id  [
+         (match item.parseme with ""  -> Error.error "Illegal MWE, no parseme field" | s -> Some ("parseme", `String s));
+         (match item.mwepos with Some x -> Some ("mwepos", `String x) | None -> None);
+         (match item.label with Some x -> Some ("label", `String x) | None -> None);
+         (match item.criterion with Some x -> Some ("criterion", `String x) | None -> None)
+       ]
+     )
     )
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1284,14 +1288,14 @@ module Conllx = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json (t: t) : Yojson.Basic.t =
 
-    let nodes = List.map Node.to_json t.nodes in
+    let node_items = List.map Node.to_json_item t.nodes in
     let edges = List.map Edge.to_json t.edges in
 
     (* replace old values of nodes, edges with new ones, taking into account parseme *)
-    let (nodes, edges) =
+    let (node_items, edges) =
       Int_map.fold
         (fun mwe_id mwe_item (acc_nodes, acc_edges) ->
-           ((Parseme.item_to_json mwe_id mwe_item) :: acc_nodes,
+           ((Parseme.item_to_json_item mwe_id mwe_item) :: acc_nodes,
             List.fold_left (fun acc (token_id,proj) ->
                 let pre_label = match proj with
                   | Parseme.Proj_1 -> ["proj", `String "1"]
@@ -1304,10 +1308,10 @@ module Conllx = struct
                 ] :: acc
               ) acc_edges mwe_item.ids
            )
-        ) t.parseme (nodes, edges) in
+        ) t.parseme (node_items, edges) in
 
     (* replace old values of nodes, edges with new ones, taking into account frsemcor *)
-    let (nodes, edges) =
+    let (node_items, edges) =
       Int_map.fold
         (fun sem_id sem_item (acc_nodes, acc_edges) ->
            match sem_item.Frsemcor.head with
@@ -1316,9 +1320,9 @@ module Conllx = struct
              Error.error ?sent_id "No head for id `%d`" sem_id
            | Some head ->
              let node_id = sprintf "FRSEMCOR_%d" sem_id in
-             let new_node = `Assoc [("id",`String node_id); ("frsemcor", `String sem_item.frsemcor)] in
+             let new_node_item = (node_id, `Assoc [("frsemcor", `String sem_item.frsemcor)]) in
              (
-               new_node :: acc_nodes,
+               new_node_item :: acc_nodes,
                `Assoc [("src", `String node_id); ("label", `Assoc [("frsemcor", `String "head")]); ("tar", `String (Id.to_string head));] ::
                (List.fold_left
                   (fun acc token_id ->
@@ -1330,13 +1334,13 @@ module Conllx = struct
                   ) acc_edges sem_item.Frsemcor.tokens
                )
              )
-        ) t.frsemcor (nodes, edges) in
+        ) t.frsemcor (node_items, edges) in
 
     `Assoc
       (CCList.filter_map CCFun.id
          [
            (match t.meta with [] -> None | _ -> Some ("meta", `Assoc (List.map (fun (k,v) -> (k, `String v)) t.meta)));
-           (match nodes with [] -> None | _ -> Some ("nodes", `List nodes));
+           (match node_items with [] -> None | _ -> Some ("nodes", `Assoc node_items));
            (match edges with [] -> None | _ -> Some ("edges", `List edges));
            (match t.order with [] -> None | _ -> Some ("order", `List (List.map (fun id -> `String (Id.to_string id)) t.order)));
          ]
@@ -1353,16 +1357,15 @@ module Conllx = struct
 
     let positions = CCList.foldi (fun acc i id -> Id_map.add id i acc) Id_map.empty order in
 
-    let all_nodes = try json |> member "nodes" |> to_list with Type_error _ -> [] in
-    let (token_nodes, parseme_nodes, frsemcor_nodes) =
+    let all_node_items = try json |> member "nodes" |> to_assoc with Type_error _ -> [] in
+    let (token_node_items, parseme_node_items, frsemcor_node_items) =
       List.fold_right
-
-        (fun node (token_acc, parseme_acc, frsemcor_acc) ->
+        (fun (id,node) (token_acc, parseme_acc, frsemcor_acc) ->
            match node with
-           | `Assoc l when List.mem_assoc "parseme" l -> (token_acc, node::parseme_acc, frsemcor_acc)
-           | `Assoc l when List.mem_assoc "frsemcor" l -> (token_acc, parseme_acc, node::frsemcor_acc)
-           | _ -> (node :: token_acc, parseme_acc, frsemcor_acc)
-        ) all_nodes ([],[],[]) in
+           | `Assoc l when List.mem_assoc "parseme" l -> (token_acc, (id,node)::parseme_acc, frsemcor_acc)
+           | `Assoc l when List.mem_assoc "frsemcor" l -> (token_acc, parseme_acc, (id,node)::frsemcor_acc)
+           | _ -> ((id,node) :: token_acc, parseme_acc, frsemcor_acc)
+        ) all_node_items ([],[],[]) in
 
     let all_edges = List.map Edge.of_json (try json |> member "edges" |> to_list with Type_error _ -> [])  in
 
@@ -1377,8 +1380,7 @@ module Conllx = struct
 
     let parseme_items_unordered =
       List.map
-        (fun parseme_node ->
-           let node_id = parseme_node |> member "id" |> to_string in
+        (fun (node_id, parseme_node) ->
            let tokens = List.fold_right
                (fun token_edge acc2 ->
                   if Id.to_string token_edge.Edge.src = node_id
@@ -1393,7 +1395,7 @@ module Conllx = struct
                   else acc2
                ) parseme_edges [] in
            Parseme.item_of_json tokens parseme_node
-        ) parseme_nodes in
+        ) parseme_node_items in
 
     let rec compare_list l1 l2 = match (l1, l2) with
       | [],[] -> 0
@@ -1416,9 +1418,7 @@ module Conllx = struct
 
     let (frsemcor_singleton, frsemcor_multi_unordered) =
       List.fold_left
-        (fun (acc_singleton, acc_multi) frsemcor_node ->
-           let node_id = frsemcor_node |> member "id" |> to_string in
-
+        (fun (acc_singleton, acc_multi) (node_id, frsemcor_node) ->
            let (head_list, not_head_list) =
              List.fold_left
                (fun (acc_head, acc_not_head) edge ->
@@ -1438,7 +1438,7 @@ module Conllx = struct
            | ([head], tokens) ->
              (acc_singleton, { Frsemcor.frsemcor = frsemcor_node |> member "frsemcor" |> to_string; head = Some head; tokens } :: acc_multi)
            | (l,_) -> Error.error "Not one head -> %d" (List.length head_list)
-        ) ([],[]) frsemcor_nodes in
+        ) ([],[]) frsemcor_node_items in
 
     let rec compare_list l1 l2 = match (l1, l2) with
       | [],[] -> 0
@@ -1503,7 +1503,7 @@ module Conllx = struct
         (try json |> member "meta" |> to_assoc with Type_error _ -> []) in
     {
       meta;
-      nodes = token_nodes |> List.map Node.of_json;
+      nodes = token_node_items |> List.map Node.of_json_item;
       order;
       edges = token_edges;
       parseme;
