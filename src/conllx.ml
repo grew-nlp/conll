@@ -1333,16 +1333,12 @@ module Conllx = struct
         ) t.frsemcor (nodes, edges) in
 
     `Assoc
-      (CCList.filter_map
-         (function
-           | _, [] -> None
-           | key, l -> Some (key, `List l)
-         )
+      (CCList.filter_map CCFun.id
          [
-           "meta", List.map (fun (k,v) -> `Assoc ["key", `String k; "value", `String v]) t.meta;
-           "nodes", nodes;
-           "order", (List.map (fun id -> `String (Id.to_string id)) t.order);
-           "edges", edges
+           (match t.meta with [] -> None | _ -> Some ("meta", `Assoc (List.map (fun (k,v) -> (k, `String v)) t.meta)));
+           (match nodes with [] -> None | _ -> Some ("nodes", `List nodes));
+           (match edges with [] -> None | _ -> Some ("edges", `List edges));
+           (match t.order with [] -> None | _ -> Some ("order", `List (List.map (fun id -> `String (Id.to_string id)) t.order)));
          ]
       )
 
@@ -1503,8 +1499,8 @@ module Conllx = struct
 
     let meta =
       List.map
-        (fun j -> (j |> member "key" |> to_string, j |> member "value" |> to_string))
-        (try json |> member "meta" |> to_list with Type_error _ -> []) in
+        (fun (k,v) -> (k, v |> to_string))
+        (try json |> member "meta" |> to_assoc with Type_error _ -> []) in
     {
       meta;
       nodes = token_nodes |> List.map Node.of_json;
