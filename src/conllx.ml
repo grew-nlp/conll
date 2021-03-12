@@ -196,7 +196,7 @@ module Conllx_config = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let basic = {
     name = "basic";
-    core = "rel";
+    core = "1";
     extensions = [];
     prefixes = [];
     feats = [];
@@ -218,7 +218,6 @@ module Conllx_config = struct
     "Person[dat]"; "Person[erg]"; "Person[obj]"; "Person[psor]"; "Person[sdat]"; "Person[subj]"; "Polarity"; "Polite";
     "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "PossNumber"; "PossPerson"; "Possessed"; "Prefix"; "PrepCase";
     "PrepForm"; "Preverb"; "PronClass"; "PronGend"; "PronNum"; "PronPers"; "PronType"; "Pun"; "PunctSide"; "PunctType"; "Red"; "RefRole"; "Reflex"; "Register";
-    (* "Rel"; declared  for Tupinamba but unused *)
     "Relative"; "Strength"; "Style"; "SubGender"; "Subcat"; "Tense"; "Topic"; "Typo"; "Uninflect"; "Valency"; "Variant";
     "VerbClass"; "VerbForm"; "VerbType"; "Voice"; "Xtra";
 
@@ -239,16 +238,6 @@ module Conllx_config = struct
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let future_ud = { (* covers also eud *)
-    name="ud";
-    core = "rel";
-    extensions = [ ("subrel",':')];
-    prefixes = [];
-    feats = ud_features;
-    deps = Some ("enhanced", 'E');
-  }
-
-  (* ---------------------------------------------------------------------------------------------------- *)
   let sud = {
     name="sud";
     core = "1";
@@ -256,16 +245,6 @@ module Conllx_config = struct
     prefixes = [];
     feats = ud_features;
     deps = Some ("enhanced", 'E');
-  }
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let future_sud = {
-    name="sud";
-    core = "rel";
-    extensions = [ ("subrel",':'); ("deep", '@') ];
-    prefixes = [];
-    feats = ud_features;
-    deps = None;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
