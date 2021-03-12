@@ -544,7 +544,11 @@ module Node = struct
         wordform = (try Some (json_fs |> member "wordform" |> to_string) with Type_error _ -> None);
         textform = (try Some (json_fs |> member "textform" |> to_string) with Type_error _ -> None);
       }
-    with Type_error _ -> Error.error ~fct:"Node.of_json" ~data:json_fs "illformed json"
+    with Type_error _ ->
+
+    try {id = Id.Raw id; feats= Fs_map.add "label" (json_fs |> to_string) Fs_map.empty; form=""; wordform=None; textform=None}
+    with Type_error _ ->
+    Error.error ~fct:"Node.of_json_item" ~data:json_fs "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_conll ~config ~columns head deprel deps parseme_mwe frsemcor t =
@@ -778,10 +782,11 @@ module Conllx_label = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_json js =
     let open Yojson.Basic.Util in
-    js
-    |> to_assoc
-    |> (List.map (fun (k,v) -> k, to_string v))
-    |> String_map.of_list
+    let feat_list =
+      try [("1", js |> to_string)]
+      with Type_error _ ->
+        js |> to_assoc |> (List.map (fun (k,v) -> k, to_string v)) in
+    String_map.of_list feat_list
 end
 
 (* ==================================================================================================== *)
