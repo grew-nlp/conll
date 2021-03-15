@@ -1,3 +1,6 @@
+# 1.8.0 (2021/03/15)
+  * Simplify JSON encoding of graphs
+
 ## 1.7.5 (2021/02/24)
   * deal with Number[psor]
   * function of_lines
