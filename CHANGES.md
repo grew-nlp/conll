@@ -1,3 +1,6 @@
+## 1.8.1 (2021/04/18)
+  * add `iwpt` config
+
 # 1.8.0 (2021/03/15)
   * Simplify JSON encoding of graphs
 

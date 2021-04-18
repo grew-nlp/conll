@@ -257,10 +257,21 @@ module Conllx_config = struct
     deps = None;
   }
 
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let iwpt = {
+    name="iwpt";
+    core = "1";
+    extensions = [ ("2",':'); ("3",':'); ("deep", '@') ];
+    prefixes = [];
+    feats = ud_features;
+    deps = Some ("enhanced", 'E');
+  }
+
   let build = function
     | "sequoia" -> sequoia
     | "ud" -> ud
     | "sud" -> sud
+    | "iwpt" -> iwpt
     | "basic" | "orfeo" -> basic
     | s -> Error.error "Unknown config `%s` (available values are: `basic`, `ud`, `sud`, `sequoia`, `orfeo`)" s
 
