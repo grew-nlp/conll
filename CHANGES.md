@@ -1,3 +1,6 @@
+## 1.8.2 (2021/05/04)
+  * update `iwpt` config
+
 ## 1.8.1 (2021/04/18)
   * add `iwpt` config
 
