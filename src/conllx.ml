@@ -82,31 +82,6 @@ module Misc = struct
            | [Str.Text f] -> add f "__NOVALUE__" acc
            | _ -> Error.error ?file ?sent_id ?line_num "BUG: Unknown feat %s" fv
         ) init (Str.split (Str.regexp "|") s)
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let read_lines name =
-    try
-      let ic = open_in name in
-      let cpt = ref 0 in
-      let try_read () =
-        try incr cpt; Some (!cpt, input_line ic) with End_of_file -> None in
-      let rec loop acc = match try_read () with
-        | Some s -> loop (s :: acc)
-        | None -> close_in ic; List.rev acc in
-      loop []
-    with Sys_error msg -> Error.error "%s" msg
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let read_stdin () =
-    let cpt = ref 0 in
-    let res = ref [] in
-    try
-      while true do
-        incr cpt;
-        res := (!cpt, input_line stdin) :: !res
-      done;
-      assert false
-    with End_of_file -> List.rev !res
 end
 
 (* ==================================================================================================== *)
@@ -538,7 +513,7 @@ module Node = struct
 
     try {id = Id.Raw id; feats= Fs_map.add "label" (json_fs |> to_string) Fs_map.empty; form=""; wordform=None; textform=None}
     with Type_error _ ->
-    Error.error ~fct:"Node.of_json_item" ~data:json_fs "illformed json"
+      Error.error ~fct:"Node.of_json_item" ~data:json_fs "illformed json"
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_conll ~config ~columns head deprel deps parseme_mwe frsemcor t =
@@ -1255,7 +1230,7 @@ module Conllx = struct
     }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_lines ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) lines =
+  let of_num_lines ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) lines =
     let (lines, columns) =
       match lines with
       | [] -> ([], columns)
@@ -1271,14 +1246,16 @@ module Conllx = struct
     | l -> of_string_list_rev ~columns ~config l
 
   (* ---------------------------------------------------------------------------------------------------- *)
+  let of_lines ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) lines =
+    of_num_lines ~config ~columns (List.mapi (fun i l -> (i+1,l)) lines)
+
+  (* ---------------------------------------------------------------------------------------------------- *)
   let of_string ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) s =
-    let lines = List.mapi (fun i l -> (i+1,l)) (Str.split (Str.regexp "\n") s) in
-    of_lines ~config ~columns lines
+    of_lines ~config ~columns (Str.split (Str.regexp "\n") s)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let load ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) file =
-    let lines = Misc.read_lines file in
-    of_lines ~config ~columns lines
+    of_lines ~config ~columns (CCIO.(with_in file read_lines_l))
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json (t: t) : Yojson.Basic.t =
@@ -1635,7 +1612,7 @@ module Conllx_corpus = struct
     Buffer.contents buff
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_lines ?(config=Conllx_config.basic) ?(quiet=false) ?log_file ?columns ?file lines =
+  let of_num_lines ?(config=Conllx_config.basic) ?(quiet=false) ?log_file ?columns ?file lines =
     match lines with
     | [] -> empty
     | ((line_num,head)::tail) as all ->
@@ -1693,7 +1670,12 @@ module Conllx_corpus = struct
       { columns; data=Array.of_list (List.rev !res) }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load ?(config=Conllx_config.basic) ?log_file ?columns file = of_lines ~config ?log_file ?columns ~file (Misc.read_lines file)
+  let of_lines ?(config=Conllx_config.basic) ?(quiet=false) ?log_file ?columns ?file lines =
+    of_num_lines ~config ~quiet ?log_file ?columns ?file (List.mapi (fun i l -> (i+1,l)) lines)
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let load ?(config=Conllx_config.basic) ?log_file ?columns file =
+    let lines = CCIO.(with_in file read_lines_l) in of_lines ~config ?log_file ?columns ~file lines
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let load_list ?(config=Conllx_config.basic) ?log_file ?columns file_list =
@@ -1703,9 +1685,6 @@ module Conllx_corpus = struct
       if List.for_all (fun {columns=p} -> p = columns) tail
       then { columns; data = Array.concat (List.map (fun c -> c.data) l) }
       else Error.error "All files must have the same columns declaration"
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let read_stdin ?(config=Conllx_config.basic) ?log_file ?columns () = of_lines ~config ?log_file ?columns (Misc.read_stdin ())
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let sizes t =
