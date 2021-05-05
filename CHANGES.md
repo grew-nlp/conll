@@ -1,3 +1,8 @@
+# 1.9.0 (2021/05/05)
+  * ⚠️ remove old Conll implementation
+  * ⚠️ remove Conllx_corpus.read_stdin
+  * ⚠️ change type Conllx_corpus.of_line
+
 ## 1.8.2 (2021/05/04)
   * update `iwpt` config
 
