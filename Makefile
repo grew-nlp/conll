@@ -1,8 +1,7 @@
 OCB_FLAGS = -use-ocamlfind -I src
 OCB = ocamlbuild $(OCB_FLAGS)
 
-LIB_FILES = conll.cma conll.cmxa conll.a conll.cmi conll.cmx conll.cmxs conll_types.cmi conll_types.cmx \
-	conllx.cma conllx.cmxa conllx.a conllx.cmi conllx.cmx conllx.cmxs
+LIB_FILES = conllx.cma conllx.cmxa conllx.a conllx.cmi conllx.cmx conllx.cmxs
 INSTALL_FILES = $(LIB_FILES:%=_build/src/%)
 
 VERSION = `cat VERSION`
