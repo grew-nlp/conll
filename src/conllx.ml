@@ -1612,18 +1612,19 @@ module Conllx_corpus = struct
     Buffer.contents buff
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_num_lines ?(config=Conllx_config.basic) ?(quiet=false) ?log_file ?columns ?file lines =
+  let of_lines ?(config=Conllx_config.basic) ?(quiet=false) ?log_file ?columns ?file lines =
     match lines with
     | [] -> empty
-    | ((line_num,head)::tail) as all ->
-      let (columns, data_lines) =
-        match (Conllx_columns.of_string ?file ~line_num head, columns) with
-        | (None, None) -> (Conllx_columns.default, all)
-        | (None, Some cols) -> (cols, all)
-        | (Some cols, None) -> (cols,tail)
-        | (Some c1, Some c2) when c1 = c2 -> (c1,tail)
+    | (head::tail) as all ->
+
+      let (columns, data_lines, delta) =
+        match (Conllx_columns.of_string ?file head, columns) with
+        | (None, None) -> (Conllx_columns.default, all, 1)
+        | (None, Some cols) -> (cols, all, 1)
+        | (Some cols, None) -> (cols,tail, 2)
+        | (Some c1, Some c2) when c1 = c2 -> (c1,tail, 2)
         | (Some c1, Some c2) ->
-          Error.error ?file ~line_num "Inconsistent columsn declaration\nin file --> %s\nin config --> %s\n"
+          Error.error ?file "Inconsistent columsn declaration\nin file --> %s\nin config --> %s\n"
             (Conllx_columns.to_string c1) (Conllx_columns.to_string c2) in
 
       let cpt = ref 0 in
@@ -1655,9 +1656,11 @@ module Conllx_corpus = struct
         rev_locals := [] in
 
       let _ =
-        List.iter
-          (fun (line_num,line) -> match line with
-             | "" when !rev_locals = [] -> Error.warning ~quiet ?file ~line_num "Illegal blank line";
+        List.iteri
+          (fun i line -> 
+             let line_num = i+delta in
+             match line with
+             | "" when !rev_locals = [] -> Error.warning ~line_num ~quiet ?file "Illegal blank line";
              | "" -> save_one ()
              | _ -> rev_locals := (line_num,line) :: !rev_locals
           ) data_lines in
@@ -1670,12 +1673,9 @@ module Conllx_corpus = struct
       { columns; data=Array.of_list (List.rev !res) }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_lines ?(config=Conllx_config.basic) ?(quiet=false) ?log_file ?columns ?file lines =
-    of_num_lines ~config ~quiet ?log_file ?columns ?file (List.mapi (fun i l -> (i+1,l)) lines)
-
-  (* ---------------------------------------------------------------------------------------------------- *)
   let load ?(config=Conllx_config.basic) ?log_file ?columns file =
-    let lines = CCIO.(with_in file read_lines_l) in of_lines ~config ?log_file ?columns ~file lines
+    let lines = CCIO.(with_in file read_lines_l) in
+    of_lines ~config ?log_file ?columns ~file lines
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let load_list ?(config=Conllx_config.basic) ?log_file ?columns file_list =

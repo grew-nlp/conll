@@ -1,3 +1,6 @@
+## 1.9.1 (2021/05/07)
+  * Fix bug "Stack overflow" on long files
+
 # 1.9.0 (2021/05/05)
   * ⚠️ remove old Conll implementation
   * ⚠️ remove Conllx_corpus.read_stdin
