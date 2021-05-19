@@ -1639,10 +1639,10 @@ module Conllx_corpus = struct
             let base = match file with Some f -> Filename.basename f | None -> "stdin" in
             let sent_id = match Conllx.get_sent_id_opt conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
             res := (sent_id,conll) :: !res
-          with (Conllx_error json) as e ->
+          with Conllx_error json ->
             begin
               match log_file with
-              | None -> raise e
+              | None -> Printf.eprintf "%s\n" (Yojson.Basic.pretty_to_string json)
               | Some f when Sys.file_exists f ->
                 let out_ch = open_out_gen [Open_append] 0o755 f in
                 Printf.fprintf out_ch "%s" (Yojson.Basic.pretty_to_string json);
