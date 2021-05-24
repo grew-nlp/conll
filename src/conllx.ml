@@ -760,6 +760,7 @@ module Edge = struct
     src: Id.t;
     label: Conllx_label.t;
     tar: Id.t;
+    line_num: int option;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -802,13 +803,19 @@ module Edge = struct
         | (Some "-", Some "-") -> []
 
         (* PARSEME-IT@1.1 and PARSEME-IT@1.1 has the pair ("0", "_") as HEAD/DEPREL *)
-        | (Some "0", None) -> [{ src=Id.of_string  ?file ?sent_id ?line_num "0"; label=Conllx_label.of_string ~config "root"; tar }]
+        | (Some "0", None) -> [
+          { src=Id.of_string ?file ?sent_id ?line_num "0";
+            label=Conllx_label.of_string ~config "root";
+            tar;
+            line_num;
+          }
+            ]
 
         | (Some srcs, Some labels) ->
           let src_id_list = List.map (Id.of_string  ?file ?sent_id ?line_num) (Str.split (Str.regexp "|") srcs) in
           let label_list = List.map (Conllx_label.of_string ~config) (Str.split (Str.regexp "|") labels) in
           begin
-            try List.map2 (fun src label -> { src; label; tar}) src_id_list label_list
+            try List.map2 (fun src label -> { src; label; tar; line_num}) src_id_list label_list
             with Invalid_argument _ -> Error.error ?file ?sent_id ?line_num "different number of items in HEAD/DEPREL spec"
           end
         | (None, None) -> []
@@ -820,7 +827,7 @@ module Edge = struct
         List.fold_left
           (fun acc sec ->
              match Str.bounded_split (Str.regexp ":") sec 2 with
-             | [src_string;label] -> { src=Id.of_string  ?file ?sent_id ?line_num src_string; label = Conllx_label.of_string_deps ?file ?sent_id ?line_num ~config label; tar} :: acc
+             | [src_string;label] -> { src=Id.of_string  ?file ?sent_id ?line_num src_string; label = Conllx_label.of_string_deps ?file ?sent_id ?line_num ~config label; tar; line_num} :: acc
              | _ -> Error.error ?file ?sent_id ?line_num "Cannot parse secondary edges `%s`" sec
           ) head_dep_edges (Str.split (Str.regexp "|") deps)
 
@@ -844,6 +851,7 @@ module Edge = struct
         src = Id.Raw (json |> member "src" |> to_string);
         label = json |> member "label" |> Conllx_label.of_json;
         tar = Id.Raw (json |> member "tar" |> to_string);
+        line_num = None;
       }
     with Type_error _ -> Error.error ~fct:"Edge.of_json" ~data:json "illformed json"
 
@@ -1145,8 +1153,8 @@ module Conllx = struct
   let check_edge ?file ?sent_id nodes edge =
     match (List.exists (fun n -> n.Node.id = edge.Edge.src) nodes, List.exists (fun n -> n.Node.id = edge.Edge.tar) nodes) with
     | (true, true) -> ()
-    | (false, _) -> Error.error ?file ?sent_id "Unknown identifier `%s`" (Id.to_string edge.Edge.src)
-    | (_, false) -> Error.error ?file ?sent_id "Unknown identifier `%s`" (Id.to_string edge.Edge.tar)
+    | (false, _) -> Error.error ?file ?sent_id ?line_num:edge.Edge.line_num "Unknown src identifier `%s`" (Id.to_string edge.Edge.src)
+    | (_, false) -> Error.error ?file ?sent_id ?line_num:edge.Edge.line_num "Unknown tar identifier `%s`" (Id.to_string edge.Edge.tar)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string_list_rev ~config ?file ~columns string_list_rev =
