@@ -216,7 +216,7 @@ module Conllx_config = struct
   let sud = {
     name="sud";
     core = "1";
-    extensions = [ ("2",':'); ("deep", '@') ];
+    extensions = [ ("2",':'); ("deep", '@'); ("subsem", '$') ];
     prefixes = [];
     feats = ud_features;
     deps = Some ("enhanced", 'E');
@@ -804,12 +804,12 @@ module Edge = struct
 
         (* PARSEME-IT@1.1 and PARSEME-IT@1.1 has the pair ("0", "_") as HEAD/DEPREL *)
         | (Some "0", None) -> [
-          { src=Id.of_string ?file ?sent_id ?line_num "0";
-            label=Conllx_label.of_string ~config "root";
-            tar;
-            line_num;
-          }
-            ]
+            { src=Id.of_string ?file ?sent_id ?line_num "0";
+              label=Conllx_label.of_string ~config "root";
+              tar;
+              line_num;
+            }
+          ]
 
         | (Some srcs, Some labels) ->
           let src_id_list = List.map (Id.of_string  ?file ?sent_id ?line_num) (Str.split (Str.regexp "|") srcs) in
