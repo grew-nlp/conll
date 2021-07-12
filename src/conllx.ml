@@ -1706,12 +1706,23 @@ end
 (* ======================================================================================================================== *)
 module Conllx_stat = struct
 
-  type t = ((int String_map.t) String_map.t) String_map.t    (* keys are label --> gov --> dep *)
+  module Label_map = Map.Make (
+    struct 
+      type t = string
+      let compare t1 t2 =
+        let e1 = String.length t1 > 2 && String.sub t1 0 2 = "E:"
+        and e2 = String.length t2 > 2 && String.sub t2 0 2 = "E:" in
+        match (e1, e2) with
+        | (true, false) -> 1
+        | (false, true) -> -1
+        | _ -> Stdlib.compare t1 t2
+    end
+    )
 
-  let get_labels map = String_map.fold (fun label _ acc -> String_set.add label acc) map String_set.empty
+  type t = ((int String_map.t) String_map.t) Label_map.t    (* keys are label --> gov --> dep *)
 
   let get_tags map =
-    String_map.fold
+    Label_map.fold
       (fun _ map2 acc ->
          String_map.fold
            (fun gov map3 acc2 ->
@@ -1731,8 +1742,8 @@ module Conllx_stat = struct
     String_map.add gov (add3 dep old) stat2
 
   let add label gov dep stat =
-    let old = try String_map.find label stat with Not_found -> String_map.empty in
-    String_map.add label (add2 gov dep old) stat
+    let old = try Label_map.find label stat with Not_found -> String_map.empty in
+    Label_map.add label (add2 gov dep old) stat
 
   let map_add_conll ~config (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) conll map =
     let edges = conll.Conllx.edges in
@@ -1769,10 +1780,10 @@ module Conllx_stat = struct
     Array.fold_left
       (fun acc (_,conll) ->
          map_add_conll ~config (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) conll acc
-      ) String_map.empty corpus.Conllx_corpus.data
+      ) Label_map.empty corpus.Conllx_corpus.data
 
   let dump map =
-    String_map.iter
+    Label_map.iter
       (fun label map2 ->
          String_map.iter
            (fun gov map3 ->
@@ -1784,18 +1795,18 @@ module Conllx_stat = struct
       ) map
 
   let get map gov label dep =
-    try Some (map |> (String_map.find label) |> (String_map.find gov) |> (String_map.find dep))
+    try Some (map |> (Label_map.find label) |> (String_map.find gov) |> (String_map.find dep))
     with Not_found -> None
 
   let get_total_gov map label gov =
     try
-      let map_dep = map |> (String_map.find label) |> (String_map.find gov) in
+      let map_dep = map |> (Label_map.find label) |> (String_map.find gov) in
       Some (String_map.fold (fun _ x acc -> x + acc) map_dep 0)
     with Not_found -> None
 
   let get_total_dep map label dep =
     try
-      let map_map_gov = map |> (String_map.find label)  in
+      let map_map_gov = map |> (Label_map.find label)  in
       match
         String_map.fold
           (fun _ map acc ->
@@ -1810,7 +1821,7 @@ module Conllx_stat = struct
   let get_total map label =
     String_map.fold (fun _ map acc1 ->
         String_map.fold (fun _ x acc2 -> x + acc2) map acc1
-      ) (String_map.find label map) 0
+      ) (Label_map.find label map) 0
 
   let count_compare (tag1,count1) (tag2,count2) =
     match (count1, count2) with
@@ -1940,7 +1951,6 @@ module Conllx_stat = struct
     |> Str.global_replace (Str.regexp "@") "___"
 
   let to_html corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map =
-    let labels = get_labels map in
     let buff = Buffer.create 32 in
     bprintf buff "<!DOCTYPE html>\n";
     bprintf buff "<html lang=\"en\">\n";
@@ -1960,24 +1970,24 @@ module Conllx_stat = struct
     bprintf buff "			<div role=\"tabpanel\">\n";
     bprintf buff "				<div class=\"col-sm-2\" style=\"height: 100vh; overflow-y: auto;\">\n";
     bprintf buff "					<ul class=\"nav nav-pills brand-pills nav-stacked\" role=\"tablist\">\n";
-    String_set.iter
-      (fun label ->
+    Label_map.iter
+      (fun label _ ->
          let esc = escape_dot label in
          bprintf buff "						<li role=\"presentation\" class=\"brand-nav\"><a href=\"#%s\" aria-controls=\"#%s\" data-toggle=\"tab\">%s [%d]</a></li>\n"
            esc esc label (get_total map label)
-      ) labels;
+      ) map;
 
     bprintf buff "					</ul>\n";
     bprintf buff "				</div>\n";
     bprintf buff "				<div class=\"col-sm-10\">\n";
     bprintf buff "					<div class=\"tab-content\">\n";
 
-    String_set.iter
-      (fun label ->
+    Label_map.iter
+      (fun label _ ->
          bprintf buff "						<div class=\"tab-pane\" id=\"%s\">\n" (escape_dot label);
          table buff corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map label;
          bprintf buff "						</div>\n";
-      ) labels;
+      ) map;
 
     bprintf buff "					</div>\n";
     bprintf buff "				</div>\n";
