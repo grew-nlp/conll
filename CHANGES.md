@@ -1,3 +1,7 @@
+# 1.10.0 (2021/07/12)
+  * Change ordering of relations in tables: "E:…" at the end
+  * add "subsem" extension in SUD
+
 ## 1.9.2 (2021/05/19)
   * Do not skip file with conll error (warning on stdout instead of error)
 
