@@ -1,3 +1,6 @@
+## 1.10.1 (2021/09/16)
+  * Fix order in defining subrelations (to be consistent with ArboratorGrew)
+
 # 1.10.0 (2021/07/12)
   * Change ordering of relations in tables: "E:…" at the end
   * add "subsem" extension in SUD
