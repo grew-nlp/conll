@@ -1650,7 +1650,7 @@ module Conllx_corpus = struct
           with Conllx_error json ->
             begin
               match log_file with
-              | None -> Printf.eprintf "%s\n" (Yojson.Basic.pretty_to_string json)
+              | None -> raise (Conllx_error json)
               | Some f when Sys.file_exists f ->
                 let out_ch = open_out_gen [Open_append] 0o755 f in
                 Printf.fprintf out_ch "%s" (Yojson.Basic.pretty_to_string json);
@@ -1681,13 +1681,13 @@ module Conllx_corpus = struct
       { columns; data=Array.of_list (List.rev !res) }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load ?(config=Conllx_config.basic) ?log_file ?columns file =
+  let load ?(config=Conllx_config.basic) ?quiet ?log_file ?columns file =
     let lines = CCIO.(with_in file read_lines_l) in
-    of_lines ~config ?log_file ?columns ~file lines
+    of_lines ~config ?quiet ?log_file ?columns ~file lines
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load_list ?(config=Conllx_config.basic) ?log_file ?columns file_list =
-    match List.map (load ~config ?columns ?log_file) file_list with
+  let load_list ?(config=Conllx_config.basic) ?quiet ?log_file ?columns file_list =
+    match List.map (load ~config ?quiet ?columns ?log_file) file_list with
     | [] -> empty
     | ({ columns }::tail) as l ->
       if List.for_all (fun {columns=p} -> p = columns) tail

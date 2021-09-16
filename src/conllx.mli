@@ -75,9 +75,9 @@ end
 module Conllx_corpus : sig
   type t
 
-  val load: ?config: Conllx_config.t -> ?log_file: string -> ?columns: Conllx_columns.t -> string -> t
+  val load: ?config: Conllx_config.t -> ?quiet:bool -> ?log_file: string -> ?columns: Conllx_columns.t -> string -> t
 
-  val load_list: ?config: Conllx_config.t -> ?log_file: string -> ?columns: Conllx_columns.t -> string list -> t
+  val load_list: ?config: Conllx_config.t -> ?quiet:bool -> ?log_file: string -> ?columns: Conllx_columns.t -> string list -> t
 
   val of_lines: ?config: Conllx_config.t -> ?quiet:bool -> ?log_file: string -> ?columns: Conllx_columns.t -> ?file: string -> string list -> t
 
