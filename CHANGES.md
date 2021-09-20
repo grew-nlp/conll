@@ -1,3 +1,6 @@
+# 1.11.0 (2021/09/20)
+  * Better error reporting
+
 ## 1.10.1 (2021/09/16)
   * Fix order in defining subrelations (to be consistent with ArboratorGrew)
 
