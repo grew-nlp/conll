@@ -612,7 +612,9 @@ module Node = struct
         begin
           match node.textform with
           | Some tf -> unescape_form tf
-          | None -> Error.error ~fct:"find_original_textform" "No `wordform` feature"
+          | None -> Error.error 
+            ~fct:"find_original_textform" 
+            "Cannot build CoNLL data from graph: inconsistent textform data in graph; the token <%d> (form=%s) does not have a `textform` whereas the next token as a \"_\" textform" i node.form
         end
       | None -> Error.error ~fct:"find_original_textform" "Cannot find node `%d`" i in
 
