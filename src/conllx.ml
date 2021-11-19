@@ -58,32 +58,6 @@ module Error = struct
     raise (Conllx_error new_json)
 end
 
-
-(* ==================================================================================================== *)
-module Misc = struct
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let parse_features ?file ?sent_id ?line_num s init =
-    match s with
-    | "_" -> init
-    | _ ->
-      let add f v acc =
-        match String_map.find_opt f acc with
-        | None -> String_map.add f v acc
-        | Some v' when v=v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the same value `%s`" f v
-        | Some v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the different values `%s` and `%s`" f v v'
-      in
-      List.fold_left
-        (fun acc fv ->
-           match Str.bounded_full_split (Str.regexp "=") fv 2 with
-           | [Str.Text f; Str.Delim "="; Str.Text v] -> add f v acc
-           | [Str.Text f; Str.Delim "="] -> add f "" acc
-           (* accept features without values. This happens in MISC column in a few UD corpora and in FEATS column in PARSEME-TR@1.1 *)
-           | [Str.Text f] -> add f "__NOVALUE__" acc
-           | _ -> Error.error ?file ?sent_id ?line_num "BUG: Unknown feat %s" fv
-        ) init (Str.split (Str.regexp "|") s)
-end
-
 (* ==================================================================================================== *)
 module Column = struct
   type t = ID | FORM | LEMMA | UPOS | XPOS | FEATS | HEAD | DEPREL | DEPS | MISC
