@@ -1993,6 +1993,7 @@ module Conllx_stat = struct
     s
     |> Str.global_replace (Str.regexp "\\.") "__"
     |> Str.global_replace (Str.regexp ":") "__"
+    |> Str.global_replace (Str.regexp "\\$") "__"
     |> Str.global_replace (Str.regexp "@") "___"
 
   let to_html corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map =
