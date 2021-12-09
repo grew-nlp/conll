@@ -586,9 +586,10 @@ module Node = struct
         begin
           match node.textform with
           | Some tf -> unescape_form tf
-          | None -> Error.error 
-            ~fct:"find_original_textform" 
-            "Cannot build CoNLL data from graph: inconsistent textform data in graph; the token <%d> (form=%s) does not have a `textform` whereas the next token as a \"_\" textform" i node.form
+          | None -> 
+            Error.error 
+              ~fct:"find_original_textform" 
+              "Cannot build CoNLL data from graph: inconsistent textform data in graph; the token <%d> (form=%s) does not have a `textform` whereas the next token as a \"_\" textform" i node.form
         end
       | None -> Error.error ~fct:"find_original_textform" "Cannot find node `%d`" i in
 
@@ -1996,7 +1997,7 @@ module Conllx_stat = struct
     |> Str.global_replace (Str.regexp "\\$") "__"
     |> Str.global_replace (Str.regexp "@") "___"
 
-  let to_html corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map =
+  let to_html corpus_id ?(tmp_gm2=false) (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map =
     let buff = Buffer.create 32 in
     bprintf buff "<!DOCTYPE html>\n";
     bprintf buff "<html lang=\"en\">\n";
@@ -2031,7 +2032,11 @@ module Conllx_stat = struct
     Label_map.iter
       (fun label _ ->
          bprintf buff "						<div class=\"tab-pane\" id=\"%s\">\n" (escape_dot label);
-         table buff corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map label;
+         begin
+           if tmp_gm2
+           then table_new_grew_match buff corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map label
+           else table buff corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map label
+         end;
          bprintf buff "						</div>\n";
       ) map;
 

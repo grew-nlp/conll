@@ -103,7 +103,8 @@ module Conllx_stat : sig
 
   (* build the table file. Args: corpus_id stat *)
   val to_html:
-    string->
+    string ->
+    ?tmp_gm2: bool -> (* tmp flag for Grew_match 2 *)
     (string * string option) -> (* gov clustering key. Ex: ("upos", None) *)
     (string * string option) -> (* dev clustering key. Ex: ("ExtPos", Some "upos")  *)
     t ->
