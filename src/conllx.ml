@@ -637,6 +637,8 @@ module Conllx_label = struct
   (* feature structures for edge labels *)
   type t = string String_map.t
 
+  let empty = String_map.empty
+
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_string_long t =
     String.concat ","
@@ -788,8 +790,12 @@ module Edge = struct
             }
           ]
 
+        | (Some id, None) when List.length (Str.split (Str.regexp "|") id) = 1 ->
+          let src = Id.of_string ?file ?sent_id ?line_num id in
+          [{ src; label=Conllx_label.empty; tar; line_num}]
+
         | (Some srcs, Some labels) ->
-          let src_id_list = List.map (Id.of_string  ?file ?sent_id ?line_num) (Str.split (Str.regexp "|") srcs) in
+          let src_id_list = List.map (Id.of_string ?file ?sent_id ?line_num) (Str.split (Str.regexp "|") srcs) in
           let label_list = List.map (Conllx_label.of_string ~config) (Str.split (Str.regexp "|") labels) in
           begin
             try List.map2 (fun src label -> { src; label; tar; line_num}) src_id_list label_list
