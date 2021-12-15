@@ -1,3 +1,7 @@
+# 1.12.0 (2021/12/15)
+  * Fix relation tables when there is a "$" in relation name (Naija)
+  * Prepare new Grew-match
+
 # 1.11.0 (2021/09/20)
   * Better error reporting
 
