@@ -56,6 +56,7 @@ module Conllx : sig
   type t
 
   val get_meta: t -> (string * string) list
+  val set_meta: string -> string -> t -> t
 
   val set_sent_id: string -> t -> t
   val get_sent_id_opt: t -> string option
