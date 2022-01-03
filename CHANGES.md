@@ -1,3 +1,6 @@
+## 1.12.1 (2022/01/03)
+  * parsing of long form labels (1=comp,2=obl)
+
 # 1.12.0 (2021/12/15)
   * Fix relation tables when there is a "$" in relation name (Naija)
   * Prepare new Grew-match
