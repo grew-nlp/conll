@@ -710,7 +710,17 @@ module Conllx_label = struct
         | None -> loop feat p tail
         | Some new_pos -> String_map.add feat (String.sub s p (new_pos-p)) (loop next (new_pos+1) tail) in
 
-    loop config.core pos config.extensions
+    (if CCString.contains s '='
+     then
+       begin
+         List.fold_left
+           (fun acc x -> 
+              match Str.split (Str.regexp "=") x with
+              | [k;v] -> String_map.add k v acc
+              | _ -> Error.error "Cannot parse label `%s`" s
+           ) String_map.empty (Str.split (Str.regexp ",") (CCString.drop pos s))
+       end
+     else loop config.core pos config.extensions)
     |> (fun x -> match pref_feat_opt with Some (f,v) -> String_map.add f v x | None -> x)
 
   (* ---------------------------------------------------------------------------------------------------- *)
