@@ -12,7 +12,7 @@ remove: [
 ]
 depends: [
   "ocaml" { >= "4.07.0"}
-  "containers"
+  "containers" { >= "3.6"}
   "yojson"
 ]
 synopsis: "An ocaml library to load conll corpus files"

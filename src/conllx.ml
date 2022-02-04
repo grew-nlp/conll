@@ -13,11 +13,11 @@ module Error = struct
   let build_json ?file ?sent_id ?line_num ?fct ?data ?prev message =
     let opt_list = [
       Some ("message", `String message);
-      (CCOpt.map (fun x -> ("file", `String x)) file);
-      (CCOpt.map (fun x -> ("sent_id", `String x)) sent_id);
-      (CCOpt.map (fun x -> ("line", `Int x)) line_num);
-      (CCOpt.map (fun x -> ("function", `String x)) fct);
-      (CCOpt.map (fun x -> ("data", x)) data);
+      (CCOption.map (fun x -> ("file", `String x)) file);
+      (CCOption.map (fun x -> ("sent_id", `String x)) sent_id);
+      (CCOption.map (fun x -> ("line", `Int x)) line_num);
+      (CCOption.map (fun x -> ("function", `String x)) fct);
+      (CCOption.map (fun x -> ("data", x)) data);
     ] in
     let prev_list = match prev with
       | None -> [("library", `String "Conllx")]
@@ -452,8 +452,8 @@ module Node = struct
        CCList.filter_map CCFun.id
          (
            (Some ("form", `String t.form))
-           :: (CCOpt.map (fun v -> ("textform", `String v)) t.textform)
-           :: (CCOpt.map (fun v -> ("wordform", `String v)) t.wordform)
+           :: (CCOption.map (fun v -> ("textform", `String v)) t.textform)
+           :: (CCOption.map (fun v -> ("wordform", `String v)) t.wordform)
            :: (Fs_map.fold (fun (f:string) v acc -> Some (f, `String v) :: acc) t.feats [])
          ))
     )
