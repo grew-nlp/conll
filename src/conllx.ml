@@ -6,6 +6,13 @@ module Int_map = CCMap.Make (Int)
 
 exception Conllx_error of Yojson.Basic.t
 
+let strip s = 
+  let len = String.length s in
+  if len > 0 && Char.code s.[len-1] = 13
+  then String.sub s 0 (len-1)
+  else s
+
+
 (* ==================================================================================================== *)
 module Error = struct
 
@@ -1246,13 +1253,14 @@ module Conllx = struct
     | (_,"") :: t -> of_string_list_rev ~config ~columns t (* remove pending empty line, if any *)
     | l -> of_string_list_rev ~columns ~config l
 
+
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_lines ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) lines =
-    of_num_lines ~config ~columns (List.mapi (fun i l -> (i+1,l)) lines)
+    of_num_lines ~config ~columns (List.mapi (fun i l -> (i+1,strip l)) lines)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) s =
-    of_lines ~config ~columns (Str.split (Str.regexp "\n") s)
+    of_lines ~config ~columns (Str.split (Str.regexp "\r\\|\n\\|\013\\|\010\013?") s)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let load ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) file =
@@ -1660,7 +1668,7 @@ module Conllx_corpus = struct
         List.iteri
           (fun i line -> 
              let line_num = i+delta in
-             match line with
+             match strip line with
              | "" when !rev_locals = [] -> Error.warning ~line_num ~quiet ?file "Illegal blank line";
              | "" -> save_one ()
              | _ -> rev_locals := (line_num,line) :: !rev_locals
