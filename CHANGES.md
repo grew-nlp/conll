@@ -1,3 +1,6 @@
+## 1.12.2 (2022/02/20)
+  * handle CoNLL with "empty" DEPREL
+
 ## 1.12.1 (2022/01/03)
   * parsing of long form labels (1=comp,2=obl)
 
