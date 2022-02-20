@@ -816,7 +816,10 @@ module Edge = struct
           let label_list = List.map (Conllx_label.of_string ~config) (Str.split (Str.regexp "|") labels) in
           begin
             try List.map2 (fun src label -> { src; label; tar; line_num}) src_id_list label_list
-            with Invalid_argument _ -> Error.error ?file ?sent_id ?line_num "different number of items in HEAD/DEPREL spec"
+            with Invalid_argument _ -> 
+              match (src_id_list, label_list) with 
+              | ([src], []) -> [{ src; label=String_map.empty; tar; line_num}] (* handle cases with "empty" labels *)
+              | _ -> Error.error ?file ?sent_id ?line_num "different number of items in HEAD/DEPREL spec"
           end
         | (None, None) -> []
         | _ -> Error.error ?file ?sent_id ?line_num "Invalid HEAD/DEPREL spec" in
