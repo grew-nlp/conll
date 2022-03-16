@@ -1913,75 +1913,6 @@ module Conllx_stat = struct
     bprintf buff "							</table>\n";
     ()
 
-  let table_new_grew_match buff corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map label =
-    let tags = get_tags map in
-    let govs = String_set.fold
-        (fun gov acc -> (gov, get_total_gov map label gov) :: acc
-        ) tags [] in
-    let sorted_govs = List.sort count_compare govs in
-
-    let deps = String_set.fold
-        (fun dep acc -> (dep, get_total_dep map label dep) :: acc
-        ) tags [] in
-    let sorted_deps = List.sort count_compare deps in
-
-    bprintf buff "							<table>\n";
-    bprintf buff "								<colgroup/>\n";
-    String_set.iter (fun _ -> bprintf buff "								<colgroup/>\n") tags;
-    bprintf buff "								<thead>\n";
-    bprintf buff "									<tr>\n";
-    bprintf buff "										<th>\n";
-    bprintf buff "											<span>DEP⇨</span>\n";
-    bprintf buff "											<br>\n";
-    bprintf buff "											<span>⇩GOV</span>\n";
-    bprintf buff "										</th>\n";
-    bprintf buff "										<th><b>TOTAL</b></th>\n";
-    List.iter (fun (dep,_) -> bprintf buff "										<th>%s</th>\n" dep) sorted_deps;
-    bprintf buff "									</tr>\n";
-    bprintf buff "								</thead>\n";
-    bprintf buff "								<tbody>\n";
-
-
-    bprintf buff "									<tr>\n";
-    bprintf buff "										<th><b>TOTAL</b></th>\n";
-    let onclick = sprintf "'run(\"%s\",\"%s\")'" corpus_id label in
-    bprintf buff "										<td class=\"total\"><a onclick=%s class=\"btn btn-warning\" target=\"_blank\">%d</a></td>\n"
-      onclick (get_total map label);
-    List.iter (fun (dep,count) ->
-        bprintf buff "										<td class=\"total\">%s</td>\n"
-          (match count with
-           | Some i ->
-             let onclick = sprintf "'run(\"%s\",\"%s\",undefined,\"%s\")'" corpus_id label dep in
-             sprintf "<a onclick=%s class=\"btn btn-success\" target=\"_blank\">%d</a>" onclick i
-           | None -> "")
-      ) sorted_deps;
-    bprintf buff "									</tr>\n";
-
-    List.iter (fun (gov, count) ->
-        bprintf buff "									<tr>\n";
-        bprintf buff "										<th>%s</th>\n" gov;
-
-        bprintf buff "										<td class=\"total\">%s</td>\n"
-          (match count with
-           | Some i ->
-             let onclick = sprintf "'run(\"%s\",\"%s\",\"%s\")'" corpus_id label gov in
-             sprintf "<a onclick=%s class=\"btn btn-success\" target=\"_blank\">%d</a>" onclick i
-           | None -> "");
-
-        List.iter (fun (dep,_) ->
-            bprintf buff "										<td>%s</td>\n"
-              (match get map gov label dep with
-               | Some i ->
-                 let onclick = sprintf "'run(\"%s\",\"%s\",\"%s\",\"%s\")'" corpus_id label gov dep in
-                 sprintf "<a onclick=%s class=\"btn btn-primary\" target=\"_blank\">%d</a>" onclick i
-               | None -> "")
-          ) sorted_deps;
-        bprintf buff "									</tr>\n";
-      ) sorted_govs;
-    bprintf buff "								</tbody>\n";
-    bprintf buff "							</table>\n";
-    ()
-
   let escape_dot s =
     s
     |> Str.global_replace (Str.regexp "\\.") "__"
@@ -1989,7 +1920,7 @@ module Conllx_stat = struct
     |> Str.global_replace (Str.regexp "\\$") "__"
     |> Str.global_replace (Str.regexp "@") "___"
 
-  let to_html corpus_id ?(tmp_gm2=false) (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map =
+  let to_html corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map =
     let buff = Buffer.create 32 in
     bprintf buff "<!DOCTYPE html>\n";
     bprintf buff "<html lang=\"en\">\n";
@@ -2024,11 +1955,7 @@ module Conllx_stat = struct
     Label_map.iter
       (fun label _ ->
          bprintf buff "						<div class=\"tab-pane\" id=\"%s\">\n" (escape_dot label);
-         begin
-           if tmp_gm2
-           then table_new_grew_match buff corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map label
-           else table buff corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map label
-         end;
+         table buff corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map label;
          bprintf buff "						</div>\n";
       ) map;
 
