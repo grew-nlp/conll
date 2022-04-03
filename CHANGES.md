@@ -1,3 +1,6 @@
+## 1.12.3 (2022/04/03)
+  * internal changes for Grew-match
+
 ## 1.12.2 (2022/02/20)
   * handle CoNLL with "empty" DEPREL
 
