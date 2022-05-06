@@ -360,7 +360,14 @@ module Fs = struct
   let to_string feats =
     if Fs_map.is_empty feats
     then "_"
-    else String.concat "|" (Fs_map.fold (fun k v acc -> (k^"="^v) :: acc) feats [])
+    else String.concat 
+        "|" 
+        (Fs_map.fold 
+           (fun k v acc -> 
+             match v with
+             | "__NOVALUE__" -> k :: acc
+             | _ -> (k^"="^v) :: acc
+           ) feats [])
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let string_feats ~config misc feats =
@@ -817,9 +824,9 @@ module Edge = struct
           begin
             try List.map2 (fun src label -> { src; label; tar; line_num}) src_id_list label_list
             with Invalid_argument _ -> 
-              match (src_id_list, label_list) with 
-              | ([src], []) -> [{ src; label=String_map.empty; tar; line_num}] (* handle cases with "empty" labels *)
-              | _ -> Error.error ?file ?sent_id ?line_num "different number of items in HEAD/DEPREL spec"
+            match (src_id_list, label_list) with 
+            | ([src], []) -> [{ src; label=String_map.empty; tar; line_num}] (* handle cases with "empty" labels *)
+            | _ -> Error.error ?file ?sent_id ?line_num "different number of items in HEAD/DEPREL spec"
           end
         | (None, None) -> []
         | _ -> Error.error ?file ?sent_id ?line_num "Invalid HEAD/DEPREL spec" in
@@ -1576,6 +1583,9 @@ module Conllx_corpus = struct
   let get_data t = t.data
 
   (* ---------------------------------------------------------------------------------------------------- *)
+  let get_columns t = t.columns
+
+  (* ---------------------------------------------------------------------------------------------------- *)
   let to_string ?(config=Conllx_config.basic) ?columns t =
     (* if the columns argument is given, it has priority on internal columms of the corpus *)
     let columns = match columns with Some c -> c | None -> t.columns in
@@ -1601,7 +1611,7 @@ module Conllx_corpus = struct
         | (Some cols, None) -> (cols,tail, 2)
         | (Some c1, Some c2) when c1 = c2 -> (c1,tail, 2)
         | (Some c1, Some c2) ->
-          Error.error ?file "Inconsistent columsn declaration\nin file --> %s\nin config --> %s\n"
+          Error.error ?file "Inconsistent columns declaration\nin file --> %s\nin config --> %s\n"
             (Conllx_columns.to_string c1) (Conllx_columns.to_string c2) in
 
       let cpt = ref 0 in

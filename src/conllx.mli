@@ -85,6 +85,7 @@ module Conllx_corpus : sig
   val to_string: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> t -> string
 
   val get_data: t -> (string * Conllx.t) array
+  val get_columns: t -> Conllx_columns.t
 
   val sizes: t -> (int * int)  (* number of graphs, number of nodes *)
 end
