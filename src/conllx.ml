@@ -161,23 +161,24 @@ module Conllx_config = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let ud_features = [
-    (* UD features collected from data folder on 2020/10/27 *)
-    "Abbr"; "AdjType"; "AdpType"; "AdvType"; "Agent"; "Agglutination"; "Analyt"; "Animacy"; "Animacy[gram]";
-    "Animacy[obj]"; "Aspect"; "Case"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]";
-    "Compound"; "ConjType"; "Connegative"; "Contrast"; "Copula"; "Definite"; "Definite[obj]"; "Degree"; "Deixis";
-    "DeixisRef"; "Deriv"; "Derivation"; "Dialect"; "Distance"; "Echo"; "Emphatic"; "Evident"; "Focus"; "FocusType";
-    "Foreign"; "Form"; "Gender"; "Gender[abs]"; "Gender[acc]"; "Gender[ben]"; "Gender[dat]"; "Gender[erg]"; "Gender[obj]";
-    "Gender[psor]"; "Gender[subj]"; "HebBinyan"; "HebExistential"; "HebSource"; "Hyph"; "InfForm"; "Link"; "Mood"; "Morph"; "Mutation";
-    "NameType"; "NegationType"; "Nomzr"; "Noun"; "NounClass"; "NounClass[obj]"; "NounClass[subj]"; "NounForm"; "NounType"; "NumForm";
-    "NumType"; "NumValue"; "Number"; "Number[abs]"; "Number[acc]"; "Number[dat]"; "Number[erg]"; "Number[obj]";
-    "Number[psed]"; "Number[psor]"; "Number[subj]"; "Orth"; "PartForm"; "PartType"; "Person"; "Person12Pl"; "Person12Sg"; "Person[abs]"; "Person[acc]";
-    "Person[dat]"; "Person[erg]"; "Person[obj]"; "Person[psor]"; "Person[sdat]"; "Person[subj]"; "Polarity"; "Polite";
-    "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "PossNumber"; "PossPerson"; "Possessed"; "Prefix"; "PrepCase";
-    "PrepForm"; "Preverb"; "PronClass"; "PronGend"; "PronNum"; "PronPers"; "PronType"; "Pun"; "PunctSide"; "PunctType"; "Red"; "RefRole"; "Reflex"; "Register";
-    "Relative"; "Strength"; "Style"; "SubGender"; "Subcat"; "Tense"; "Topic"; "Typo"; "Uninflect"; "Valency"; "Variant";
-    "VerbClass"; "VerbForm"; "VerbType"; "Voice"; "Xtra";
-
-
+    (* UD features collected from data 2.10  *)
+    "Abbr"; "AdjType"; "AdpType"; "AdvType"; "Agglutination"; "Analyt"; "Animacy"; "Animacy[gram]"; "Antr"; "Aspect"; "Augm";
+    "Case"; "Cfm"; "Clas"; "Class"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]"; "Compound"; "Comt"; 
+    "ConjType"; "Connegative"; "Contrast"; "Contv"; "Corf"; "Decl"; "Definite"; "Definitizer"; "Degree"; "DegreeModQpm"; "Deixis";
+    "DeixisRef"; "Deixis[psor]"; "Delib"; "Deo"; "Derivation"; "Determ"; "Detrans"; "Dev"; "Dialect"; "Dimin"; "Dist"; "Echo"; "Emph";
+    "Emphatic"; "Evident"; "Excl"; "ExtPos"; "Foc"; "Focus"; "FocusType"; "Foreign"; "Form";
+    "Gender"; "Gender[dat]"; "Gender[erg]"; "Gender[obj]"; "Gender[psor]"; "Gender[subj]"; "HebBinyan"; "HebExistential"; "Hum";
+    "Hyph"; "Imprs"; "Incorp"; "InfForm"; "InflClass"; "InflClass[nominal]"; "Int"; "Intens"; "Intense"; "Intension";
+    "LangId"; "Language"; "Link"; "Mood"; "Morph"; "Movement"; "Mutation"; "NCount"; "NameType"; "NegationType"; "Neutral";
+    "Nomzr"; "NonFoc"; "NounBase"; "NounClass"; "NounType"; "NumForm"; "NumType"; "NumValue";
+    "Number"; "Number[abs]"; "Number[dat]"; "Number[erg]"; "Number[obj]"; "Number[psed]"; "Number[psor]"; "Number[subj]";
+    "Obl"; "Orth"; "PartForm"; "PartType"; "PartTypeQpm"; "Pcl";
+    "Person"; "Person[abs]"; "Person[dat]"; "Person[erg]"; "Person[obj]"; "Person[psor]"; "Person[subj]";
+    "Polarity"; "Polite"; "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "Possessed";
+    "Pred"; "Prefix"; "PrepCase"; "PrepForm"; "Priv"; "PronType"; "Proper"; "Pun"; "PunctSide"; "PunctType";
+    "Recip"; "Red"; "Redup"; "Reflex"; "Reflex[obj]"; "Reflex[subj]"; "Rel"; "Report"; "Speech"; "Strength";
+    "Style"; "SubGender"; "Subcat"; "Subordinative"; "Tense"; "Top"; "Trans"; "Tv"; "Typo"; "Uninflect";
+    "Valency"; "Variant"; "Ventive"; "VerbClass"; "VerbForm"; "VerbStem"; "VerbType"; "Voice";
 
     (* SUD features *)
     "Shared";
