@@ -332,25 +332,22 @@ module Fs = struct
   let encode_feat_name s = Str.global_replace (Str.regexp "\\[\\([0-9a-z]+\\)\\]") "__\\1" s
   let decode_feat_name s = Str.global_replace (Str.regexp "__\\([0-9a-z]+\\)$") "[\\1]" s
 
+  let add ?file ?sent_id ?line_num f v acc =
+    let enc_f = encode_feat_name f in
+    match Fs_map.find_opt enc_f acc with
+    | None -> Fs_map.add enc_f v acc
+    | Some v' when v=v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the same value `%s`" f v
+    | Some v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the different values `%s` and `%s`" f v v'
+
   (* ---------------------------------------------------------------------------------------------------- *)
   let parse ?file ?sent_id ?line_num s init =
     match s with
     | "_" -> init
     | _ ->
-      let add f v acc =
-        let enc_f = encode_feat_name f in
-        match Fs_map.find_opt enc_f acc with
-        | None -> Fs_map.add enc_f v acc
-        | Some v' when v=v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the same value `%s`" f v
-        | Some v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the different values `%s` and `%s`" f v v'
-      in
       List.fold_left
         (fun acc fv ->
            match Str.bounded_full_split (Str.regexp "=") fv 2 with
-           | [Str.Text f; Str.Delim "="; Str.Text v] -> add f v acc
-           | [Str.Text f; Str.Delim "="] -> add f "" acc
-           (* accept features without values. This happens in MISC column in a few UD corpora and in FEATS column in PARSEME-TR@1.1 *)
-           | [Str.Text f] -> add f "__NOVALUE__" acc
+           | [Str.Text f; Str.Delim "="; Str.Text v] -> add ?file ?sent_id ?line_num f v acc
            | _ -> Error.error ?file ?sent_id ?line_num "Cannot parse feature `%s` (expected string: `feat=value`)" fv
         ) init (Str.split (Str.regexp "|") s)
 
@@ -364,11 +361,9 @@ module Fs = struct
     else String.concat 
         "|" 
         (Fs_map.fold 
-           (fun k v acc -> 
-             match v with
-             | "__NOVALUE__" -> k :: acc
-             | _ -> (k^"="^v) :: acc
-           ) feats [])
+           (fun k v acc -> (k^"="^v) :: acc
+           ) feats []
+        )
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let string_feats ~config misc feats =
@@ -377,6 +372,8 @@ module Fs = struct
         (fun key value acc ->
            match key with
            | "lemma" | "upos" | "xpos" -> acc
+           | "__RAW_MISC__" when misc -> (key,value) :: acc
+           | "__RAW_MISC__" -> acc
            | s when s.[0] = '_' -> acc (* TODO: DOC (other columns like orfeo are encoded from "_xxx" feats)*)
            | _ when config.Conllx_config.feats = [] ->
              begin
@@ -399,7 +396,8 @@ module Fs = struct
         ) feats [] in
     match feat_list with
     | [] -> "_"
-    | l -> String.concat "|" (CCList.rev_map (fun (f,v) -> (decode_feat_name f)^"="^v) l)
+    | l -> String.concat "|" 
+             (CCList.rev_map (fun (f,v) -> if f = "__RAW_MISC__" then v else (decode_feat_name f)^"="^v) l)
 end
 
 (* ==================================================================================================== *)
@@ -437,19 +435,24 @@ module Node = struct
              | (Column.FORM, _) ->
                (acc_id_opt, item, acc_feats)
              | (Column.LEMMA, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs_map.add "lemma" item acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs.add ?file ?sent_id ?line_num "lemma" item acc_feats)
              | (Column.UPOS, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs_map.add "upos" item acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs.add ?file ?sent_id ?line_num "upos" item acc_feats)
              | (Column.XPOS, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs_map.add "xpos" item acc_feats)
-             | (Column.FEATS,_) -> (acc_id_opt, acc_form, Fs.parse ?file ?sent_id ?line_num item acc_feats)
-             | (Column.MISC,_) -> (acc_id_opt, acc_form, Fs.parse ?file ?sent_id ?line_num item acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs.add ?file ?sent_id ?line_num "xpos" item acc_feats)
+             | (Column.FEATS,_) -> 
+               let feats = Fs.parse ?file ?sent_id ?line_num item acc_feats in (acc_id_opt, acc_form, feats)
+             | (Column.MISC,_) -> 
+               let feats = 
+                 try Fs.parse ?file ?sent_id ?line_num item acc_feats 
+                 with Conllx_error _ -> Fs.add ?file ?sent_id ?line_num "__RAW_MISC__" item acc_feats
+               in (acc_id_opt, acc_form, feats)
              | (Column.ORFEO_START, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs_map.add "_start" item acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs.add ?file ?sent_id ?line_num "_start" item acc_feats)
              | (Column.ORFEO_STOP, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs_map.add "_stop" item acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs.add ?file ?sent_id ?line_num "_stop" item acc_feats)
              | (Column.ORFEO_SPEAKER, _) ->
-               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs_map.add "_speaker" item acc_feats)
+               (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs.add ?file ?sent_id ?line_num "_speaker" item acc_feats)
              | _ -> (acc_id_opt, acc_form, acc_feats)
           ) (None, "" ,Fs.empty) columns item_list in
       match id_opt with
