@@ -340,14 +340,19 @@ module Fs = struct
     | Some v' -> Error.error ?file ?sent_id ?line_num "The feature `%s` is declared twice with the different values `%s` and `%s`" f v v'
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let parse ?file ?sent_id ?line_num s init =
+  let parse ?config ?file ?sent_id ?line_num misc s init =
+    let misc_pref f = 
+      match config with
+      | Some c when misc && List.mem f c.Conllx_config.feats -> "__MISC__" ^ f
+      | _ -> f in
     match s with
     | "_" -> init
     | _ ->
       List.fold_left
         (fun acc fv ->
            match Str.bounded_full_split (Str.regexp "=") fv 2 with
-           | [Str.Text f; Str.Delim "="; Str.Text v] -> add ?file ?sent_id ?line_num f v acc
+           | [Str.Text f; Str.Delim "="; Str.Text v] -> 
+             add ?file ?sent_id ?line_num (misc_pref f) v acc
            | _ -> Error.error ?file ?sent_id ?line_num "Cannot parse feature `%s` (expected string: `feat=value`)" fv
         ) init (Str.split (Str.regexp "|") s)
 
@@ -374,6 +379,7 @@ module Fs = struct
            | "lemma" | "upos" | "xpos" -> acc
            | "__RAW_MISC__" when misc -> (key,value) :: acc
            | "__RAW_MISC__" -> acc
+           | s when misc && String.length s > 8 && String.sub s 0 8 = "__MISC__" -> (String.sub s 8 ((String.length s) - 8),value) :: acc
            | s when s.[0] = '_' -> acc (* TODO: DOC (other columns like orfeo are encoded from "_xxx" feats)*)
            | _ when config.Conllx_config.feats = [] ->
              begin
@@ -424,7 +430,7 @@ module Node = struct
   let id_map mapping t = { t with id = Id.map_id mapping t.id}
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_item_list ?file ?sent_id ?line_num ~columns item_list =
+  let of_item_list ?file ?sent_id ?line_num ~config ~columns item_list =
     try
       let (id_opt, form, feats) =
         List.fold_left2
@@ -441,10 +447,10 @@ module Node = struct
              | (Column.XPOS, _) ->
                (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs.add ?file ?sent_id ?line_num "xpos" item acc_feats)
              | (Column.FEATS,_) -> 
-               let feats = Fs.parse ?file ?sent_id ?line_num item acc_feats in (acc_id_opt, acc_form, feats)
+               let feats = Fs.parse ~config ?file ?sent_id ?line_num false item acc_feats in (acc_id_opt, acc_form, feats)
              | (Column.MISC,_) -> 
                let feats = 
-                 try Fs.parse ?file ?sent_id ?line_num item acc_feats 
+                 try Fs.parse ~config ?file ?sent_id ?line_num true item acc_feats 
                  with Conllx_error _ -> Fs.add ?file ?sent_id ?line_num "__RAW_MISC__" item acc_feats
                in (acc_id_opt, acc_form, feats)
              | (Column.ORFEO_START, _) ->
@@ -546,7 +552,7 @@ module Node = struct
       (fun item ->
          match Str.split (Str.regexp_string "::") item with
          | [si; sj; string_feats] ->
-           ((int_of_string si, int_of_string sj), Fs.parse string_feats Fs.empty)
+           ((int_of_string si, int_of_string sj), Fs.parse false string_feats Fs.empty)
          | _ -> Error.error ~fct: "mwt_misc_of_string" "Cannot parse `%s`" s
       )  (Str.split (Str.regexp_string "||") s)
 
@@ -1183,7 +1189,7 @@ module Conllx = struct
       List.fold_left
         (fun (acc_nodes, acc_edges, acc_parseme, acc_frsemcor) (line_num,graph_line) ->
            let item_list = Str.split (Str.regexp "\t") graph_line in
-           let node = Node.of_item_list ?file ?sent_id ~line_num ~columns item_list in
+           let node = Node.of_item_list ?file ?sent_id ~line_num ~config ~columns item_list in
            let edge_list = Edge.of_item_list ?file ?sent_id ~line_num ~config ~columns node.Node.id item_list in
            let new_acc_parseme = Parseme.update ?file ?sent_id ~line_num ~columns node.Node.id item_list acc_parseme in
            let new_acc_frsemcor = Frsemcor.update ?file ?sent_id ~line_num ~columns node.Node.id item_list acc_frsemcor in
