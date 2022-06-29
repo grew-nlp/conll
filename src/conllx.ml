@@ -166,7 +166,7 @@ module Conllx_config = struct
     "Case"; "Cfm"; "Clas"; "Class"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]"; "Compound"; "Comt"; 
     "ConjType"; "Connegative"; "Contrast"; "Contv"; "Corf"; "Decl"; "Definite"; "Definitizer"; "Degree"; "DegreeModQpm"; "Deixis";
     "DeixisRef"; "Deixis[psor]"; "Delib"; "Deo"; "Derivation"; "Determ"; "Detrans"; "Dev"; "Dialect"; "Dimin"; "Dist"; "Echo"; "Emph";
-    "Emphatic"; "Evident"; "Excl"; "ExtPos"; "Foc"; "Focus"; "FocusType"; "Foreign"; "Form";
+    "Emphatic"; "Evident"; "Excl"; (* "ExtPos"; *) "Foc"; "Focus"; "FocusType"; "Foreign"; "Form";
     "Gender"; "Gender[dat]"; "Gender[erg]"; "Gender[obj]"; "Gender[psor]"; "Gender[subj]"; "HebBinyan"; "HebExistential"; "Hum";
     "Hyph"; "Imprs"; "Incorp"; "InfForm"; "InflClass"; "InflClass[nominal]"; "Int"; "Intens"; "Intense"; "Intension";
     "LangId"; "Language"; "Link"; "Mood"; "Morph"; "Movement"; "Mutation"; "NCount"; "NameType"; "NegationType"; "Neutral";
