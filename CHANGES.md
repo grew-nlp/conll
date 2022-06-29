@@ -1,3 +1,6 @@
+## 1.13.0 (2022/06/29)
+  * add some pseudo features (like __RAW_MISC__) to improve CONLL preservation
+
 ## 1.12.3 (2022/04/03)
   * internal changes for Grew-match
 
