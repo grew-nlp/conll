@@ -319,7 +319,12 @@ module Id_map = Map.Make (struct type t = Id.t let compare = Stdlib.compare end)
 
 (* ==================================================================================================== *)
 
-let lowercase_compare s1 s2 = Stdlib.compare (CCString.lowercase_ascii s1) (CCString.lowercase_ascii s2)
+let remove_misc_prefix s =
+  if String.length s > 8 && String.sub s 0 8 = "__MISC__" 
+  then String.sub s 8 ((String.length s) - 8)
+  else s
+
+let lowercase_compare s1 s2 = Stdlib.compare (CCString.lowercase_ascii (remove_misc_prefix s1)) (CCString.lowercase_ascii (remove_misc_prefix s2))
 module Fs_map = CCMap.Make (struct type t=string let compare = lowercase_compare end)
 (* we need a special map to take into account the lowercase based comparison of CoNLL feats *)
 
