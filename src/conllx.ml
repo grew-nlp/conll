@@ -552,7 +552,10 @@ module Node = struct
       (fun item ->
          match Str.split (Str.regexp_string "::") item with
          | [si; sj; string_feats] ->
-           ((int_of_string si, int_of_string sj), Fs.parse false string_feats Fs.empty)
+           let feats = 
+             try Fs.parse false string_feats Fs.empty 
+             with Conllx_error _ -> Fs.add "__RAW_MISC__" string_feats Fs.empty
+           in ((int_of_string si, int_of_string sj), feats)
          | _ -> Error.error ~fct: "mwt_misc_of_string" "Cannot parse `%s`" s
       )  (Str.split (Str.regexp_string "||") s)
 
@@ -572,7 +575,7 @@ module Node = struct
       | { id=Id.Mwt (init,final); form; feats; _} :: next :: tail ->
         begin
           if not (Fs_map.is_empty feats)
-          then  mwt_misc := ((init,final),feats) :: !mwt_misc
+          then mwt_misc := ((init,final),feats) :: !mwt_misc
         end;
         let new_to_underscore = (CCList.range (init+1) final) @ to_underscore in
         {next with textform = Some (escape_form form)} :: (loop new_to_underscore tail)
