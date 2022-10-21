@@ -11,6 +11,7 @@ remove: [
   ["make" "uninstall"]
 ]
 depends: [
+  "ocamlbuild"
   "ocaml" { >= "4.07.0"}
   "containers" { >= "3.6"}
   "yojson"

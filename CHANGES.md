@@ -1,4 +1,6 @@
-## 1.13.0 (2022/06/29)
+## 1.13.1 (2022/10/21)
+  * add dependence on ocamlbuild
+# 1.13.0 (2022/06/29)
   * add some pseudo features (like __RAW_MISC__) to improve CONLL preservation
 
 ## 1.12.3 (2022/04/03)
