@@ -319,12 +319,14 @@ module Id_map = Map.Make (struct type t = Id.t let compare = Stdlib.compare end)
 
 (* ==================================================================================================== *)
 
-let remove_misc_prefix s =
+(* The sorting must be done on unprefixed feature name, but without merging `f` and `__MISC__f`
+   --> the `__MISC__` is kept as a suffix *)
+let move_misc_prefix s =
   if String.length s > 8 && String.sub s 0 8 = "__MISC__" 
-  then String.sub s 8 ((String.length s) - 8)
+  then String.sub s 8 ((String.length s) - 8) ^ "__MISC__"
   else s
 
-let lowercase_compare s1 s2 = Stdlib.compare (CCString.lowercase_ascii (remove_misc_prefix s1)) (CCString.lowercase_ascii (remove_misc_prefix s2))
+let lowercase_compare s1 s2 = Stdlib.compare (CCString.lowercase_ascii (move_misc_prefix s1)) (CCString.lowercase_ascii (move_misc_prefix s2))
 module Fs_map = CCMap.Make (struct type t=string let compare = lowercase_compare end)
 (* we need a special map to take into account the lowercase based comparison of CoNLL feats *)
 
@@ -360,9 +362,6 @@ module Fs = struct
              add ?file ?sent_id ?line_num (misc_pref f) v acc
            | _ -> Error.error ?file ?sent_id ?line_num "Cannot parse feature `%s` (expected string: `feat=value`)" fv
         ) init (Str.split (Str.regexp "|") s)
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let compare (f1,_) (f2,_) = Stdlib.compare (CCString.lowercase_ascii f1) (CCString.lowercase_ascii f2)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_string feats =
