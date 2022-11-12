@@ -1301,7 +1301,7 @@ module Conllx = struct
     let (node_items, edges) =
       Int_map.fold
         (fun mwe_id mwe_item (acc_nodes, acc_edges) ->
-           ((Parseme.item_to_json_item mwe_id mwe_item) :: acc_nodes,
+          ((Parseme.item_to_json_item mwe_id mwe_item) :: acc_nodes,
             List.fold_left (fun acc (token_id,proj) ->
                 let pre_label = match proj with
                   | Parseme.Proj_1 -> ["proj", `String "1"]
@@ -1313,43 +1313,43 @@ module Conllx = struct
                   ("tar", `String (Id.to_string token_id));
                 ] :: acc
               ) acc_edges mwe_item.ids
-           )
+          )
         ) t.parseme (node_items, edges) in
 
     (* replace old values of nodes, edges with new ones, taking into account frsemcor *)
     let (node_items, edges) =
       Int_map.fold
         (fun sem_id sem_item (acc_nodes, acc_edges) ->
-           match sem_item.Frsemcor.head with
-           | None ->
-             let sent_id = List.assoc_opt "sent_id" t.meta in
-             Error.error ?sent_id "No head for id `%d`" sem_id
-           | Some head ->
-             let node_id = sprintf "FRSEMCOR_%d" sem_id in
-             let new_node_item = (node_id, `Assoc [("frsemcor", `String sem_item.frsemcor)]) in
-             (
-               new_node_item :: acc_nodes,
-               `Assoc [("src", `String node_id); ("label", `Assoc [("frsemcor", `String "head")]); ("tar", `String (Id.to_string head));] ::
-               (List.fold_left
-                  (fun acc token_id ->
-                     `Assoc [
-                       ("src", `String node_id);
-                       ("label", `Assoc [("frsemcor", `String "yes")]);
-                       ("tar", `String (Id.to_string token_id));
-                     ] :: acc
-                  ) acc_edges sem_item.Frsemcor.tokens
-               )
-             )
+          match sem_item.Frsemcor.head with
+          | None ->
+            let sent_id = List.assoc_opt "sent_id" t.meta in
+            Error.error ?sent_id "No head for id `%d`" sem_id
+          | Some head ->
+            let node_id = sprintf "FRSEMCOR_%d" sem_id in
+            let new_node_item = (node_id, `Assoc [("frsemcor", `String sem_item.frsemcor)]) in
+            (
+              new_node_item :: acc_nodes,
+              `Assoc [("src", `String node_id); ("label", `Assoc [("frsemcor", `String "head")]); ("tar", `String (Id.to_string head));] ::
+              (List.fold_left
+                (fun acc token_id ->
+                  `Assoc [
+                    ("src", `String node_id);
+                    ("label", `Assoc [("frsemcor", `String "yes")]);
+                    ("tar", `String (Id.to_string token_id));
+                  ] :: acc
+                ) acc_edges sem_item.Frsemcor.tokens
+              )
+            )
         ) t.frsemcor (node_items, edges) in
 
-    `Assoc
+    `Assoc 
       (CCList.filter_map CCFun.id
-         [
-           (match t.meta with [] -> None | _ -> Some ("meta", `Assoc (List.map (fun (k,v) -> (k, `String v)) t.meta)));
-           (match node_items with [] -> None | _ -> Some ("nodes", `Assoc node_items));
-           (match edges with [] -> None | _ -> Some ("edges", `List edges));
-           (match t.order with [] -> None | _ -> Some ("order", `List (List.map (fun id -> `String (Id.to_string id)) t.order)));
-         ]
+        [
+          (match t.meta with [] -> None | _ -> Some ("meta", `Assoc (List.map (fun (k,v) -> (k, `String v)) t.meta)));
+          (match node_items with [] -> None | _ -> Some ("nodes", `Assoc node_items));
+          (match edges with [] -> None | _ -> Some ("edges", `List edges));
+          (match t.order with [] -> None | _ -> Some ("order", `List (List.map (fun id -> `String (Id.to_string id)) t.order)));
+        ]
       )
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1689,6 +1689,25 @@ module Conllx_corpus = struct
       if List.for_all (fun {columns=p} -> p = columns) tail
       then { columns; data = Array.concat (List.map (fun c -> c.data) l) }
       else Error.error "All files must have the same columns declaration"
+
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let save ?(config=Conllx_config.basic) ?sent_id_list out_ch t =
+    let columns= t.columns in 
+    fprintf out_ch "%s\n" (Conllx_columns.to_string columns);
+    match sent_id_list with
+    | Some l -> 
+      List.iter 
+        (fun sent_id -> 
+          match CCArray.find_opt (fun (s,_) -> s=sent_id) t.data with
+          | Some (_,conll) -> fprintf out_ch "%s\n" (Conllx.to_string ~config ~columns conll)
+          | None -> Error.warning "sent_id not found (%s)" sent_id
+        ) l
+    | None -> 
+      Array.iter 
+        (fun (sent_id, conll) ->
+          fprintf out_ch "%s\n" (Conllx.to_string ~config ~columns conll)
+        ) t.data
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let sizes t =
