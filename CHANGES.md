@@ -1,5 +1,10 @@
+## 1.13.2 (2022/11/23)
+  * Fix unwanted `__RAW_MISC__`
+  * add `Conllx_corpus.save`
+
 ## 1.13.1 (2022/10/21)
   * add dependence on ocamlbuild
+
 # 1.13.0 (2022/06/29)
   * add some pseudo features (like __RAW_MISC__) to improve CONLL preservation
 
