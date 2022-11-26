@@ -160,29 +160,34 @@ module Conllx_config = struct
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let ud_features = [
-    (* UD features collected from data 2.10  *)
-    "Abbr"; "AdjType"; "AdpType"; "AdvType"; "Agglutination"; "Analyt"; "Animacy"; "Animacy[gram]"; "Antr"; "Aspect"; "Augm";
-    "Case"; "Cfm"; "Clas"; "Class"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]"; "Compound"; "Comt"; 
-    "ConjType"; "Connegative"; "Contrast"; "Contv"; "Corf"; "Decl"; "Definite"; "Definitizer"; "Degree"; "DegreeModQpm"; "Deixis";
-    "DeixisRef"; "Deixis[psor]"; "Delib"; "Deo"; "Derivation"; "Determ"; "Detrans"; "Dev"; "Dialect"; "Dimin"; "Dist"; "Echo"; "Emph";
-    "Emphatic"; "Evident"; "Excl"; (* "ExtPos"; *) "Foc"; "Focus"; "FocusType"; "Foreign"; "Form";
-    "Gender"; "Gender[dat]"; "Gender[erg]"; "Gender[obj]"; "Gender[psor]"; "Gender[subj]"; "HebBinyan"; "HebExistential"; "Hum";
-    "Hyph"; "Imprs"; "Incorp"; "InfForm"; "InflClass"; "InflClass[nominal]"; "Int"; "Intens"; "Intense"; "Intension";
-    "LangId"; "Language"; "Link"; "Mood"; "Morph"; "Movement"; "Mutation"; "NCount"; "NameType"; "NegationType"; "Neutral";
-    "Nomzr"; "NonFoc"; "NounBase"; "NounClass"; "NounType"; "NumForm"; "NumType"; "NumValue";
-    "Number"; "Number[abs]"; "Number[dat]"; "Number[erg]"; "Number[obj]"; "Number[psed]"; "Number[psor]"; "Number[subj]";
-    "Obl"; "Orth"; "PartForm"; "PartType"; "PartTypeQpm"; "Pcl";
-    "Person"; "Person[abs]"; "Person[dat]"; "Person[erg]"; "Person[obj]"; "Person[psor]"; "Person[subj]";
-    "Polarity"; "Polite"; "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "Possessed";
-    "Pred"; "Prefix"; "PrepCase"; "PrepForm"; "Priv"; "PronType"; "Proper"; "Pun"; "PunctSide"; "PunctType";
-    "Recip"; "Red"; "Redup"; "Reflex"; "Reflex[obj]"; "Reflex[subj]"; "Rel"; "Report"; "Speech"; "Strength";
-    "Style"; "SubGender"; "Subcat"; "Subordinative"; "Tense"; "Top"; "Trans"; "Tv"; "Typo"; "Uninflect";
-    "Valency"; "Variant"; "Ventive"; "VerbClass"; "VerbForm"; "VerbStem"; "VerbType"; "Voice";
 
+  let ud_features = [
+    (* UD features collected from data 2.11 *)
+    "Abbr"; "Accomp"; "AdjType"; "AdpType"; "AdvType"; "Advlz"; "Agglutination"; "Also"; "Analyt"; "Animacy"; "Animacy[gram]"; "Animacy[obj]"; "Aspect"; "Augm";
+    "Case"; "Caus"; "Cfm"; "Clas"; "Class"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]"; "Compound"; "Comt"; "Conces";
+    "ConjType"; "Connegative"; "Contrast"; "Contv"; "Corf"; "Decl"; "Definite"; "Definitizer"; "Degree"; "DegreeModQpm"; "Deixis";
+    "DeixisRef"; "Deixis[psor]"; "Delib"; "Deo"; "Derivation"; "Determ"; "Detrans"; "Dev"; "Dialect"; "Dim"; "Dimin"; "Dist"; "Echo"; "Emph";
+    "Emphatic"; "Evident"; "Excl"; "Fact"; "False"; "Foc"; "Focus"; "FocusType"; "Foreign"; "Form";
+    "Gender"; "Gender[abs]"; "Gender[dat]"; "Gender[erg]"; "Gender[io]"; "Gender[obj]"; "Gender[psor]"; "Gender[subj]"; "HebBinyan"; "HebExistential"; "Hon"; "Hum";
+    "Hyph"; "Imprs"; "Incorp"; "InfForm"; "InflClass"; "InflClass[nominal]"; "Int"; "Intens"; "Intense"; "Intension";
+    "LangId"; "Language"; "Link"; "Mir"; "Mood"; "Morph"; "Movement"; "Mutation"; "NCount"; "NameType"; "NegationType"; "Neutral"; "Nmzr";
+    "Nomzr"; "NonFoc"; "NounBase"; "NounClass"; "NounType"; "NumForm"; "NumType"; "NumValue";
+    "Number"; "Number[abs]"; "Number[dat]"; "Number[erg]"; "Number[grnd]"; "Number[io]"; "Number[obj]"; "Number[psed]"; "Number[psor]"; "Number[subj]";
+    "Obl"; "Orth"; "PartForm"; "PartType"; "PartTypeQpm"; "Pcl";
+    "Person"; "Person[abs]"; "Person[dat]"; "Person[erg]"; "Person[grnd]"; "Person[io]"; "Person[obj]"; "Person[psor]"; "Person[subj]";
+    "Polarity"; "Polite"; "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "Possessed";
+    "Pred"; "Prefix"; "PrepCase"; "PrepForm"; "Priv"; "PronType"; "Proper"; "Prp"; "Pun"; "PunctSide"; "PunctType";
+    "RcpType"; "Recip"; "Red"; "Redup"; "Reflex"; "Reflex[obj]"; "Reflex[subj]"; "Rel"; "RelType"; "Report"; "Restr"; "Speech"; "Strength";
+    "Style"; "SubGender"; "Subcat"; "Subord"; "Subordinative"; "Tense"; "Top"; "Trans"; "Tv"; "Typo"; "Uninflect";
+    "Valency"; "Variant"; "Ventive"; "VerbClass"; "VerbForm"; "VerbStem"; "VerbType"; "Voice";
+ 
     (* SUD features *)
     "Shared";
+
+    (* Note: ExtPos is used in FEATS in UD_English-EWT, UD_Portuguese-Bosque and UD_Portuguese-GSD but in MISC in SUD corpora 
+       We consider it as MISC here. *)
   ]
+
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let ud = { (* covers also eud *)
