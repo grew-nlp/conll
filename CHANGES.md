@@ -1,3 +1,6 @@
+## 1.13.3 (2022/11/26)
+  * update ud_features definition for 2.11
+
 ## 1.13.2 (2022/11/23)
   * Fix unwanted `__RAW_MISC__`
   * add `Conllx_corpus.save`
