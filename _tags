@@ -1,2 +1,0 @@
-true:	package(containers,unix,str,yojson)
-true: bin_annot

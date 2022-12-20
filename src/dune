@@ -1,0 +1,5 @@
+(library
+ (public_name conll)
+ (name conll)
+ (libraries str unix containers yojson)
+)
