@@ -1654,11 +1654,11 @@ module Conllx_corpus = struct
               | None -> raise (Conllx_error json)
               | Some f when Sys.file_exists f ->
                 let out_ch = open_out_gen [Open_append] 0o755 f in
-                Printf.fprintf out_ch "%s" (Yojson.Basic.pretty_to_string json);
+                Printf.fprintf out_ch "%s\n" (Yojson.Basic.to_string json);
                 close_out out_ch
               | Some f ->
                 let out_ch = open_out f in
-                Printf.fprintf out_ch "%s" (Yojson.Basic.pretty_to_string json);
+                Printf.fprintf out_ch "%s\n" (Yojson.Basic.to_string json);
                 close_out out_ch
             end
         end;
