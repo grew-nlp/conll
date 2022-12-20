@@ -579,7 +579,7 @@ module Node = struct
     let mwt_misc = ref [] in
     let rec loop to_underscore = function
       | [] -> []
-      | ({ form="__0__" } as node) :: tail -> node :: (loop to_underscore tail)
+      | ({ form="__0__"; _ } as node) :: tail -> node :: (loop to_underscore tail)
       | ({ id=Id.Empty _; _ } as node) :: tail -> { node with textform = Some "_"} :: (loop to_underscore tail)
       | { id=Id.Mwt (init,final); form; feats; _} :: next :: tail ->
         begin
@@ -947,11 +947,6 @@ module Parseme = struct
   let empty = { mwepos = None; parseme = ""; label = None; criterion = None; ids = []; }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let item_sort t = { t with ids = List.sort (fun (x,_) (y,_) -> Id.compare x y) t.ids }
-  (* NB: the order used of order on Id but order given in the order Conllx field should be used
-         but in this context, the orders are equivalent. TOCHECK! *)
-
-  (* ---------------------------------------------------------------------------------------------------- *)
   let id_map mapping t = { t with ids = List.map (fun (x,y) -> (Id.map_id mapping x,y)) t.ids }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1004,8 +999,6 @@ module Parseme = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   type t = item Int_map.t
-
-  let sort = Int_map.map item_sort
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let update ?file ?sent_id ~line_num ~columns node_id item_list t =
@@ -1068,7 +1061,7 @@ module Frsemcor = struct
   let last_fresh_sem_id = ref 0
   let get_fresh_sem_id () = decr last_fresh_sem_id; !last_fresh_sem_id
 
-  let update ?file ?sent_id ~line_num ~columns node_id item_list t =
+  let update ?file ?sent_id ?line_num ~columns node_id item_list t =
     List.fold_left2
       (fun acc col item ->
          match (col, item) with
@@ -1104,7 +1097,7 @@ module Frsemcor = struct
                     | None -> Int_map.add sem_id {empty with frsemcor; head = Some node_id } acc2
                     | Some item -> Int_map.add sem_id { item with frsemcor; head = Some node_id } acc2
                   end
-                | _ -> Error.error "cannot parse FRSEMCOR_NOUN"
+                | _ -> Error.error ?file ?sent_id ?line_num "cannot parse FRSEMCOR_NOUN"
              ) acc sem_items
          | _ -> acc
       ) t columns item_list
@@ -1219,8 +1212,8 @@ module Conllx = struct
     begin
       let rec loop used_ids = function
         | [] -> ()
-        | {Node.id=id}::tail when Id_set.mem id used_ids -> Error.error ?sent_id ?file "id `%s` is used twice" (Id.to_string id)
-        | {Node.id=id}::tail -> loop (Id_set.add id used_ids) tail in
+        | {Node.id=id; _}::_ when Id_set.mem id used_ids -> Error.error ?sent_id ?file "id `%s` is used twice" (Id.to_string id)
+        | {Node.id=id; _}::tail -> loop (Id_set.add id used_ids) tail in
       try
         loop Id_set.empty nodes;
         List.iter (check_edge ?file ?sent_id nodes) edges;
@@ -1448,7 +1441,7 @@ module Conllx = struct
              ({ Frsemcor.frsemcor = frsemcor_node |> member "frsemcor" |> to_string; head = Some head; tokens=[] } :: acc_singleton, acc_multi)
            | ([head], tokens) ->
              (acc_singleton, { Frsemcor.frsemcor = frsemcor_node |> member "frsemcor" |> to_string; head = Some head; tokens } :: acc_multi)
-           | (l,_) -> Error.error "Not one head -> %d" (List.length head_list)
+           | (_,_) -> Error.error "Not one head -> %d" (List.length head_list)
         ) ([],[]) frsemcor_node_items in
 
     let rec compare_list l1 l2 = match (l1, l2) with
@@ -1517,7 +1510,7 @@ module Conllx = struct
     { t with parseme = Int_map.map order_mwe t.parseme }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_buff ?sent_id ~config ~columns buff t =
+  let to_buff ~config ~columns buff t =
 
     let t = order_mwes t in
 
@@ -1560,7 +1553,7 @@ module Conllx = struct
                      | _::tail when List.mem_assoc node.id tail ->
                        let proj = List.assoc node.id tail in
                        (Parseme.mwe_id_proj_to_string (mwe_id, proj)) :: acc
-                     | l -> acc
+                     | _ -> acc
                   ) t_without_root.parseme []) with
              | [] -> "*"
              | l -> String.concat ";" (List.rev l) in
@@ -1570,9 +1563,9 @@ module Conllx = struct
                   (fun mwe_id frsemcor_item acc ->
                      match (frsemcor_item.Frsemcor.head, frsemcor_item.Frsemcor.tokens) with
                      | (Some h, []) when h = node.id -> frsemcor_item.Frsemcor.frsemcor :: acc
-                     | (Some h, tokens) when h=node.id -> (sprintf "%d:%s" mwe_id frsemcor_item.Frsemcor.frsemcor) :: acc
+                     | (Some h, _) when h=node.id -> (sprintf "%d:%s" mwe_id frsemcor_item.Frsemcor.frsemcor) :: acc
                      | (_,tokens) when List.mem node.id tokens -> (sprintf "%d" mwe_id) :: acc
-                     | l -> acc
+                     | _ -> acc
                   ) t_without_root.frsemcor []) with
            | [] -> "*"
            | l -> String.concat ";" l in
@@ -1615,8 +1608,7 @@ module Conllx_corpus = struct
     bprintf buff "%s\n" (Conllx_columns.to_string columns);
     Array.iter
       (fun (_,conll) ->
-         let sent_id = Conllx.get_sent_id_opt conll in
-         Conllx.to_buff ?sent_id ~config ~columns:t.columns buff conll;
+         Conllx.to_buff ~config ~columns:t.columns buff conll
       ) t.data;
     Buffer.contents buff
 
@@ -1690,8 +1682,8 @@ module Conllx_corpus = struct
   let load_list ?(config=Conllx_config.basic) ?quiet ?log_file ?columns file_list =
     match List.map (load ~config ?quiet ?columns ?log_file) file_list with
     | [] -> empty
-    | ({ columns }::tail) as l ->
-      if List.for_all (fun {columns=p} -> p = columns) tail
+    | ({ columns; _ }::tail) as l ->
+      if List.for_all (fun {columns=p; _} -> p = columns) tail
       then { columns; data = Array.concat (List.map (fun c -> c.data) l) }
       else Error.error "All files must have the same columns declaration"
 
@@ -1710,7 +1702,7 @@ module Conllx_corpus = struct
         ) l
     | None -> 
       Array.iter 
-        (fun (sent_id, conll) ->
+        (fun (_, conll) ->
           fprintf out_ch "%s\n" (Conllx.to_string ~config ~columns conll)
         ) t.data
 
