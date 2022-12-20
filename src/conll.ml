@@ -27,7 +27,7 @@ module Error = struct
       (CCOption.map (fun x -> ("data", x)) data);
     ] in
     let prev_list = match prev with
-      | None -> [("library", `String "Conllx")]
+      | None -> [("library", `String "Conll")]
       | Some (`Assoc l) -> l
       | Some json -> ["ill_formed_error", json] in
     `Assoc ((CCList.filter_map (fun x-> x) opt_list) @ prev_list)
@@ -708,7 +708,7 @@ module Conllx_label = struct
         let t = String_map.remove "kind" t in
 
         let prefix_string = match (pref_deps, pref_kind) with
-          | (Some _, Some _) -> Error.error ~fct:"Conllx.to_string" "BUG: Prefix confict, please report input=`%s`" (to_string_long t)
+          | (Some _, Some _) -> Error.error ~fct:"Conll.to_string" "BUG: Prefix confict, please report input=`%s`" (to_string_long t)
           | (Some c, None) | (None, Some c) -> sprintf "%c:" c
           | (None, None) -> "" in
 
@@ -1104,7 +1104,7 @@ module Frsemcor = struct
 end
 
 (* ==================================================================================================== *)
-module Conllx = struct
+module Conll = struct
   type t = {
     meta: (string * string) list;
     nodes: Node.t list;
@@ -1131,7 +1131,7 @@ module Conllx = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
 
-  (* when MISC features is used on a MWT line, there is no place to store the data in Conllx.t: we used a special meta as a hack *)
+  (* when MISC features is used on a MWT line, there is no place to store the data in Conll.t: we used a special meta as a hack *)
   let textform_up t =
     match Node.textform_up t.nodes with
     | (new_nodes, "") -> { t with nodes = new_nodes }
@@ -1356,7 +1356,7 @@ module Conllx = struct
     let order =
       List.map (function
           | `String s -> Id.Raw s
-          | _ -> Error.error ~data:json ~fct:"Conllx.of_json" "illformed json (order field)"
+          | _ -> Error.error ~data:json ~fct:"Conll.of_json" "illformed json (order field)"
         ) (try json |> member "order" |> to_list with Type_error _ -> []) in
 
     let positions = CCList.foldi (fun acc i id -> Id_map.add id i acc) Id_map.empty order in
@@ -1588,7 +1588,7 @@ module Conllx_corpus = struct
 
   type t = {
     columns: Conllx_columns.t;
-    data: (string * Conllx.t) array;
+    data: (string * Conll.t) array;
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1608,7 +1608,7 @@ module Conllx_corpus = struct
     bprintf buff "%s\n" (Conllx_columns.to_string columns);
     Array.iter
       (fun (_,conll) ->
-         Conllx.to_buff ~config ~columns:t.columns buff conll
+         Conll.to_buff ~config ~columns:t.columns buff conll
       ) t.data;
     Buffer.contents buff
 
@@ -1635,10 +1635,10 @@ module Conllx_corpus = struct
       let save_one () =
         begin
           try
-            let conll = Conllx.of_string_list_rev ?file ~config ~columns !rev_locals in
+            let conll = Conll.of_string_list_rev ?file ~config ~columns !rev_locals in
             incr cpt;
             let base = match file with Some f -> Filename.basename f | None -> "stdin" in
-            let sent_id = match Conllx.get_sent_id_opt conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
+            let sent_id = match Conll.get_sent_id_opt conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
             res := (sent_id,conll) :: !res
           with Conllx_error json ->
             begin
@@ -1697,20 +1697,20 @@ module Conllx_corpus = struct
       List.iter 
         (fun sent_id -> 
           match CCArray.find_opt (fun (s,_) -> s=sent_id) t.data with
-          | Some (_,conll) -> fprintf out_ch "%s\n" (Conllx.to_string ~config ~columns conll)
+          | Some (_,conll) -> fprintf out_ch "%s\n" (Conll.to_string ~config ~columns conll)
           | None -> Error.warning "sent_id not found (%s)" sent_id
         ) l
     | None -> 
       Array.iter 
         (fun (_, conll) ->
-          fprintf out_ch "%s\n" (Conllx.to_string ~config ~columns conll)
+          fprintf out_ch "%s\n" (Conll.to_string ~config ~columns conll)
         ) t.data
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let sizes t =
     (
       Array.length t.data,
-      Array.fold_left (fun acc (_,conll) -> acc + Conllx.size conll) 0 t.data
+      Array.fold_left (fun acc (_,conll) -> acc + Conll.size conll) 0 t.data
     )
 
 end
@@ -1758,11 +1758,11 @@ module Conllx_stat = struct
     Label_map.add label (add2 gov dep old) stat
 
   let map_add_conll ~config (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) conll map =
-    let edges = conll.Conllx.edges in
+    let edges = conll.Conll.edges in
     List.fold_left
       (fun acc edge ->
-         let gov_node = Conllx.find_node edge.Edge.src conll.nodes in
-         let dep_node = Conllx.find_node edge.Edge.tar conll.nodes in
+         let gov_node = Conll.find_node edge.Edge.src conll.nodes in
+         let dep_node = Conll.find_node edge.Edge.tar conll.nodes in
          let gov_value =
            match Fs_map.find_opt gov_key gov_node.Node.feats with
            | Some x -> x
