@@ -1,6 +1,6 @@
-exception Conllx_error of Yojson.Basic.t
+exception Conll_error of Yojson.Basic.t
 
-module Conllx_columns : sig
+module Conll_columns : sig
   type t
 
   val to_string: t -> string
@@ -21,7 +21,7 @@ module Conllx_columns : sig
   val build: string -> t
 end
 
-module Conllx_config: sig
+module Conll_config: sig
   type t
 
   (** [build] from a constant value. Known values are: "basic", "sequoia", "ud", "sud", "orfeo".
@@ -34,7 +34,7 @@ module Conllx_config: sig
 end
 
 
-module Conllx_label : sig
+module Conll_label : sig
   type t
 
   val of_json: Yojson.Basic.t -> t
@@ -43,11 +43,11 @@ module Conllx_label : sig
 
   (** [to_string ~config t] tries to convert the label to a compact representation [Ok s].
       The "long" representation [Error "f=u,g=v"] is returned if not possible. *)
-  val to_string: config: Conllx_config.t -> t -> (string, string) result
+  val to_string: config: Conll_config.t -> t -> (string, string) result
 
   (** [of_string ~config t] parse the compact label representation.
       Must not be used with a long representation! *)
-  val of_string: config: Conllx_config.t -> string -> t
+  val of_string: config: Conll_config.t -> string -> t
 end
 
 
@@ -65,43 +65,43 @@ module Conll : sig
 
   val to_json: t -> Yojson.Basic.t
 
-  val to_string: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> t -> string
+  val to_string: ?config: Conll_config.t -> ?columns: Conll_columns.t -> t -> string
 
-  val of_string: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> string -> t
+  val of_string: ?config: Conll_config.t -> ?columns: Conll_columns.t -> string -> t
 
-  val load: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> string -> t
+  val load: ?config: Conll_config.t -> ?columns: Conll_columns.t -> string -> t
 end
 
 
-module Conllx_corpus : sig
+module Conll_corpus : sig
   type t
 
 
-  val load: ?config: Conllx_config.t -> ?quiet:bool -> ?log_file: string -> ?columns: Conllx_columns.t -> string -> t
+  val load: ?config: Conll_config.t -> ?quiet:bool -> ?log_file: string -> ?columns: Conll_columns.t -> string -> t
 
-  val load_list: ?config: Conllx_config.t -> ?quiet:bool -> ?log_file: string -> ?columns: Conllx_columns.t -> string list -> t
+  val load_list: ?config: Conll_config.t -> ?quiet:bool -> ?log_file: string -> ?columns: Conll_columns.t -> string list -> t
 
-  val save: ?config: Conllx_config.t -> ?sent_id_list:(string list) -> out_channel -> t -> unit
+  val save: ?config: Conll_config.t -> ?sent_id_list:(string list) -> out_channel -> t -> unit
 
-  val of_lines: ?config: Conllx_config.t -> ?quiet:bool -> ?log_file: string -> ?columns: Conllx_columns.t -> ?file: string -> string list -> t
+  val of_lines: ?config: Conll_config.t -> ?quiet:bool -> ?log_file: string -> ?columns: Conll_columns.t -> ?file: string -> string list -> t
 
-  val to_string: ?config: Conllx_config.t -> ?columns: Conllx_columns.t -> t -> string
+  val to_string: ?config: Conll_config.t -> ?columns: Conll_columns.t -> t -> string
 
   val get_data: t -> (string * Conll.t) array
-  val get_columns: t -> Conllx_columns.t
+  val get_columns: t -> Conll_columns.t
 
   val sizes: t -> (int * int)  (* number of graphs, number of nodes *)
 end
 
 
-module Conllx_stat : sig
+module Conll_stat : sig
   type t
 
   val build:
-    ?config: Conllx_config.t ->
+    ?config: Conll_config.t ->
     (string * string option) -> (* gov clustering key. Ex: ("upos", None) *)
     (string * string option) -> (* dev clustering key. Ex: ("ExtPos", Some "upos")  *)
-    Conllx_corpus.t ->
+    Conll_corpus.t ->
     t
 
   val dump: t -> unit

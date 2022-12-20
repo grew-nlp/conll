@@ -4,7 +4,7 @@ module String_map = CCMap.Make (String)
 module String_set = Set.Make (String)
 module Int_map = CCMap.Make (Int)
 
-exception Conllx_error of Yojson.Basic.t
+exception Conll_error of Yojson.Basic.t
 
 let strip s = 
   let len = String.length s in
@@ -44,7 +44,7 @@ module Error = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let error_ ?file ?sent_id ?line_num ?fct ?data ?prev message =
     let json = build_json ?file ?sent_id ?line_num ?fct ?data ?prev message in
-    raise (Conllx_error json)
+    raise (Conll_error json)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let error ?file ?sent_id ?line_num ?fct ?data ?prev = Printf.ksprintf (error_ ?file ?sent_id ?line_num ?fct ?data ?prev)
@@ -62,7 +62,7 @@ module Error = struct
           |> (fun l -> match prev with None -> l | Some x -> ("prev", `String x) :: (List.remove_assoc "prev" l))
         )
       | _ -> error "Bug in json error structure" in
-    raise (Conllx_error new_json)
+    raise (Conll_error new_json)
 end
 
 (* ==================================================================================================== *)
@@ -113,7 +113,7 @@ module Column = struct
 end
 
 (* ==================================================================================================== *)
-module Conllx_columns = struct
+module Conll_columns = struct
 
   type t = Column.t list
 
@@ -139,7 +139,7 @@ module Conllx_columns = struct
 end
 
 (* ==================================================================================================== *)
-module Conllx_config = struct
+module Conll_config = struct
   type t = {
     name: string;
     core: string;                     (* name of the required part (no join symbol) *)
@@ -355,7 +355,7 @@ module Fs = struct
   let parse ?config ?file ?sent_id ?line_num misc s init =
     let misc_pref f = 
       match config with
-      | Some c when misc && List.mem f c.Conllx_config.feats -> "__MISC__" ^ f
+      | Some c when misc && List.mem f c.Conll_config.feats -> "__MISC__" ^ f
       | _ -> f in
     match s with
     | "_" -> init
@@ -390,7 +390,7 @@ module Fs = struct
            | "__RAW_MISC__" -> acc
            | s when misc && String.length s > 8 && String.sub s 0 8 = "__MISC__" -> (String.sub s 8 ((String.length s) - 8),value) :: acc
            | s when s.[0] = '_' -> acc (* TODO: DOC (other columns like orfeo are encoded from "_xxx" feats)*)
-           | _ when config.Conllx_config.feats = [] ->
+           | _ when config.Conll_config.feats = [] ->
              begin
                if misc
                then acc
@@ -460,7 +460,7 @@ module Node = struct
              | (Column.MISC,_) -> 
                let feats = 
                  try Fs.parse ~config ?file ?sent_id ?line_num true item acc_feats 
-                 with Conllx_error _ -> Fs.add ?file ?sent_id ?line_num "__RAW_MISC__" item acc_feats
+                 with Conll_error _ -> Fs.add ?file ?sent_id ?line_num "__RAW_MISC__" item acc_feats
                in (acc_id_opt, acc_form, feats)
              | (Column.ORFEO_START, _) ->
                (acc_id_opt, acc_form, match item with "_" -> acc_feats | _ -> Fs.add ?file ?sent_id ?line_num "_start" item acc_feats)
@@ -563,7 +563,7 @@ module Node = struct
          | [si; sj; string_feats] ->
            let feats = 
              try Fs.parse false string_feats Fs.empty 
-             with Conllx_error _ -> Fs.add "__RAW_MISC__" string_feats Fs.empty
+             with Conll_error _ -> Fs.add "__RAW_MISC__" string_feats Fs.empty
            in ((int_of_string si, int_of_string sj), feats)
          | _ -> Error.error ~fct: "mwt_misc_of_string" "Cannot parse `%s`" s
       )  (Str.split (Str.regexp_string "||") s)
@@ -668,7 +668,7 @@ module Node = struct
 end
 
 (* ==================================================================================================== *)
-module Conllx_label = struct
+module Conll_label = struct
 
   (* feature structures for edge labels *)
   type t = string String_map.t
@@ -684,7 +684,7 @@ module Conllx_label = struct
   exception Long
   let to_string ~config t =
     try
-      match String_map.find_opt config.Conllx_config.core t with
+      match String_map.find_opt config.Conll_config.core t with
       | None -> raise Long (* no core relation *)
       | Some rel ->
         let t = String_map.remove config.core t in
@@ -731,7 +731,7 @@ module Conllx_label = struct
     let (pref_feat_opt, pos) =
       if String.length s > 1 && s.[1] = ':'
       then
-        match config.Conllx_config.deps with
+        match config.Conll_config.deps with
         | Some (efn, pref_deps) when pref_deps = s.[0] -> (Some (efn, "yes"), 2)
         | _ ->
           match List.find_opt (fun (_,sym) -> sym = s.[0]) config.prefixes with
@@ -783,7 +783,7 @@ end
 module Edge = struct
   type t = {
     src: Id.t;
-    label: Conllx_label.t;
+    label: Conll_label.t;
     tar: Id.t;
     line_num: int option;
   }
@@ -801,7 +801,7 @@ module Edge = struct
     | (None, Some "surf") | (Some "deep", None) | (Some "deep", Some "surf") -> 1
     | _ ->
       match Id.compare e1.src e2.src with
-      | 0 -> Stdlib.compare (Conllx_label.to_string ~config e1.label) (Conllx_label.to_string ~config e2.label)
+      | 0 -> Stdlib.compare (Conll_label.to_string ~config e1.label) (Conll_label.to_string ~config e2.label)
       | n -> n
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -830,7 +830,7 @@ module Edge = struct
         (* PARSEME-IT@1.1 and PARSEME-IT@1.1 has the pair ("0", "_") as HEAD/DEPREL *)
         | (Some "0", None) -> [
             { src=Id.of_string ?file ?sent_id ?line_num "0";
-              label=Conllx_label.of_string ~config "root";
+              label=Conll_label.of_string ~config "root";
               tar;
               line_num;
             }
@@ -838,11 +838,11 @@ module Edge = struct
 
         | (Some id, None) when List.length (Str.split (Str.regexp "|") id) = 1 ->
           let src = Id.of_string ?file ?sent_id ?line_num id in
-          [{ src; label=Conllx_label.empty; tar; line_num}]
+          [{ src; label=Conll_label.empty; tar; line_num}]
 
         | (Some srcs, Some labels) ->
           let src_id_list = List.map (Id.of_string ?file ?sent_id ?line_num) (Str.split (Str.regexp "|") srcs) in
-          let label_list = List.map (Conllx_label.of_string ~config) (Str.split (Str.regexp "|") labels) in
+          let label_list = List.map (Conll_label.of_string ~config) (Str.split (Str.regexp "|") labels) in
           begin
             try List.map2 (fun src label -> { src; label; tar; line_num}) src_id_list label_list
             with Invalid_argument _ -> 
@@ -859,7 +859,7 @@ module Edge = struct
         List.fold_left
           (fun acc sec ->
              match Str.bounded_split (Str.regexp ":") sec 2 with
-             | [src_string;label] -> { src=Id.of_string  ?file ?sent_id ?line_num src_string; label = Conllx_label.of_string_deps ?file ?sent_id ?line_num ~config label; tar; line_num} :: acc
+             | [src_string;label] -> { src=Id.of_string  ?file ?sent_id ?line_num src_string; label = Conll_label.of_string_deps ?file ?sent_id ?line_num ~config label; tar; line_num} :: acc
              | _ -> Error.error ?file ?sent_id ?line_num "Cannot parse secondary edges `%s`" sec
           ) head_dep_edges (Str.split (Str.regexp "|") deps)
 
@@ -871,7 +871,7 @@ module Edge = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json t = `Assoc [
       ("src", `String (Id.to_string t.src));
-      ("label", Conllx_label.to_json t.label);
+      ("label", Conll_label.to_json t.label);
       ("tar", `String (Id.to_string t.tar));
     ]
 
@@ -881,7 +881,7 @@ module Edge = struct
     try
       {
         src = Id.Raw (json |> member "src" |> to_string);
-        label = json |> member "label" |> Conllx_label.of_json;
+        label = json |> member "label" |> Conll_label.of_json;
         tar = Id.Raw (json |> member "tar" |> to_string);
         line_num = None;
       }
@@ -891,7 +891,7 @@ module Edge = struct
   (* ---------------------------------------------------------------------------------------------------- *)
 
   (* [split] an edge list in two lists: basic edges (HEAD/DEPREL columns) and DEPS column *)
-  let split ?(config=Conllx_config.sud) edge_list =
+  let split ?(config=Conll_config.sud) edge_list =
     match config.deps with
     | None -> (edge_list, [])
     | Some (deps_efn,_) ->
@@ -1217,7 +1217,7 @@ module Conll = struct
       try
         loop Id_set.empty nodes;
         List.iter (check_edge ?file ?sent_id nodes) edges;
-      with Conllx_error e -> Error.reraise ?sent_id ?file e
+      with Conll_error e -> Error.reraise ?sent_id ?file e
     end;
     {
       meta = List.rev meta;
@@ -1261,13 +1261,13 @@ module Conll = struct
     }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_num_lines ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) lines =
+  let of_num_lines ?(config=Conll_config.basic) ?(columns=Conll_columns.default) lines =
     let (lines, columns) =
       match lines with
       | [] -> ([], columns)
       | (_,head)::tail ->
         begin
-          match Conllx_columns.of_string head with
+          match Conll_columns.of_string head with
           | Some c -> (tail, c)
           | None -> (lines, columns)
         end in
@@ -1278,15 +1278,15 @@ module Conll = struct
 
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_lines ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) lines =
+  let of_lines ?(config=Conll_config.basic) ?(columns=Conll_columns.default) lines =
     of_num_lines ~config ~columns (List.mapi (fun i l -> (i+1,strip l)) lines)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_string ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) s =
+  let of_string ?(config=Conll_config.basic) ?(columns=Conll_columns.default) s =
     of_lines ~config ~columns (Str.split (Str.regexp "\r\\|\n\\|\013\\|\010\013?") s)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) file =
+  let load ?(config=Conll_config.basic) ?(columns=Conll_columns.default) file =
     of_lines ~config ~columns (CCIO.(with_in file read_lines_l))
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1535,12 +1535,12 @@ module Conll = struct
                let l = List.sort (Edge.compare ~config) l in
                (
                  String.concat "|" (List.map (fun e -> Id.to_string e.Edge.src) l),
-                 String.concat "|" (List.map (fun e -> Conllx_label.to_string_robust ~config e.Edge.label) l)
+                 String.concat "|" (List.map (fun e -> Conll_label.to_string_robust ~config e.Edge.label) l)
                ) in
            let deps =
              match List.sort (Edge.compare ~config) (List.filter (Edge.is_tar node.Node.id) deps_edges) with
              | [] -> "_"
-             | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Conllx_label.to_string_robust ~config e.Edge.label)) l) in
+             | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Conll_label.to_string_robust ~config e.Edge.label)) l) in
 
 
            let parseme_mwe =
@@ -1576,7 +1576,7 @@ module Conll = struct
     ()
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string ?(config=Conllx_config.basic) ?(columns=Conllx_columns.default) t =
+  let to_string ?(config=Conll_config.basic) ?(columns=Conll_columns.default) t =
     let buff = Buffer.create 32 in
     to_buff ~config ~columns buff t;
     Buffer.contents buff
@@ -1584,10 +1584,10 @@ module Conll = struct
 end
 
 (* ==================================================================================================== *)
-module Conllx_corpus = struct
+module Conll_corpus = struct
 
   type t = {
-    columns: Conllx_columns.t;
+    columns: Conll_columns.t;
     data: (string * Conll.t) array;
   }
 
@@ -1601,11 +1601,11 @@ module Conllx_corpus = struct
   let get_columns t = t.columns
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string ?(config=Conllx_config.basic) ?columns t =
+  let to_string ?(config=Conll_config.basic) ?columns t =
     (* if the columns argument is given, it has priority on internal columms of the corpus *)
     let columns = match columns with Some c -> c | None -> t.columns in
     let buff = Buffer.create 32 in
-    bprintf buff "%s\n" (Conllx_columns.to_string columns);
+    bprintf buff "%s\n" (Conll_columns.to_string columns);
     Array.iter
       (fun (_,conll) ->
          Conll.to_buff ~config ~columns:t.columns buff conll
@@ -1613,20 +1613,20 @@ module Conllx_corpus = struct
     Buffer.contents buff
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let of_lines ?(config=Conllx_config.basic) ?(quiet=false) ?log_file ?columns ?file lines =
+  let of_lines ?(config=Conll_config.basic) ?(quiet=false) ?log_file ?columns ?file lines =
     match lines with
     | [] -> empty
     | (head::tail) as all ->
 
       let (columns, data_lines, delta) =
-        match (Conllx_columns.of_string ?file head, columns) with
-        | (None, None) -> (Conllx_columns.default, all, 1)
+        match (Conll_columns.of_string ?file head, columns) with
+        | (None, None) -> (Conll_columns.default, all, 1)
         | (None, Some cols) -> (cols, all, 1)
         | (Some cols, None) -> (cols,tail, 2)
         | (Some c1, Some c2) when c1 = c2 -> (c1,tail, 2)
         | (Some c1, Some c2) ->
           Error.error ?file "Inconsistent columns declaration\nin file --> %s\nin config --> %s\n"
-            (Conllx_columns.to_string c1) (Conllx_columns.to_string c2) in
+            (Conll_columns.to_string c1) (Conll_columns.to_string c2) in
 
       let cpt = ref 0 in
       let res = ref [] in
@@ -1640,10 +1640,10 @@ module Conllx_corpus = struct
             let base = match file with Some f -> Filename.basename f | None -> "stdin" in
             let sent_id = match Conll.get_sent_id_opt conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
             res := (sent_id,conll) :: !res
-          with Conllx_error json ->
+          with Conll_error json ->
             begin
               match log_file with
-              | None -> raise (Conllx_error json)
+              | None -> raise (Conll_error json)
               | Some f when Sys.file_exists f ->
                 let out_ch = open_out_gen [Open_append] 0o755 f in
                 Printf.fprintf out_ch "%s\n" (Yojson.Basic.to_string json);
@@ -1674,12 +1674,12 @@ module Conllx_corpus = struct
       { columns; data=Array.of_list (List.rev !res) }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load ?(config=Conllx_config.basic) ?quiet ?log_file ?columns file =
+  let load ?(config=Conll_config.basic) ?quiet ?log_file ?columns file =
     let lines = CCIO.(with_in file read_lines_l) in
     of_lines ~config ?quiet ?log_file ?columns ~file lines
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let load_list ?(config=Conllx_config.basic) ?quiet ?log_file ?columns file_list =
+  let load_list ?(config=Conll_config.basic) ?quiet ?log_file ?columns file_list =
     match List.map (load ~config ?quiet ?columns ?log_file) file_list with
     | [] -> empty
     | ({ columns; _ }::tail) as l ->
@@ -1689,9 +1689,9 @@ module Conllx_corpus = struct
 
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let save ?(config=Conllx_config.basic) ?sent_id_list out_ch t =
+  let save ?(config=Conll_config.basic) ?sent_id_list out_ch t =
     let columns= t.columns in 
-    fprintf out_ch "%s\n" (Conllx_columns.to_string columns);
+    fprintf out_ch "%s\n" (Conll_columns.to_string columns);
     match sent_id_list with
     | Some l -> 
       List.iter 
@@ -1716,7 +1716,7 @@ module Conllx_corpus = struct
 end
 
 (* ======================================================================================================================== *)
-module Conllx_stat = struct
+module Conll_stat = struct
 
   module Label_map = Map.Make (
     struct 
@@ -1783,16 +1783,16 @@ module Conllx_stat = struct
                match Fs_map.find_opt subkey dep_node.Node.feats with
                | Some x -> x
                | None -> "_" in
-         match Conllx_label.to_string ~config edge.label with
+         match Conll_label.to_string ~config edge.label with
          | Ok label -> add label gov_value dep_value acc
          | _ -> acc
       ) map edges
 
-  let build ?(config=Conllx_config.basic) (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) corpus =
+  let build ?(config=Conll_config.basic) (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) corpus =
     Array.fold_left
       (fun acc (_,conll) ->
          map_add_conll ~config (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) conll acc
-      ) Label_map.empty corpus.Conllx_corpus.data
+      ) Label_map.empty corpus.Conll_corpus.data
 
   let dump map =
     Label_map.iter
