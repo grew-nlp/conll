@@ -1,3 +1,9 @@
+
+# 1.14.0 (2022/12/21)
+  * Move to Dune build system
+  * Change opam package naming form "libcam-conll" to "conll"
+  * Change modules names from "Conllx*" to "Conll*" to 
+
 ## 1.13.3 (2022/11/26)
   * update ud_features definition for 2.11
 
