@@ -2,7 +2,7 @@
 
 (name conll)
 
-(version 1.14.0)
+(version 1.14.1)
 
 (generate_opam_files true)
 
@@ -21,4 +21,6 @@
  (description "Mainly developed to be used by Grew")
  (depends ocaml dune containers yojson)
  (tags
-  (nlp)))
+  (nlp))
+ (conflicts libcaml-conll)
+)
