@@ -1143,31 +1143,34 @@ module Conll = struct
   let wordform_down t = { t with nodes = Node.wordform_down t.nodes}
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let get_sent_id_opt_meta meta =
-    match List.assoc_opt "sent_id" meta with
-    | Some id -> Some id
-    | None -> match List.assoc_opt "source_sent_id" meta with
-      | Some id ->
-        begin
-          match Str.split (Str.regexp " ") id with
-          | [_; _; id] -> Some id
-          | _ -> None
-        end
-      | None -> None
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let get_sent_id_opt t = get_sent_id_opt_meta t.meta
+  let get_sent_id_opt t = List.assoc_opt "sent_id" t.meta
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let set_sent_id new_sent_id t =
     { t with meta = ("sent_id", new_sent_id) :: (List.remove_assoc "sent_id" t.meta) }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let parse_meta (_,t) =
-    if Str.string_match (Str.regexp "# \\([^= ]*\\) = \\(.*\\)") t 0
-    then (Str.matched_group 1 t, Str.matched_group 2 t)
-    else ("", t)
-
+  let parse_meta_list meta_lines =
+    List.fold_right
+      (fun (_,t) acc -> 
+        if Str.string_match (Str.regexp "# \\([^= ]*\\) = \\(.*\\)") t 0
+          then 
+            begin
+            match (Str.matched_group 1 t, Str.matched_group 2 t) with
+            | ("source_sent_id", source_sent_id) ->
+              begin
+                match Str.split (Str.regexp_string " +") source_sent_id with
+                | [prefix_uri;file_path_under_root; sent_id] ->
+                  ("prefix_uri", prefix_uri) ::
+                  ("file_path_under_root", file_path_under_root) ::
+                  ("sent_id", sent_id) ::
+                  acc
+                | _ -> ("source_sent_id", source_sent_id) :: acc
+              end
+            | (k,v) -> (k,v):: acc
+            end
+                   else ("", t) :: acc
+      ) meta_lines []
   (* ---------------------------------------------------------------------------------------------------- *)
   let check_edge ?file ?sent_id nodes edge =
     match (List.exists (fun n -> n.Node.id = edge.Edge.src) nodes, List.exists (fun n -> n.Node.id = edge.Edge.tar) nodes) with
@@ -1180,8 +1183,8 @@ module Conll = struct
     let (meta_lines, graph_lines_rev) =
       List.partition (fun (_,l) -> l <> "" && l.[0] = '#') string_list_rev in
 
-    let meta = List.map parse_meta meta_lines in
-    let sent_id = get_sent_id_opt_meta meta in
+    let meta = parse_meta_list meta_lines in
+    let sent_id = List.assoc_opt "sent_id" meta in
 
     let (nodes_without_root, edges, parseme, frsemcor) =
       List.fold_left
@@ -1213,7 +1216,7 @@ module Conll = struct
       with Conll_error e -> Error.reraise ?sent_id ?file e
     end;
     {
-      meta = List.rev meta;
+      meta;
       nodes;
       order = []; (* [order] is computed after textform/wordform because of MWT "nodes" *)
       edges;
