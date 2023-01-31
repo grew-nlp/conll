@@ -1513,7 +1513,6 @@ module Conll = struct
 
     let _ = List.iter
         (function
-          | ("", meta) -> bprintf buff "%s\n" meta
           | (key,value) -> bprintf buff "# %s = %s\n" key value
         ) t_without_root.meta in
 
