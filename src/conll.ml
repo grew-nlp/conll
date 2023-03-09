@@ -1151,8 +1151,8 @@ module Conll = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let parse_meta_list meta_lines =
-    List.fold_right
-      (fun (_,t) acc -> 
+    List.fold_left
+      (fun acc (_,t) -> 
         if Str.string_match (Str.regexp "# \\([^= ]*\\) = \\(.*\\)") t 0
           then 
             begin
@@ -1169,8 +1169,9 @@ module Conll = struct
               end
             | (k,v) -> (k,v):: acc
             end
-                   else ("", t) :: acc
-      ) meta_lines []
+        else ("", t) :: acc
+      ) [] meta_lines
+
   (* ---------------------------------------------------------------------------------------------------- *)
   let check_edge ?file ?sent_id nodes edge =
     match (List.exists (fun n -> n.Node.id = edge.Edge.src) nodes, List.exists (fun n -> n.Node.id = edge.Edge.tar) nodes) with
