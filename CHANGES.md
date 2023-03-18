@@ -1,3 +1,9 @@
+# 1.15.0 (2023/03/18)
+  * Change meta data reading of Parseme files
+  * Fix CRLF handling
+
+## 1.14.1 (2023/01/06)
+  * declare conflict with old name "libcam-conll"
 
 # 1.14.0 (2022/12/21)
   * Move to Dune build system
