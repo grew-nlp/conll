@@ -1153,7 +1153,7 @@ module Conll = struct
   let parse_meta_list meta_lines =
     List.fold_left
       (fun acc (_,t) -> 
-        if Str.string_match (Str.regexp "# \\([^= ]*\\) = \\(.*\\)") t 0
+        if Str.string_match (Str.regexp "# \\([^= ]*\\) =[ \t]\\(.*\\)") t 0
           then 
             begin
             match (Str.matched_group 1 t, Str.matched_group 2 t) with
