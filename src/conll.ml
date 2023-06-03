@@ -1517,6 +1517,7 @@ module Conll = struct
 
     let _ = List.iter
         (function
+          | (key,_) when String.length key > 0 && key.[0] = '_' -> ()
           | (key,value) -> bprintf buff "# %s = %s\n" key value
         ) t_without_root.meta in
 
@@ -1631,7 +1632,10 @@ module Conll_corpus = struct
       let save_one () =
         begin
           try
-            let conll = Conll.of_string_list_rev ?file ~config ~columns !rev_locals in
+            let conll = 
+              Conll.of_string_list_rev ?file ~config ~columns !rev_locals
+              |> (fun x -> match file with None -> x | Some f -> Conll.set_meta "_filename" (Filename.basename f) x) 
+            in
             incr cpt;
             let base = match file with Some f -> Filename.basename f | None -> "stdin" in
             let sent_id = match Conll.get_sent_id_opt conll with Some id -> id | None -> sprintf "%s_%05d" base !cpt in
