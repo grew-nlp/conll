@@ -1,3 +1,10 @@
+# 1.16.0 (2023/06/26)
+  * ExtPos goes in FEATS by default (config sud and ud)
+  * add a pseudo metadata feature "_filename"
+
+## 1.15.1 (2023/05/20)
+  * softer regexp for metadata
+
 # 1.15.0 (2023/03/18)
   * Change meta data reading of Parseme files
   * Fix CRLF handling
