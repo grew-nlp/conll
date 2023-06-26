@@ -175,10 +175,9 @@ module Conll_config = struct
     "Valency"; "Variant"; "Ventive"; "VerbClass"; "VerbForm"; "VerbStem"; "VerbType"; "Voice";
  
     (* SUD features *)
-    "Shared";
+    "Shared"; "ExtPos";
 
-    (* Note: ExtPos is used in FEATS in UD_English-EWT, UD_Portuguese-Bosque and UD_Portuguese-GSD but in MISC in SUD corpora 
-       We consider it as MISC here. *)
+    (* Note: ExtPos is now put in FEATS following the discussion https://github.com/surfacesyntacticud/guidelines/issues/31 *)
   ]
 
 
