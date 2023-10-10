@@ -1,3 +1,6 @@
+# 1.17.0 (2023/10/10)
+  * handling of "/" in relations (UD and SUD)
+
 # 1.16.0 (2023/06/26)
   * ExtPos goes in FEATS by default (config sud and ud)
   * add a pseudo metadata feature "_filename"

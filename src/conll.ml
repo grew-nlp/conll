@@ -185,7 +185,7 @@ module Conll_config = struct
   let ud = { (* covers also eud *)
     name="ud";
     core = "1";
-    extensions = [ ("2",':')];
+    extensions = [ ("2",':'); ("type",'/')];
     prefixes = [];
     feats = ud_features;
     deps = Some ("enhanced", 'E');
@@ -195,10 +195,10 @@ module Conll_config = struct
   let sud = {
     name="sud";
     core = "1";
-    extensions = [ ("2",':'); ("subsem", '$'); ("deep", '@') ];
+    extensions = [ ("2",':'); ("subsem", '$'); ("deep", '@'); ("type",'/') ];
     prefixes = [];
     feats = ud_features;
-    deps = Some ("enhanced", 'E');
+    deps = Some ("enhanced", 'E'); (* for conversion EUD to SUD: need a config which covers both *)
   }
 
   (* ---------------------------------------------------------------------------------------------------- *)
