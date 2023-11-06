@@ -669,8 +669,9 @@ module Conll_label = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_string_long t =
-    String.concat ","
-      (String_map.fold (fun k v acc -> (sprintf "%s=%s" k v) :: acc) t [])
+    match String_map.fold (fun k v acc -> (sprintf "%s=%s" k v) :: acc) t [] with
+    | [] -> "_"
+    | l -> String.concat "," l
 
   (* ---------------------------------------------------------------------------------------------------- *)
   exception Long

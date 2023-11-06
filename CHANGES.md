@@ -1,3 +1,6 @@
+## 1.17.1 (2023/11/06)
+  * Fix Conllu output for empty DEPS ("_" instead of "")
+
 # 1.17.0 (2023/10/10)
   * handling of "/" in relations (UD and SUD)
 
