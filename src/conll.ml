@@ -155,32 +155,29 @@ module Conll_config = struct
   (* ---------------------------------------------------------------------------------------------------- *)
 
   let ud_features = [
-    (* UD features collected from data 2.11 *)
-    "Abbr"; "Accomp"; "AdjType"; "AdpType"; "AdvType"; "Advlz"; "Agglutination"; "Also"; "Analyt"; "Animacy"; "Animacy[gram]"; "Animacy[obj]"; "Aspect"; "Augm";
+    (* UD features collected from data 2.13 *)
+    "Abbr"; "Accomp"; "AdjType"; "AdpType"; "AdvType"; "Advlz"; "Agglutination"; "Also"; "Analyt"; "Animacy"; "Animacy[gram]"; "Animacy[obj]"; "Aspect";
     "Case"; "Caus"; "Cfm"; "Clas"; "Class"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]"; "Compound"; "Comt"; "Conces";
-    "ConjType"; "Connegative"; "Contrast"; "Contv"; "Corf"; "Decl"; "Definite"; "Definitizer"; "Degree"; "DegreeModQpm"; "Deixis";
-    "DeixisRef"; "Deixis[psor]"; "Delib"; "Deo"; "Derivation"; "Determ"; "Detrans"; "Dev"; "Dialect"; "Dim"; "Dimin"; "Dist"; "Echo"; "Emph";
-    "Emphatic"; "Evident"; "Excl"; "Fact"; "False"; "Foc"; "Focus"; "FocusType"; "Foreign"; "Form";
-    "Gender"; "Gender[abs]"; "Gender[dat]"; "Gender[erg]"; "Gender[io]"; "Gender[obj]"; "Gender[psor]"; "Gender[subj]"; "HebBinyan"; "HebExistential"; "Hon"; "Hum";
+    "ConjType"; "Connegative"; "Contrast"; "Contv"; "Corf"; "Decl"; "Definite"; "Definitizer"; "Degree"; "Deixis"; 
+    "DeixisRef"; "Deixis[psor]"; "Delib"; "Deo"; "Derivation"; "Determ"; "Detrans"; "Dev"; "Dialect"; "Dist"; "Echo"; "Ego"; "Emph";
+    "Emphatic"; "Evident"; "Excl"; "ExtPos"; "Fact"; "False"; "Foc"; "Focus"; "FocusType"; "Foreign"; "Form";
+    "Gender"; "Gender[abs]"; "Gender[dat]"; "Gender[erg]"; "Gender[io]"; "Gender[obj]"; "Gender[psor]"; "Gender[subj]"; "Gnq"; "HebBinyan"; "HebExistential"; "Hon"; "Htp"; "Hum";
     "Hyph"; "Imprs"; "Incorp"; "InfForm"; "InflClass"; "InflClass[nominal]"; "Int"; "Intens"; "Intense"; "Intension";
-    "LangId"; "Language"; "Link"; "Mir"; "Mood"; "Morph"; "Movement"; "Mutation"; "NCount"; "NameType"; "NegationType"; "Neutral"; "Nmzr";
+    "LangId"; "Language"; "Link"; "Mood"; "Morph"; "Movement"; "Mutation"; "NCount"; "NameType"; "NegationType"; "Neutral"; "Nmzr";
     "Nomzr"; "NonFoc"; "NounBase"; "NounClass"; "NounType"; "NumForm"; "NumType"; "NumValue";
     "Number"; "Number[abs]"; "Number[dat]"; "Number[erg]"; "Number[grnd]"; "Number[io]"; "Number[obj]"; "Number[psed]"; "Number[psor]"; "Number[subj]";
     "Obl"; "Orth"; "PartForm"; "PartType"; "PartTypeQpm"; "Pcl";
     "Person"; "Person[abs]"; "Person[dat]"; "Person[erg]"; "Person[grnd]"; "Person[io]"; "Person[obj]"; "Person[psor]"; "Person[subj]";
     "Polarity"; "Polite"; "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "Possessed";
-    "Pred"; "Prefix"; "PrepCase"; "PrepForm"; "Priv"; "PronType"; "Proper"; "Prp"; "Pun"; "PunctSide"; "PunctType";
-    "RcpType"; "Recip"; "Red"; "Redup"; "Reflex"; "Reflex[obj]"; "Reflex[subj]"; "Rel"; "RelType"; "Report"; "Restr"; "Speech"; "Strength";
+    "Pred"; "Prefix"; "PrepCase"; "PrepForm"; "Priv"; "PronClass"; "PronType"; "Proper"; "Prp"; "PunctSide"; "PunctType";
+    "Purp"; "RcpType"; "Recip"; "Red"; "Redup"; "Reflex"; "Reflex[obj]"; "Reflex[subj]"; "Rel"; "RelType"; "Report"; "Speech"; "Strength";
     "Style"; "SubGender"; "Subcat"; "Subord"; "Subordinative"; "Tense"; "Top"; "Trans"; "Tv"; "Typo"; "Uninflect";
     "Valency"; "Variant"; "Ventive"; "VerbClass"; "VerbForm"; "VerbStem"; "VerbType"; "Voice";
  
     (* SUD features *)
-    "Shared"; "ExtPos";
-
-    (* Note: ExtPos is now put in FEATS following the discussion https://github.com/surfacesyntacticud/guidelines/issues/31 *)
+    "Shared";
   ]
-
-
+  
   (* ---------------------------------------------------------------------------------------------------- *)
   let ud = { (* covers also eud *)
     name="ud";

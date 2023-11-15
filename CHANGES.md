@@ -1,3 +1,6 @@
+## 1.17.2 (2023/11/15)
+  - adjust UD config for verison 2.13 of UD (list of FEATS features)
+
 ## 1.17.1 (2023/11/06)
   * Fix Conllu output for empty DEPS ("_" instead of "")
 
