@@ -1223,7 +1223,7 @@ module Conll = struct
     }
     |> textform_up
     |> wordform_up
-    |> (fun t -> { t with order = List.map (fun node -> node.Node.id) t.nodes;})
+    |> (fun t -> { t with order = CCList.filter_map (function {Node.id = Unordered _; _} -> None | {Node.id = id; _} -> Some id) t.nodes;})
   (* NOTE: order is built from order on nodes in input data, not following numerical order. *)
 
   (* ---------------------------------------------------------------------------------------------------- *)
