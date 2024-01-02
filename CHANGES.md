@@ -1,5 +1,8 @@
+## 1.17.3 (2024/01/02)
+  - Fix bug with Conll containing non ordered nodes
+
 ## 1.17.2 (2023/11/15)
-  - adjust UD config for verison 2.13 of UD (list of FEATS features)
+  - adjust UD config for version 2.13 of UD (list of FEATS features)
 
 ## 1.17.1 (2023/11/06)
   * Fix Conllu output for empty DEPS ("_" instead of "")
