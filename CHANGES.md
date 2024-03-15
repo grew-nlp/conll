@@ -1,3 +1,6 @@
+## 1.17.4 (2024/03/15)
+  - Add function Conll_Config.of_json
+
 ## 1.17.3 (2024/01/02)
   - Fix bug with Conll containing non ordered nodes
 
