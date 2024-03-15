@@ -31,6 +31,8 @@ module Conll_config: sig
   val get_name: t -> string
 
   val remove_from_feats: string -> t -> t
+
+  val of_json: Yojson.Basic.t -> t
 end
 
 

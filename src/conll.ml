@@ -231,6 +231,17 @@ module Conll_config = struct
   let remove_from_feats feature_name config =
     { config with feats = CCList.remove ~eq:(=) ~key:feature_name config.feats }
 
+  let of_json json = 
+    let open Yojson.Basic.Util in
+    let feats = 
+      json 
+      |> to_list 
+      |> List.hd 
+      |> member "FEATS" 
+      |> to_list 
+      |> List.map (fun j -> j |> member "name" |> to_string) in
+      { sud with name="from_json"; feats }
+  
 end
 
 
