@@ -1,7 +1,7 @@
 open Printf
 
 module String_map = CCMap.Make (String)
-module String_set = Set.Make (String)
+module String_set = CCSet.Make (String)
 module Int_map = CCMap.Make (Int)
 
 exception Conll_error of Yojson.Basic.t
@@ -1033,7 +1033,6 @@ module Parseme = struct
       ) t columns item_list
 end
 
-
 (* ==================================================================================================== *)
 module Frsemcor = struct
 
@@ -1115,11 +1114,17 @@ module Conll = struct
     frsemcor: Frsemcor.t;
   }
 
+
   (* ---------------------------------------------------------------------------------------------------- *)
   let get_meta t = t.meta
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let set_meta k v t = {t with meta = t.meta @ [(k,v)] }
+  let set_meta k v t = 
+    let rec update = function
+    | [] -> [(k,v)]
+    | (h,_)::t when h=k -> (k,v)::t
+    | h::t -> h::(update t) in
+    {t with meta = update t.meta }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let size t = (List.length t.nodes) - 1 (* Do not count the dummy __0__ node *)
@@ -1585,6 +1590,32 @@ module Conll = struct
     let buff = Buffer.create 32 in
     to_buff ~config ~columns buff t;
     Buffer.contents buff
+
+      (* ---------------------------------------------------------------------------------------------------- *)
+  let build_text t =
+    List.fold_left
+      (fun (acc, space_before, skip) node ->
+        (* printf "%s --> %b/%b •• [%s] %s\n%!" 
+          node.Node.form 
+          (Fs_map.find_opt "SpaceAfter" node.Node.feats = Some "No")
+          (Fs_map.mem "SpaceAfter" node.Node.feats)
+          (match Fs_map.find_opt "SpaceAfter" node.Node.feats with Some v -> v | None -> "NNN")
+          (Fs.to_string node.Node.feats); *)
+        let space_after =
+          if Fs_map.find_opt "SpaceAfter" node.Node.feats = Some "No"
+          then ""
+          else " " in
+        match (node.Node.id, skip) with
+        | (Mwt (_,j),_) -> (* printf "111: %s\n%!" node.Node.form;*)  (sprintf "%s%s%s" acc space_before node.Node.form, space_after, Some j)
+        | (Simple 0, _) -> (* printf "222: %s\n%!" node.Node.form;*) (acc, "", skip)
+        | (Simple _, None) -> (* printf "333: %s\n%!" node.Node.form;*) (sprintf "%s%s%s" acc space_before node.Node.form, space_after, None)
+        | (Simple i, Some j) when i < j -> (* printf "444: %s\n%!" node.Node.form;*) (acc, space_before, Some j)
+        | (Simple i, Some j) when i = j -> (* printf "499: %s\n%!" node.Node.form;*) (acc, space_before, None)
+        | _ -> (* printf "555: %s\n%!" node.Node.form;*) (acc, space_after, skip)
+      ) ("", "", None) (textform_down t).nodes
+      |> (fun (x,_,_) -> x)
+
+  let text_from_tokens t = set_meta "text" (build_text t) t
 
 end
 

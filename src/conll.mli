@@ -72,6 +72,8 @@ module Conll : sig
   val of_string: ?config: Conll_config.t -> ?columns: Conll_columns.t -> string -> t
 
   val load: ?config: Conll_config.t -> ?columns: Conll_columns.t -> string -> t
+
+  val text_from_tokens: t -> t
 end
 
 
