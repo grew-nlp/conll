@@ -1,3 +1,6 @@
+# 1.18.0 (2024/04/10)
+  - Add function Conll.text_from_tokens
+
 ## 1.17.4 (2024/03/15)
   - Add function Conll_Config.of_json
 
