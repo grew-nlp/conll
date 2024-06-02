@@ -155,25 +155,25 @@ module Conll_config = struct
   (* ---------------------------------------------------------------------------------------------------- *)
 
   let ud_features = [
-    (* UD features collected from data 2.13 *)
+    (* UD features collected from data 2.14 *)
     "Abbr"; "Accomp"; "AdjType"; "AdpType"; "AdvType"; "Advlz"; "Agglutination"; "Also"; "Analyt"; "Animacy"; "Animacy[gram]"; "Animacy[obj]"; "Aspect";
     "Case"; "Caus"; "Cfm"; "Clas"; "Class"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]"; "Compound"; "Comt"; "Conces";
-    "ConjType"; "Connegative"; "Contrast"; "Contv"; "Corf"; "Decl"; "Definite"; "Definitizer"; "Degree"; "Deixis"; 
-    "DeixisRef"; "Deixis[psor]"; "Delib"; "Deo"; "Derivation"; "Determ"; "Detrans"; "Dev"; "Dialect"; "Dist"; "Echo"; "Ego"; "Emph";
+    "ConjType"; "Connegative"; "Contrast"; "Contv"; "Corf"; "Decl"; "Definite"; "Definitizer"; "Degree"; "Deixis";
+    "DeixisRef"; "Deixis[psor]"; "Delib"; "Deo"; "Derivation"; "Determ"; "Detrans"; "Dev"; "Dialect"; "Dist"; "Dyn"; "Echo"; "Ego"; "Emph";
     "Emphatic"; "Evident"; "Excl"; "ExtPos"; "Fact"; "False"; "Foc"; "Focus"; "FocusType"; "Foreign"; "Form";
-    "Gender"; "Gender[abs]"; "Gender[dat]"; "Gender[erg]"; "Gender[io]"; "Gender[obj]"; "Gender[psor]"; "Gender[subj]"; "Gnq"; "HebBinyan"; "HebExistential"; "Hon"; "Htp"; "Hum";
+    "Gender"; "Gender[abs]"; "Gender[cs]"; "Gender[dat]"; "Gender[erg]"; "Gender[io]"; "Gender[lo]"; "Gender[obj]"; "Gender[po]"; "Gender[psor]"; "Gender[refl]"; "Gender[ro]"; "Gender[subj]";
+    "HebBinyan"; "HebExistential"; "Hnfc"; "Htp"; "Hum"; 
     "Hyph"; "Imprs"; "Incorp"; "InfForm"; "InflClass"; "InflClass[nominal]"; "Int"; "Intens"; "Intense"; "Intension";
     "LangId"; "Language"; "Link"; "Mood"; "Morph"; "Movement"; "Mutation"; "NCount"; "NameType"; "NegationType"; "Neutral"; "Nmzr";
     "Nomzr"; "NonFoc"; "NounBase"; "NounClass"; "NounType"; "NumForm"; "NumType"; "NumValue";
-    "Number"; "Number[abs]"; "Number[dat]"; "Number[erg]"; "Number[grnd]"; "Number[io]"; "Number[obj]"; "Number[psed]"; "Number[psor]"; "Number[subj]";
+    "Number"; "Number[abs]"; "Number[cs]"; "Number[dat]"; "Number[erg]"; "Number[grnd]"; "Number[io]"; "Number[lo]"; "Number[obj]"; "Number[po]"; "Number[psed]"; "Number[psor]"; "Number[refl]"; "Number[ro]"; "Number[subj]";
     "Obl"; "Orth"; "PartForm"; "PartType"; "PartTypeQpm"; "Pcl";
-    "Person"; "Person[abs]"; "Person[dat]"; "Person[erg]"; "Person[grnd]"; "Person[io]"; "Person[obj]"; "Person[psor]"; "Person[subj]";
+    "Person"; "Person[abs]"; "Person[cs]"; "Person[dat]"; "Person[erg]"; "Person[grnd]"; "Person[io]"; "Person[lo]"; "Person[obj]"; "Person[po]"; "Person[psor]"; "Person[refl]"; "Person[ro]"; "Person[subj]";
     "Polarity"; "Polite"; "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "Possessed";
     "Pred"; "Prefix"; "PrepCase"; "PrepForm"; "Priv"; "PronClass"; "PronType"; "Proper"; "Prp"; "PunctSide"; "PunctType";
-    "Purp"; "RcpType"; "Recip"; "Red"; "Redup"; "Reflex"; "Reflex[obj]"; "Reflex[subj]"; "Rel"; "RelType"; "Report"; "Speech"; "Strength";
+    "Purp"; "RcpType"; "Recip"; "Red"; "Redup"; "Reflex"; "Reflex[obj]"; "Reflex[subj]"; "Rel"; "RelType"; "Reln"; "Report"; "Speech"; "Strength";
     "Style"; "SubGender"; "Subcat"; "Subord"; "Subordinative"; "Tense"; "Top"; "Trans"; "Tv"; "Typo"; "Uninflect";
-    "Valency"; "Variant"; "Ventive"; "VerbClass"; "VerbForm"; "VerbStem"; "VerbType"; "Voice";
- 
+    "Valency"; "Variant"; "Ventive"; "VerbClass"; "VerbForm"; "VerbStem"; "VerbType"; "Voice"; 
     (* SUD features *)
     "Shared";
   ]
