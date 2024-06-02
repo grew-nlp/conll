@@ -1,3 +1,6 @@
+## 1.18.1 (2024/06/02)
+  - adjust UD config for version 2.14 of UD (list of FEATS features)
+
 # 1.18.0 (2024/04/10)
   - Add function Conll.text_from_tokens
 
