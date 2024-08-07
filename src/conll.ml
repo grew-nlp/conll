@@ -122,7 +122,10 @@ module Conll_columns = struct
       (String.concat " " (List.map Column.to_string t))
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let build s = List.map Column.of_string (Str.split (Str.regexp " ") s)
+  let of_list = List.map Column.of_string
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let to_list = List.map Column.to_string
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string ?file ?line_num t =

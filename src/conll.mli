@@ -17,8 +17,11 @@ module Conll_columns : sig
   (* # global.columns = ID FORM LEMMA UPOS XPOS FEATS HEAD DEPREL DEPS MISC ORFEO:START ORFEO:STOP ORFEO:SPEAKER *)
   val orfeo: t
 
-  (* [build] from a string like "ID FORM UPOS"*)
-  val build: string -> t
+  (* [of_list] from a list like ["ID"; "FORM"; "UPOS"] *)
+  val of_list: string list -> t
+
+  (* [to_list] return a list like ["ID"; "FORM"; "UPOS"] *)
+  val to_list: t -> string list
 end
 
 module Conll_config: sig
