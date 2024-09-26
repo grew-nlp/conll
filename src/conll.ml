@@ -304,7 +304,7 @@ module Id = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string ?file ?sent_id ?line_num s =
-    if s <> "" && s.[0] = '_'
+    if CCString.prefix ~pre:"_" s
     then Unordered (CCString.drop 1 s)
     else
       try
@@ -325,14 +325,16 @@ module Id_set = Set.Make (struct type t = Id.t let compare = Stdlib.compare end)
 module Id_map = Map.Make (struct type t = Id.t let compare = Stdlib.compare end)
 
 
+
+
 (* ==================================================================================================== *)
 
 (* The sorting must be done on unprefixed feature name, but without merging `f` and `__MISC__f`
-   --> the `__MISC__` is kept as a suffix *)
-let move_misc_prefix s =
-  if String.length s > 8 && String.sub s 0 8 = "__MISC__" 
-  then String.sub s 8 ((String.length s) - 8) ^ "__MISC__"
-  else s
+   --> the `__MISC__` is kept as a suffix to avoid clash (ex: Case in Polish) *)
+let move_misc_prefix str =
+  match CCString.chop_prefix ~pre:"__MISC__" str with
+  | None -> str
+  | Some sub -> sub ^ "__MISC__"
 
 let lowercase_compare s1 s2 = Stdlib.compare (CCString.lowercase_ascii (move_misc_prefix s1)) (CCString.lowercase_ascii (move_misc_prefix s2))
 module Fs_map = CCMap.Make (struct type t=string let compare = lowercase_compare end)
@@ -391,8 +393,8 @@ module Fs = struct
            | "lemma" | "upos" | "xpos" -> acc
            | "__RAW_MISC__" when misc -> (key,value) :: acc
            | "__RAW_MISC__" -> acc
-           | s when misc && String.length s > 8 && String.sub s 0 8 = "__MISC__" -> (String.sub s 8 ((String.length s) - 8),value) :: acc
-           | s when s.[0] = '_' -> acc (* TODO: DOC (other columns like orfeo are encoded from "_xxx" feats)*)
+           | s when misc && CCString.prefix ~pre:"__MISC__" s -> (CCString.drop 8 s,value) :: acc
+           | s when CCString.prefix ~pre:"_" s -> acc (* TODO: DOC (other columns like orfeo are encoded from "_xxx" feats)*)
            | _ when config.Conll_config.feats = [] ->
              begin
                if misc
@@ -1166,26 +1168,32 @@ module Conll = struct
     { t with meta = ("sent_id", new_sent_id) :: (List.remove_assoc "sent_id" t.meta) }
 
   (* ---------------------------------------------------------------------------------------------------- *)
+  (* special handling of Parseme usage of souce_sent_id *)
+  let rec expand_parseme_meta = function
+  | [] -> []
+  | ("source_sent_id", source_sent_id) :: t -> 
+        begin
+          match Str.split (Str.regexp " +") source_sent_id with
+          | [prefix_uri;file_path_under_root; sent_id] ->
+            ("prefix_uri", prefix_uri) :: ("file_path_under_root", file_path_under_root) :: ("sent_id", sent_id) :: t
+          | _ -> ("source_sent_id", source_sent_id) :: t
+        end
+    | x :: t -> x :: (expand_parseme_meta t)
+
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let rec contract_parseme_meta = function
+  | ("prefix_uri", prefix_uri) :: ("file_path_under_root", file_path_under_root) :: ("sent_id", sent_id) :: t ->
+    ("source_sent_id", prefix_uri  ^ " " ^ file_path_under_root ^ " " ^ sent_id ^ " ") :: t
+  | [] -> []
+  | x :: t -> x :: (contract_parseme_meta t)
+
+  (* ---------------------------------------------------------------------------------------------------- *)
   let parse_meta_list meta_lines =
     List.fold_left
-      (fun acc (_,t) -> 
-        if Str.string_match (Str.regexp "# \\([^=]*\\) =[ \t]\\(.*\\)") t 0
-          then 
-            begin
-            match (Str.matched_group 1 t, Str.matched_group 2 t) with
-            | ("source_sent_id", source_sent_id) ->
-              begin
-                match Str.split (Str.regexp_string " +") source_sent_id with
-                | [prefix_uri;file_path_under_root; sent_id] ->
-                  ("prefix_uri", prefix_uri) ::
-                  ("file_path_under_root", file_path_under_root) ::
-                  ("sent_id", sent_id) ::
-                  acc
-                | _ -> ("source_sent_id", source_sent_id) :: acc
-              end
-            | (k,v) -> (k,v):: acc
-            end
-        else ("", t) :: acc
+      (fun acc (_,t) ->
+        match Str.bounded_split_delim (Str.regexp "[=]") (CCString.drop 1 t) 2 |> (List.map String.trim) with
+        | [k; v] -> (k,v) :: acc
+        | _ -> ("__RAW_META__", t) :: acc
       ) [] meta_lines
 
   (* ---------------------------------------------------------------------------------------------------- *)
@@ -1198,9 +1206,9 @@ module Conll = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let of_string_list_rev ~config ?file ~columns string_list_rev =
     let (meta_lines, graph_lines_rev) =
-      List.partition (fun (_,l) -> l <> "" && l.[0] = '#') string_list_rev in
+      List.partition (fun x -> x |> snd |> CCString.prefix ~pre:"#") string_list_rev in
 
-    let meta = parse_meta_list meta_lines in
+    let meta = meta_lines |> parse_meta_list |> expand_parseme_meta in
     let sent_id = List.assoc_opt "sent_id" meta in
 
     let (nodes_without_root, edges, parseme, frsemcor) =
@@ -1533,9 +1541,10 @@ module Conll = struct
 
     let _ = List.iter
         (function
-          | (key,_) when String.length key > 0 && key.[0] = '_' -> ()
+          | ("__RAW_META__", v) -> bprintf buff "%s\n" v
+          | (key,_) when CCString.prefix ~pre:"_" key -> ()
           | (key,value) -> bprintf buff "# %s = %s\n" key value
-        ) t_without_root.meta in
+        ) (contract_parseme_meta t_without_root.meta) in
 
     let _ = List.iter
         (fun node ->
@@ -1764,9 +1773,7 @@ module Conll_stat = struct
     struct 
       type t = string
       let compare t1 t2 =
-        let e1 = String.length t1 > 2 && String.sub t1 0 2 = "E:"
-        and e2 = String.length t2 > 2 && String.sub t2 0 2 = "E:" in
-        match (e1, e2) with
+        match (CCString.prefix ~pre:"E:" t1, CCString.prefix ~pre:"E:" t2) with
         | (true, false) -> 1
         | (false, true) -> -1
         | _ -> Stdlib.compare t1 t2
