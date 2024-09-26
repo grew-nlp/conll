@@ -1539,60 +1539,62 @@ module Conll = struct
 
     let t_without_root = { down_t with nodes = List.filter (fun node -> not (Node.is_conll_root node)) down_t.nodes} in
 
-    let _ = List.iter
+    let _ =
+      List.iter
         (function
           | ("__RAW_META__", v) -> bprintf buff "%s\n" v
           | (key,_) when CCString.prefix ~pre:"_" key -> ()
           | (key,value) -> bprintf buff "# %s = %s\n" key value
         ) (contract_parseme_meta t_without_root.meta) in
 
-    let _ = List.iter
+    let _ =
+      List.iter
         (fun node ->
-           let (basic_edges, deps_edges) = Edge.split ~config t_without_root.edges in
+          let (basic_edges, deps_edges) = Edge.split ~config t_without_root.edges in
 
-           let (head,deprel) =
-             match List.filter (Edge.is_tar node.Node.id) basic_edges with
-             | [] -> ("_", "_")
-             | l ->
-               let l = List.sort (Edge.compare ~config) l in
-               (
+          let (head,deprel) =
+            match List.filter (Edge.is_tar node.Node.id) basic_edges with
+            | [] -> ("_", "_")
+            | l ->
+              let l = List.sort (Edge.compare ~config) l in
+              (
                  String.concat "|" (List.map (fun e -> Id.to_string e.Edge.src) l),
                  String.concat "|" (List.map (fun e -> Conll_label.to_string_robust ~config e.Edge.label) l)
-               ) in
-           let deps =
-             match List.sort (Edge.compare ~config) (List.filter (Edge.is_tar node.Node.id) deps_edges) with
-             | [] -> "_"
-             | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Conll_label.to_string_robust ~config e.Edge.label)) l) in
+              ) in
+          let deps =
+            match List.sort (Edge.compare ~config) (List.filter (Edge.is_tar node.Node.id) deps_edges) with
+            | [] -> "_"
+            | l -> String.concat "|" (List.map (fun e -> (Id.to_string e.Edge.src)^":"^(Conll_label.to_string_robust ~config e.Edge.label)) l) in
 
 
-           let parseme_mwe =
-             match
-               (Int_map.fold
-                  (fun mwe_id parseme_item acc ->
-                     match parseme_item.Parseme.ids with
-                     | (head, proj)::_ when head = node.id ->
-                       (sprintf "%s:%s" (Parseme.mwe_id_proj_to_string (mwe_id, proj)) (Parseme.item_to_string parseme_item)):: acc
-                     | _::tail when List.mem_assoc node.id tail ->
-                       let proj = List.assoc node.id tail in
-                       (Parseme.mwe_id_proj_to_string (mwe_id, proj)) :: acc
-                     | _ -> acc
-                  ) t_without_root.parseme []) with
+          let parseme_mwe =
+            match
+              (Int_map.fold
+                (fun mwe_id parseme_item acc ->
+                  match parseme_item.Parseme.ids with
+                  | (head, proj)::_ when head = node.id ->
+                    (sprintf "%s:%s" (Parseme.mwe_id_proj_to_string (mwe_id, proj)) (Parseme.item_to_string parseme_item)):: acc
+                  | _::tail when List.mem_assoc node.id tail ->
+                    let proj = List.assoc node.id tail in
+                    (Parseme.mwe_id_proj_to_string (mwe_id, proj)) :: acc
+                  | _ -> acc
+                ) t_without_root.parseme []) with
              | [] -> "*"
              | l -> String.concat ";" (List.rev l) in
 
-           let frsemcor = match
-               (Int_map.fold
-                  (fun mwe_id frsemcor_item acc ->
-                     match (frsemcor_item.Frsemcor.head, frsemcor_item.Frsemcor.tokens) with
-                     | (Some h, []) when h = node.id -> frsemcor_item.Frsemcor.frsemcor :: acc
-                     | (Some h, _) when h=node.id -> (sprintf "%d:%s" mwe_id frsemcor_item.Frsemcor.frsemcor) :: acc
-                     | (_,tokens) when List.mem node.id tokens -> (sprintf "%d" mwe_id) :: acc
-                     | _ -> acc
-                  ) t_without_root.frsemcor []) with
-           | [] -> "*"
-           | l -> String.concat ";" l in
+          let frsemcor = match
+            (Int_map.fold
+              (fun mwe_id frsemcor_item acc ->
+                match (frsemcor_item.Frsemcor.head, frsemcor_item.Frsemcor.tokens) with
+                | (Some h, []) when h = node.id -> frsemcor_item.Frsemcor.frsemcor :: acc
+                | (Some h, _) when h=node.id -> (sprintf "%d:%s" mwe_id frsemcor_item.Frsemcor.frsemcor) :: acc
+                | (_,tokens) when List.mem node.id tokens -> (sprintf "%d" mwe_id) :: acc
+                | _ -> acc
+              ) t_without_root.frsemcor []) with
+            | [] -> "*"
+            | l -> String.concat ";" l in
 
-           bprintf buff "%s\n" (Node.to_conll ~config ~columns head deprel deps parseme_mwe frsemcor node)
+          bprintf buff "%s\n" (Node.to_conll ~config ~columns head deprel deps parseme_mwe frsemcor node)
 
         ) t_without_root.nodes in
     ()
@@ -1785,13 +1787,13 @@ module Conll_stat = struct
   let get_tags map =
     Label_map.fold
       (fun _ map2 acc ->
-         String_map.fold
-           (fun gov map3 acc2 ->
-              String_map.fold
-                (fun dep _ acc3 ->
-                   String_set.add dep acc3
-                ) map3 (String_set.add gov acc2)
-           ) map2 acc
+        String_map.fold
+          (fun gov map3 acc2 ->
+            String_map.fold
+              (fun dep _ acc3 ->
+                String_set.add dep acc3
+              ) map3 (String_set.add gov acc2)
+          ) map2 acc
       ) map String_set.empty
 
   let add3 dep stat3 =
@@ -1846,13 +1848,13 @@ module Conll_stat = struct
   let dump map =
     Label_map.iter
       (fun label map2 ->
-         String_map.iter
-           (fun gov map3 ->
-              String_map.iter
-                (fun dep value ->
-                   Printf.printf "%s -[%s]-> %s ==> %d\n" gov label dep value
-                ) map3
-           ) map2
+        String_map.iter
+          (fun gov map3 ->
+            String_map.iter
+              (fun dep value ->
+                Printf.printf "%s -[%s]-> %s ==> %d\n" gov label dep value
+              ) map3
+          ) map2
       ) map
 
   let get map gov label dep =
@@ -1871,9 +1873,9 @@ module Conll_stat = struct
       match
         String_map.fold
           (fun _ map acc ->
-             match String_map.find_opt dep map with
-             | None -> acc
-             | Some x -> x+acc
+            match String_map.find_opt dep map with
+            | None -> acc
+            | Some x -> x+acc
           ) map_map_gov 0 with
       | 0 -> None
       | i -> Some i
@@ -1891,7 +1893,7 @@ module Conll_stat = struct
     | (Some _, None) -> -1
     | (None, None) -> Stdlib.compare tag1 tag2
 
-  let  url_encode url =
+  let url_encode url =
     let buff = Buffer.create 32 in
     String.iter
       (function
@@ -1907,7 +1909,7 @@ module Conll_stat = struct
         | '>' -> bprintf buff "%s" "%3E"
         | ';' -> bprintf buff "%s" "%3B"
         | '\n' -> bprintf buff "%s" "%0A"
-        | '\"' -> bprintf buff "%s" "%22"
+        | '"' -> bprintf buff "%s" "%22"
         | c -> bprintf buff "%c" c
       ) url;
     Buffer.contents buff
@@ -1936,12 +1938,14 @@ module Conll_stat = struct
 
   let table buff corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map label =
     let tags = get_tags map in
-    let govs = String_set.fold
+    let govs =
+      String_set.fold
         (fun gov acc -> (gov, get_total_gov map label gov) :: acc
         ) tags [] in
     let sorted_govs = List.sort count_compare govs in
 
-    let deps = String_set.fold
+    let deps =
+      String_set.fold
         (fun dep acc -> (dep, get_total_dep map label dep) :: acc
         ) tags [] in
     let sorted_deps = List.sort count_compare deps in
