@@ -2,7 +2,7 @@
 
 (name conll)
 
-(version 1.18.1)
+(version 1.19.0)
 
 (generate_opam_files true)
 
