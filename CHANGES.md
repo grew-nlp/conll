@@ -1,3 +1,6 @@
+## 1.19.1 (2024/11/12)
+  - adjust UD config for version 2.15 of UD (list of FEATS features)
+
 # 1.19.0 (2024/10/27)
   - Fix metadata parsing / printing
   - ⚠️ Change Conll_columns interface

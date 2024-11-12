@@ -158,8 +158,9 @@ module Conll_config = struct
   (* ---------------------------------------------------------------------------------------------------- *)
 
   let ud_features = [
-    (* UD features collected from data 2.14 *)
+    (* UD features collected from data 2.15 *)
     "Abbr"; "Accomp"; "AdjType"; "AdpType"; "AdvType"; "Advlz"; "Agglutination"; "Also"; "Analyt"; "Animacy"; "Animacy[gram]"; "Animacy[obj]"; "Aspect";
+    "BadStyle"; (* new in 2.15 *)
     "Case"; "Caus"; "Cfm"; "Clas"; "Class"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]"; "Compound"; "Comt"; "Conces";
     "ConjType"; "Connegative"; "Contrast"; "Contv"; "Corf"; "Decl"; "Definite"; "Definitizer"; "Degree"; "Deixis";
     "DeixisRef"; "Deixis[psor]"; "Delib"; "Deo"; "Derivation"; "Determ"; "Detrans"; "Dev"; "Dialect"; "Dist"; "Dyn"; "Echo"; "Ego"; "Emph";
@@ -167,7 +168,9 @@ module Conll_config = struct
     "Gender"; "Gender[abs]"; "Gender[cs]"; "Gender[dat]"; "Gender[erg]"; "Gender[io]"; "Gender[lo]"; "Gender[obj]"; "Gender[po]"; "Gender[psor]"; "Gender[refl]"; "Gender[ro]"; "Gender[subj]";
     "HebBinyan"; "HebExistential"; "Hnfc"; "Htp"; "Hum"; 
     "Hyph"; "Imprs"; "Incorp"; "InfForm"; "InflClass"; "InflClass[nominal]"; "Int"; "Intens"; "Intense"; "Intension";
-    "LangId"; "Language"; "Link"; "Mood"; "Morph"; "Movement"; "Mutation"; "NCount"; "NameType"; "NegationType"; "Neutral"; "Nmzr";
+    "LangId"; "Language"; "Link"; 
+    "Modality"; (* new in 2.15 *)
+    "Mood"; "Morph"; "Movement"; "Mutation"; "NCount"; "NameType"; "NegationType"; "Neutral"; "Nmzr";
     "Nomzr"; "NonFoc"; "NounBase"; "NounClass"; "NounType"; "NumForm"; "NumType"; "NumValue";
     "Number"; "Number[abs]"; "Number[cs]"; "Number[dat]"; "Number[erg]"; "Number[grnd]"; "Number[io]"; "Number[lo]"; "Number[obj]"; "Number[po]"; "Number[psed]"; "Number[psor]"; "Number[refl]"; "Number[ro]"; "Number[subj]";
     "Obl"; "Orth"; "PartForm"; "PartType"; "PartTypeQpm"; "Pcl";
