@@ -1,3 +1,6 @@
+## 1.19.2 (2024/12/09)
+  - add function Conll_config.is_in_FEATS
+
 ## 1.19.1 (2024/11/12)
   - adjust UD config for version 2.15 of UD (list of FEATS features)
 
