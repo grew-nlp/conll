@@ -247,7 +247,11 @@ module Conll_config = struct
       |> to_list 
       |> List.map (fun j -> j |> member "name" |> to_string) in
       { sud with name="from_json"; feats }
-  
+
+  let is_in_FEATS t feat_name =
+    match t.feats with
+    | [] -> true
+    | _ -> List.mem feat_name t.feats
 end
 
 
