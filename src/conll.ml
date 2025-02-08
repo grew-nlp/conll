@@ -668,7 +668,7 @@ module Node = struct
       (fun node ->
          match node.wordform with
          | Some "__EMPTY__" ->
-           { node with wordform = None; feats = Fs_map.add "wordform" "__EMPTY__" node.feats }
+           { node with wordform = None; }
          | Some wf when (unescape_form wf) <> node.form ->
            { node with wordform = None; feats = Fs_map.add "wordform" wf node.feats }
          | Some _ -> { node with wordform = None }
