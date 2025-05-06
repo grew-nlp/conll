@@ -1,3 +1,6 @@
+## 1.19.3 (2025/05/06)
+  - add pt config
+
 ## 1.19.2 (2024/12/09)
   - add function Conll_config.is_in_FEATS
 
