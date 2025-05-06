@@ -224,12 +224,22 @@ module Conll_config = struct
     deps = Some ("enhanced", 'E');
   }
 
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let pt = {
+    name="pt";
+    core = "1";
+    extensions = [ ("2",':')];
+    prefixes = [];
+    feats = ["AdvType"; "Aspect"; "Case"; "ExtPos"; "Foreign"; "Gender"; "Mood"; "Nominal"; "NumType"; "Number"; "PartType"; "Person"; "Polarity"; "Poss"; "Prefix"; "PronType"; "Reflex"; "SubForm"; "Tense"; "Typo"; "VerbClass"; "VerbForm"; "VerbType"; "Voice"; ];
+    deps = None;
+  }
   let build = function
     | "sequoia" -> sequoia
     | "ud" -> ud
     | "sud" -> sud
     | "iwpt" -> iwpt
     | "basic" | "orfeo" -> basic
+    | "pt" -> pt
     | s -> Error.error "Unknown config `%s` (available values are: `basic`, `ud`, `sud`, `sequoia`, `orfeo`)" s
 
   let get_name t = t.name
