@@ -158,30 +158,27 @@ module Conll_config = struct
   (* ---------------------------------------------------------------------------------------------------- *)
 
   let ud_features = [
-    (* UD features collected from data 2.15 *)
-    "Abbr"; "Accomp"; "AdjType"; "AdpType"; "AdvType"; "Advlz"; "Agglutination"; "Also"; "Analyt"; "Animacy"; "Animacy[gram]"; "Animacy[obj]"; "Aspect";
-    "BadStyle"; (* new in 2.15 *)
-    "Case"; "Caus"; "Cfm"; "Clas"; "Class"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]"; "Compound"; "Comt"; "Conces";
+    (* UD features collected from data 2.16 *)
+    "Abbr"; "Accomp"; "AdjType"; "AdpType"; "AdvType"; "Advlz"; "Agglutination"; "Also"; "Analyt"; "Animacy"; "Animacy[gram]"; "Animacy[obj]"; "Aspect"; 
+    "Assoc"; "BadStyle"; 
+    "Case"; "Caus"; "Cfm"; "Clas"; "Class"; 
+    "CleftType"; "Clitic"; "Clusivity"; "Clusivity[obj]"; "Clusivity[psor]"; "Clusivity[subj]"; "Compound"; "Comt"; "Conces";
     "ConjType"; "Connegative"; "Contrast"; "Contv"; "Corf"; "Decl"; "Definite"; "Definitizer"; "Degree"; "Deixis";
-    "DeixisRef"; "Deixis[psor]"; "Delib"; "Deo"; "Derivation"; "Determ"; "Detrans"; "Dev"; "Dialect"; "Dist"; "Dyn"; "Echo"; "Ego"; "Emph";
-    "Emphatic"; "Evident"; "Excl"; "ExtPos"; "Fact"; "False"; "Foc"; "Focus"; "FocusType"; "Foreign"; "Form";
-    "Gender"; "Gender[abs]"; "Gender[cs]"; "Gender[dat]"; "Gender[erg]"; "Gender[io]"; "Gender[lo]"; "Gender[obj]"; "Gender[po]"; "Gender[psor]"; "Gender[refl]"; "Gender[ro]"; "Gender[subj]";
-    "HebBinyan"; "HebExistential"; "Hnfc"; "Htp"; "Hum"; 
-    "Hyph"; "Imprs"; "Incorp"; "InfForm"; "InflClass"; "InflClass[nominal]"; "Int"; "Intens"; "Intense"; "Intension";
-    "LangId"; "Language"; "Link"; 
-    "Modality"; (* new in 2.15 *)
-    "Mood"; "Morph"; "Movement"; "Mutation"; "NCount"; "NameType"; "NegationType"; "Neutral"; "Nmzr";
-    "Nomzr"; "NonFoc"; "NounBase"; "NounClass"; "NounType"; "NumForm"; "NumType"; "NumValue";
-    "Number"; "Number[abs]"; "Number[cs]"; "Number[dat]"; "Number[erg]"; "Number[grnd]"; "Number[io]"; "Number[lo]"; "Number[obj]"; "Number[po]"; "Number[psed]"; "Number[psor]"; "Number[refl]"; "Number[ro]"; "Number[subj]";
-    "Obl"; "Orth"; "PartForm"; "PartType"; "PartTypeQpm"; "Pcl";
-    "Person"; "Person[abs]"; "Person[cs]"; "Person[dat]"; "Person[erg]"; "Person[grnd]"; "Person[io]"; "Person[lo]"; "Person[obj]"; "Person[po]"; "Person[psor]"; "Person[refl]"; "Person[ro]"; "Person[subj]";
-    "Polarity"; "Polite"; "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "Possessed";
-    "Pred"; "Prefix"; "PrepCase"; "PrepForm"; "Priv"; "PronClass"; "PronType"; "Proper"; "Prp"; "PunctSide"; "PunctType";
-    "Purp"; "RcpType"; "Recip"; "Red"; "Redup"; "Reflex"; "Reflex[obj]"; "Reflex[subj]"; "Rel"; "RelType"; "Reln"; "Report"; "Speech"; "Strength";
-    "Style"; "SubGender"; "Subcat"; "Subord"; "Subordinative"; "Tense"; "Top"; "Trans"; "Tv"; "Typo"; "Uninflect";
-    "Valency"; "Variant"; "Ventive"; "VerbClass"; "VerbForm"; "VerbStem"; "VerbType"; "Voice"; 
-    (* SUD features *)
-    "Shared";
+    "DeixisRef"; "Deixis[psor]"; "Delib"; "Deo"; "Derivation"; "Determ"; "Detrans"; "Dev"; "Dialect"; "Dist"; "Dyn"; "Echo"; "Emph";
+    "Emphatic"; "Encl"; "Ergative"; "Evident"; "Excl"; "ExtPos"; "Fact"; "False"; "Foc"; "Focus"; "FocusType"; "Foreign"; "Form"; "Gender";
+    "Gender[abs]"; "Gender[cs]"; "Gender[dat]"; "Gender[erg]"; "Gender[io]"; "Gender[lo]"; "Gender[obj]"; "Gender[po]"; "Gender[psor]"; "Gender[refl]"; "Gender[ro]"; "Gender[subj]";
+    "HebBinyan"; "HebExistential"; "Hnfc"; "Htp"; "Hum"; "Human"; "Hyph";
+    "Imprs"; "Incorp"; "InfForm"; "InflClass"; "InflClass[nominal]"; "Int"; "Intens"; "Intense"; "Intension";
+    "Irr"; "LangId"; "Language"; "Link"; "LongForm"; "Modal"; "Modality"; "Mood"; "Morph"; "Movement"; "Mutation"; "NameType"; "NCount"; "NegationType";
+    "Neutral"; "Nmzr"; "Nominal"; "Nomzr"; "NonFoc"; "NounBase"; "NounClass"; "NounType"; "Number"; "Number[abs]"; "Number[cs]"; "Number[dat]";
+    "Number[erg]"; "Number[grnd]"; "Number[io]"; "Number[lo]"; "Number[obj]"; "Number[po]"; "Number[psed]"; "Number[psor]"; "Number[refl]";
+    "Number[ro]"; "Number[subj]"; "NumForm"; "NumType"; "NumValue"; "Obl"; "Orth"; "PartForm"; "PartType"; "PartTypeQpm"; "Pcl"; "Person";
+    "Person[abs]"; "Person[cs]"; "Person[dat]"; "Person[erg]"; "Person[grnd]"; "Person[io]"; "Person[lo]"; "Person[obj]"; "Person[po]"; "Person[psor]";
+    "Person[refl]"; "Person[ro]"; "Person[subj]"; "Polarity"; "Polite"; "Polite[abs]"; "Polite[dat]"; "Polite[erg]"; "Position"; "Poss"; "Possessed"; "Pred";
+    "Prefix"; "PrepCase"; "PrepForm"; "Priv"; "PronClass"; "PronType"; "Proper"; "Prp"; "PunctSide"; "PunctType"; "Purp"; "RcpType"; "Recip"; "Red"; "Redup";
+    "Reflex"; "Reflex[obj]"; "Reflex[subj]"; "Rel"; "Reln"; "RelType"; "Report"; "Speech"; "Strength"; "Style"; "Subcat"; "SubForm"; "SubGender"; "Subord";
+    "Subordinative"; "Tense"; "Top"; "Trans"; "Tv"; "Typo"; "Uninflect"; "Valency"; "Variant"; "Ventive"; "VerbClass"; "VerbForm"; "VerbStem"; "VerbType"; "Voice"; 
+    "Shared"
   ]
   
   (* ---------------------------------------------------------------------------------------------------- *)
