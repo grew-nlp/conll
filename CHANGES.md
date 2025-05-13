@@ -1,3 +1,6 @@
+## 1.19.4 (2025/05/13)
+  - adjust UD config for version 2.16 of UD (list of FEATS features)
+
 ## 1.19.3 (2025/05/06)
   - add pt config
 
