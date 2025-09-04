@@ -40,7 +40,8 @@ module Error = struct
     raise (Conll_error json)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let error ?file ?sent_id ?line_num ?fct ?data ?prev = Printf.ksprintf (error_ ?file ?sent_id ?line_num ?fct ?data ?prev)
+  let error ?file ?sent_id ?line_num ?fct ?data ?prev =
+    Printf.ksprintf (error_ ?file ?sent_id ?line_num ?fct ?data ?prev)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let reraise ?file ?sent_id ?line_num ?fct ?data ?prev json =
@@ -54,7 +55,7 @@ module Error = struct
           |> (fun l -> match data with None -> l | Some x -> ("data", x) :: (List.remove_assoc "data" l))
           |> (fun l -> match prev with None -> l | Some x -> ("prev", `String x) :: (List.remove_assoc "prev" l))
         )
-      | _ -> error "Bug in json error structure" in
+      | _ -> error ~data:json "[Error.reraise] BUG: ill-formed json data" in
     raise (Conll_error new_json)
 end
 
@@ -970,11 +971,11 @@ module Parseme = struct
   let id_map mapping t = { t with ids = List.map (fun (x,y) -> (Id.map_id mapping x,y)) t.ids }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let item_to_json_item id item : (string * Yojson.Basic.t) =
+  let item_to_json_item ?sent_id id item : (string * Yojson.Basic.t) =
     (sprintf "PARSEME_%d" id,
      `Assoc (
        CCList.filter_map CCFun.id  [
-         (match item.parseme with ""  -> Error.error "Illegal MWE, no parseme field" | s -> Some ("parseme", `String s));
+         (match item.parseme with ""  -> Error.error ?sent_id "Illegal MWE, no parseme field" | s -> Some ("parseme", `String s));
          (match item.mwepos with Some x -> Some ("mwepos", `String x) | None -> None);
          (match item.label with Some x -> Some ("label", `String x) | None -> None);
          (match item.criterion with Some x -> Some ("criterion", `String x) | None -> None)
@@ -992,7 +993,7 @@ module Parseme = struct
     { parseme; mwepos; label; criterion; ids }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let item_of_string s =
+  let item_of_string ?file ?sent_id ~line_num s =
     match Str.split (Str.regexp "|") s with
 
     (* usage of the PARSEME:MWE field in PARSEME project *)
@@ -1005,10 +1006,10 @@ module Parseme = struct
         match Str.split (Str.regexp "-") kl with
         | [k] -> (k, None)
         | [k; l] -> (k, Some l)
-        | _ -> Error.error "Cannot parse PARSEME:MWE %s" s in
+        | _ -> Error.error ?file ?sent_id ~line_num "Cannot parse PARSEME:MWE %s" s in
       let criterion = match c with "_" -> None | s -> Some s in
       { mwepos; parseme; label; criterion; ids=[] }
-    | _ -> Error.error "Cannot parse PARSEME:MWE %s" s
+    | _ -> Error.error ?file ?sent_id ~line_num "Cannot parse PARSEME:MWE %s" s
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let item_to_string item =
@@ -1041,12 +1042,12 @@ module Parseme = struct
                 | [id_proj; desc] ->
                   begin
                     let (mwe_id, proj) = mwe_id_proj_of_string ?file ?sent_id ~line_num id_proj in
-                    let new_item = item_of_string desc in
+                    let new_item = item_of_string ?file ?sent_id ~line_num desc in
                     match Int_map.find_opt mwe_id acc2 with
                     | None -> Int_map.add mwe_id {new_item with ids = [(node_id, proj)] } acc2
                     | Some item -> Int_map.add mwe_id { new_item with ids = (node_id, proj) :: item.ids } acc2
                   end
-                | _ -> Error.error "cannot parse PARSEME_MWE"
+                | _ -> Error.error ?file ?sent_id ~line_num "cannot parse PARSEME_MWE"
              ) acc mwe_items
          | _ -> acc
       ) t columns item_list
@@ -1247,12 +1248,12 @@ module Conll = struct
     begin
       let rec loop used_ids = function
         | [] -> ()
-        | {Node.id=id; _}::_ when Id_set.mem id used_ids -> Error.error ?sent_id ?file "id `%s` is used twice" (Id.to_string id)
+        | {Node.id=id; _}::_ when Id_set.mem id used_ids -> Error.error ?file ?sent_id "Node id `%s` is used twice" (Id.to_string id)
         | {Node.id=id; _}::tail -> loop (Id_set.add id used_ids) tail in
       try
         loop Id_set.empty nodes;
         List.iter (check_edge ?file ?sent_id nodes) edges;
-      with Conll_error e -> Error.reraise ?sent_id ?file e
+      with Conll_error e -> Error.reraise ?file ?sent_id e
     end;
     {
       meta;
@@ -1280,7 +1281,7 @@ module Conll = struct
           begin
             match Id.base id with
             | Some pos -> let new_id = Id.Simple (pos + 1) in (head,new_id) :: (loop (new_id,tail))
-            | None -> Error.error "BUG: normalise_list, please report"
+            | None -> Error.error "BUG: Conll.normalise_ids, please report"
           end in
       match t.order with
       | [] -> []
@@ -1327,6 +1328,7 @@ module Conll = struct
   (* ---------------------------------------------------------------------------------------------------- *)
   let to_json (t: t) : Yojson.Basic.t =
 
+    let sent_id = List.assoc_opt "sent_id" t.meta in
     let node_items = List.map Node.to_json_item t.nodes in
     let edges = List.map Edge.to_json t.edges in
 
@@ -1334,8 +1336,9 @@ module Conll = struct
     let (node_items, edges) =
       Int_map.fold
         (fun mwe_id mwe_item (acc_nodes, acc_edges) ->
-          ((Parseme.item_to_json_item mwe_id mwe_item) :: acc_nodes,
-            List.fold_left (fun acc (token_id,proj) ->
+          ((Parseme.item_to_json_item ?sent_id mwe_id mwe_item) :: acc_nodes,
+            List.fold_left
+              (fun acc (token_id,proj) ->
                 let pre_label = match proj with
                   | Parseme.Proj_1 -> ["proj", `String "1"]
                   | Parseme.Proj_2 -> ["proj", `String "2"]
@@ -1356,7 +1359,7 @@ module Conll = struct
           match sem_item.Frsemcor.head with
           | None ->
             let sent_id = List.assoc_opt "sent_id" t.meta in
-            Error.error ?sent_id "No head for id `%d`" sem_id
+            Error.error ?sent_id "No head for semcor id `%d`" sem_id
           | Some head ->
             let node_id = sprintf "FRSEMCOR_%d" sem_id in
             let new_node_item = (node_id, `Assoc [("frsemcor", `String sem_item.frsemcor)]) in
@@ -1747,13 +1750,15 @@ module Conll_corpus = struct
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let load_list ?(config=Conll_config.basic) ?quiet ?log_file ?columns file_list =
-    match List.map (load ~config ?quiet ?columns ?log_file) file_list with
+    match List.map (fun file -> (file, load ~config ?quiet ?columns ?log_file file)) file_list with
     | [] -> empty
-    | ({ columns; _ }::tail) as l ->
-      if List.for_all (fun {columns=p; _} -> p = columns) tail
-      then { columns; data = Array.concat (List.map (fun c -> c.data) l) }
-      else Error.error "All files must have the same columns declaration"
-
+    | ((first_file, { columns; _ })::tail) as l ->
+      match List.find_opt (fun (_,{columns=p; _}) -> p <> columns) tail with
+      | None -> { columns; data = Array.concat (List.map (fun (_,c) -> c.data) l) }
+      | Some (diff_file, {columns = diff_columns; _}) -> 
+        Error.error "Cannot merge files with different columns declaration: file '%s' (columns=%s) and file '%s' (columns=%s)"
+        first_file (Conll_columns.to_string columns)
+        diff_file (Conll_columns.to_string diff_columns)
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let save ?(config=Conll_config.basic) ?sent_id_list out_ch t =
