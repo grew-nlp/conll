@@ -1,3 +1,6 @@
+## 1.19.5 (2025/09/04)
+  - Improve error reporting
+
 ## 1.19.4 (2025/05/13)
   - adjust UD config for version 2.16 of UD (list of FEATS features)
 
