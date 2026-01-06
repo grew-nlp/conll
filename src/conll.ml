@@ -228,7 +228,12 @@ module Conll_config = struct
     core = "1";
     extensions = [ ("2",':')];
     prefixes = [];
-    feats = ["AdvType"; "Aspect"; "Case"; "ExtPos"; "Foreign"; "Gender"; "Mood"; "Nominal"; "NumType"; "Number"; "PartType"; "Person"; "Polarity"; "Poss"; "Prefix"; "PronType"; "Reflex"; "SubForm"; "Tense"; "Typo"; "VerbClass"; "VerbForm"; "VerbType"; "Voice"; ];
+    feats = [
+      "AdvType"; "Aspect"; "Case"; "ExtPos"; "Foreign"; "Gender"; "Mood"; "Nominal"; "NumType"; "Number";
+      "PartType"; "Person"; "Polarity"; "Poss"; "Prefix"; "PronType"; "Reflex"; "SubForm"; "Tense"; "Typo";
+      "VerbClass"; "VerbForm"; "VerbType"; "Voice"; 
+      "NameType"; "PronClass"; "StatPrep"; "Conjug"; "Nisba";
+      ];
     deps = None;
   }
   let build = function
