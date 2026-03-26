@@ -232,7 +232,7 @@ module Conll_config = struct
       "AdvType"; "Aspect"; "Case"; "ExtPos"; "Foreign"; "Gender"; "Mood"; "Nominal"; "NumType"; "Number";
       "PartType"; "Person"; "Polarity"; "Poss"; "Prefix"; "PronType"; "Reflex"; "SubForm"; "Tense"; "Typo";
       "VerbClass"; "VerbForm"; "VerbType"; "Voice"; 
-      "NameType"; "PronClass"; "StatPrep"; "Conjug"; "Nisba";
+      "NameType"; "PronClass"; "StatPrep"; "Conjug"; "Nisba"; "Name";
       ];
     deps = None;
   }
@@ -1566,6 +1566,7 @@ module Conll = struct
         (function
           | ("__RAW_META__", v) -> bprintf buff "%s\n" v
           | (key,_) when CCString.prefix ~pre:"_" key -> ()
+          | ("document_id", _) -> ()
           | (key,value) -> bprintf buff "# %s = %s\n" key value
         ) (contract_parseme_meta t_without_root.meta) in
 
@@ -1709,7 +1710,7 @@ module Conll_corpus = struct
           try
             let conll = 
               Conll.of_string_list_rev ?file ~config ~columns !rev_locals
-              |> (fun x -> match file with None -> x | Some f -> Conll.set_meta "_filename" (Filename.basename f) x) 
+              |> (fun x -> match file with None -> x | Some f -> Conll.set_meta "document_id" (f |> Filename.basename |> Filename.remove_extension) x) 
             in
             incr cpt;
             let base = match file with Some f -> Filename.basename f | None -> "stdin" in
