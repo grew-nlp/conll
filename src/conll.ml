@@ -1566,7 +1566,6 @@ module Conll = struct
         (function
           | ("__RAW_META__", v) -> bprintf buff "%s\n" v
           | (key,_) when CCString.prefix ~pre:"_" key -> ()
-          | ("document_id", _) -> ()
           | (key,value) -> bprintf buff "# %s = %s\n" key value
         ) (contract_parseme_meta t_without_root.meta) in
 
