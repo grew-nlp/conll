@@ -2038,7 +2038,8 @@ module Conll_stat = struct
     |> Str.global_replace (Str.regexp "\\.") "__"
     |> Str.global_replace (Str.regexp ":") "__"
     |> Str.global_replace (Str.regexp "\\$") "__"
-    |> Str.global_replace (Str.regexp "@") "___"
+    |> Str.global_replace (Str.regexp "@") "__"
+    |> Str.global_replace (Str.regexp_string "/") "__"
 
   let to_html corpus_id (gov_key,gov_subkey_opt) (dep_key,dep_subkey_opt) map =
     let buff = Buffer.create 32 in
