@@ -201,6 +201,15 @@ module Conll_config = struct
     feats = ud_features;
     deps = Some ("enhanced", 'E'); (* for conversion EUD to SUD: need a config which covers both *)
   }
+  (* ---------------------------------------------------------------------------------------------------- *)
+  let beja = {
+    name="beja";
+    core = "1";
+    extensions = [ ("2",':'); ("deep", '@'); ("type",'/'); ("filler", '$') ];
+    prefixes = [];
+    feats = ud_features;
+    deps = None;
+  }
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let sequoia = {
@@ -240,6 +249,7 @@ module Conll_config = struct
     | "sequoia" -> sequoia
     | "ud" -> ud
     | "sud" -> sud
+    | "beja" -> beja
     | "iwpt" -> iwpt
     | "basic" | "orfeo" -> basic
     | "pt" -> pt
