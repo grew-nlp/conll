@@ -376,8 +376,8 @@ module Fs = struct
   let empty = Fs_map.empty
 
   (* deal with UD features like "Number[psor]" encoded "Number__psor" in Grew to avoid clashes with Grew brackets usage *)
-  let encode_feat_name s = Str.global_replace (Str.regexp "\\[\\([0-9a-z]+\\)\\]") "__\\1" s
-  let decode_feat_name s = Str.global_replace (Str.regexp "__\\([0-9a-z]+\\)$") "[\\1]" s
+  let encode_feat_name s = Str.global_replace (Str.regexp "\\[\\([0-9a-zA-Z]+\\)\\]") "__\\1" s
+  let decode_feat_name s = Str.global_replace (Str.regexp "__\\([0-9a-zA-Z]+\\)$") "[\\1]" s
 
   let add ?file ?sent_id ?line_num f v acc =
     let enc_f = encode_feat_name f in
