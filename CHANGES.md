@@ -1,3 +1,6 @@
+## 1.19.8 (2026/05/17)
+  - adjust UD config for version 2.18 of UD (list of FEATS features)
+
 ## 1.19.7 (2026/04/26)
   - Small adjustments to the encoding of some data.
 
