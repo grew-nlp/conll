@@ -243,7 +243,7 @@ module Conll_config = struct
       "AdvType"; "Aspect"; "Case"; "ExtPos"; "Foreign"; "Gender"; "Mood"; "Nominal"; "NumType"; "Number";
       "PartType"; "Person"; "Polarity"; "Poss"; "Prefix"; "PronType"; "Reflex"; "SubForm"; "Tense"; "Typo";
       "VerbClass"; "VerbForm"; "VerbType"; "Voice"; 
-      "NameType"; "PronClass"; "StatPrep"; "Conjug"; "Nisba"; "Name";
+      "NameType"; "PronClass"; "StatPrep"; "Conjug"; "Nisba"; "Name"; "Impersonal";
       ];
     deps = None;
   }
@@ -1014,7 +1014,7 @@ module Parseme = struct
     match Str.split (Str.regexp "|") s with
 
     (* usage of the PARSEME:MWE field in PARSEME project *)
-    | [one] -> { empty with parseme="MWE"; mwepos= Some "VERB"; label=Some one }
+    | [one] -> { empty with parseme="MWE"; label=Some one }
 
     (* usage of the PARSEME:MWE field in PARSEME-FR project *)
     | [m;kl;c] ->
