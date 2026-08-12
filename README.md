@@ -1,7 +1,7 @@
 # An Ocaml library for CoNLL format
 
 This library brings some functions to deal with CoNLL files, mainly following formats use in the following projects:
-  * [UD](http://universaldependencies.org/): format [CoNNL-U](https://universaldependencies.org/format.html) and [CoNNL-U plus](https://universaldependencies.org/ext-format.html) (partially supported).
+  * [UD](http://universaldependencies.org/): format [CoNLL-U](https://universaldependencies.org/format.html) and [CoNLL-U plus](https://universaldependencies.org/ext-format.html) (partially supported).
   * [SUD](https://surfacesyntacticud.github.io/): same formats as UD
   * [PARSEME](https://gitlab.com/parseme): format [CUPT](http://multiword.sourceforge.net/cupt-format) 
 
