@@ -414,17 +414,6 @@ module Fs = struct
         ) init (Str.split (Str.regexp "|") s)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let to_string feats =
-    if Fs_map.is_empty feats
-    then "_"
-    else String.concat 
-        "|" 
-        (Fs_map.fold 
-           (fun k v acc -> (k^"="^v) :: acc
-           ) feats []
-        )
-
-  (* ---------------------------------------------------------------------------------------------------- *)
   let string_feats ~config misc feats =
     let feat_list =
       Fs_map.fold
@@ -589,77 +578,63 @@ module Node = struct
          ) columns)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  type mwt_misc = ((int * int) * string Fs_map.t) list
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let mwt_misc_to_string (mwt_misc: mwt_misc) =
-    String.concat "||"
-      (List.map
-         (fun ((i,f),feats) ->
-            sprintf "%d::%d::%s" i f (Fs.to_string feats)
-         ) mwt_misc
-      )
-
-  (* ---------------------------------------------------------------------------------------------------- *)
-  let mwt_misc_of_string s : mwt_misc =
-    List.map
-      (fun item ->
-         match Str.split (Str.regexp_string "::") item with
-         | [si; sj; string_feats] ->
-           let feats = 
-             try Fs.parse false string_feats Fs.empty 
-             with Conll_error _ -> Fs.add "__RAW_MISC__" string_feats Fs.empty
-           in ((int_of_string si, int_of_string sj), feats)
-         | _ -> Error.error ~fct: "mwt_misc_of_string" "Cannot parse `%s`" s
-      )  (Str.split (Str.regexp_string "||") s)
-
-  (* ---------------------------------------------------------------------------------------------------- *)
   let escape_form = function "_" -> "UNDERSCORE" | x -> x
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let unescape_form = function "UNDERSCORE" -> "_" | x -> x
 
   (* ---------------------------------------------------------------------------------------------------- *)
+  (* When there are MISC features on a multi-word-token, these features are stored in the first token, with "__MWT__" prefix. *)
+  (* ex: 7-8	des	_	_	_	_	_	_	_	SpaceAfter=No 
+     will bring the pseudo-feature __MWT__SpaceAfter=No on the token 7
+  *)
   let textform_up node_list =
-    let mwt_misc = ref [] in
     let rec loop to_underscore = function
       | [] -> []
       | ({ form="__0__"; _ } as node) :: tail -> node :: (loop to_underscore tail)
       | ({ id=Id.Empty _; _ } as node) :: tail -> { node with textform = Some "_"} :: (loop to_underscore tail)
-      | { id=Id.Mwt (init,final); form; feats; _} :: next :: tail ->
-        begin
-          if not (Fs_map.is_empty feats)
-          then mwt_misc := ((init,final),feats) :: !mwt_misc
-        end;
+      | { id=Id.Mwt (init,final); form; feats=mwt_feats; _} :: next :: tail ->
         let new_to_underscore = (CCList.range (init+1) final) @ to_underscore in
-        {next with textform = Some (escape_form form)} :: (loop new_to_underscore tail)
+        {next with 
+          textform = Some (escape_form form);
+          feats = Fs_map.fold (fun k v acc -> Fs_map.add ("__MWT__"^k) v acc) mwt_feats next.feats
+        } :: (loop new_to_underscore tail)
       | ({ id=Id.Simple i; _ } as node) :: tail when List.mem i to_underscore ->
         { node with textform = Some "_"} :: (loop (CCList.remove_one ~eq:(=) i to_underscore) tail)
       | node :: tail ->
         { node with textform = Some (escape_form node.form) } :: (loop to_underscore tail) in
     let new_node_list = loop [] node_list in
-    (new_node_list, mwt_misc_to_string !mwt_misc)
+    new_node_list
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let textform_down mwt_misc_string node_list =
-    let mwt_misc = mwt_misc_of_string mwt_misc_string in
+  let textform_down node_list =
+    let mwt_feats_map = ref Int_map.empty in
     let (in_span, new_node_list) =
       CCList.fold_map (
         fun acc node ->
           match (node.id, node.textform) with
           | (Id.Empty _, Some "_") -> (acc, {node with textform = None})
-          | (Id.Simple i, Some "_") -> (i::acc, {node with textform = None})
+          | (Id.Simple i, Some "_") ->
+            (i::acc, {node with textform = None})
+          | (Id.Simple i, _) ->
+            let (mwt_feats, node_feats) = 
+              Fs_map.partition (fun k _ -> String.starts_with ~prefix:"__MWT__" k) node.feats in
+            if not (Fs_map.is_empty mwt_feats) then
+              begin
+                let clean_mwt_feats = Fs_map.fold (fun k v acc -> Fs_map.add (String.drop_first 7 k) v acc) mwt_feats Fs_map.empty in
+                mwt_feats_map := Int_map.add i clean_mwt_feats !mwt_feats_map
+              end;
+            (acc, {node with textform = None; feats = node_feats})
           | _ -> (acc, {node with textform = None})
       ) [] node_list in
+
     let decr_in_span = List.sort (fun x y -> - (Stdlib.compare x y)) in_span in
 
     let rec loop = function
       | (None, []) -> []
       | (None, h::tail) -> loop (Some (h,h), tail)
-      | (Some (i,f), []) -> [(i-1,f)]
       | (Some (i,f), h::tail) when h = i-1 -> loop (Some (h,f), tail)
-      | (Some (i,f), l) -> (i-1,f)::(loop (None, l))
-    in
+      | (Some (i,f), l) -> (i-1,f)::(loop (None, l)) in
 
     let find_original_textform i =
       match List.find_opt (fun node -> node.id = Id.Simple i) node_list with
@@ -677,9 +652,9 @@ module Node = struct
     let mwts =
       List.map
         (fun (i,j) ->
-           match List.assoc_opt (i,j) mwt_misc with
-           | None -> { id=Id.Mwt (i,j); form=unescape_form (find_original_textform i); feats=Fs.empty; wordform=None; textform=None }
-           | Some feats -> { id=Id.Mwt (i,j); form=unescape_form (find_original_textform i); feats; wordform=None; textform=None }
+          match Int_map.find_opt i !mwt_feats_map with
+          | None -> { id=Id.Mwt (i,j); form=unescape_form (find_original_textform i); feats=Fs.empty; wordform=None; textform=None }
+          | Some feats -> { id=Id.Mwt (i,j); form=unescape_form (find_original_textform i); feats; wordform=None; textform=None }
         ) (loop (None, decr_in_span)) in
 
     List.sort compare (mwts @ new_node_list)
@@ -1181,18 +1156,10 @@ module Conll = struct
     | None -> Error.error "BUG: inconsistent id: %s" (Id.to_string id)
 
   (* ---------------------------------------------------------------------------------------------------- *)
-
-  (* when MISC features is used on a MWT line, there is no place to store the data in Conll.t: we used a special meta as a hack *)
-  let textform_up t =
-    match Node.textform_up t.nodes with
-    | (new_nodes, "") -> { t with nodes = new_nodes }
-    | (new_nodes, mwt_misc) -> { t with nodes = new_nodes; meta=("##MWT_MISC##", mwt_misc)::t.meta }
+  let textform_up t = { t with nodes = Node.textform_up t.nodes }
 
   (* ---------------------------------------------------------------------------------------------------- *)
-  let textform_down t =
-    match List.assoc_opt "##MWT_MISC##" t.meta with
-    | None -> { t with nodes = Node.textform_down "" t.nodes}
-    | Some mwt_misc -> { t with nodes = Node.textform_down mwt_misc t.nodes; meta = List.remove_assoc "##MWT_MISC##" t.meta }
+  let textform_down t = { t with nodes = Node.textform_down t.nodes}
 
   (* ---------------------------------------------------------------------------------------------------- *)
   let wordform_up t = { t with nodes = Node.wordform_up t.nodes}
