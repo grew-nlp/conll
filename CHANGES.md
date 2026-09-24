@@ -1,3 +1,6 @@
+# 1.20.0 (2026/09/24)
+  - update the encoding of MISC features in MWT
+
 ## 1.19.8 (2026/05/17)
   - adjust UD config for version 2.18 of UD (list of FEATS features)
 
