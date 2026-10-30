@@ -1,3 +1,6 @@
+## 1.20.1 (2026/10/30)
+  - add constraint of Ocaml version (https://github.com/grew-nlp/conll/issues/2)
+
 # 1.20.0 (2026/09/24)
   - update the encoding of MISC features in MWT
 

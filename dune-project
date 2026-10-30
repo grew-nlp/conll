@@ -2,7 +2,7 @@
 
 (name conll)
 
-(version 1.20.0)
+(version 1.20.1)
 
 (generate_opam_files true)
 
@@ -19,7 +19,12 @@
  (name conll)
  (synopsis "Manipulation of CoNLL files")
  (description "Mainly developed to be used by Grew")
- (depends ocaml dune containers yojson)
+ (depends 
+  (ocaml ( >= "5.5.0" ))
+  dune 
+  containers 
+  yojson
+ )
  (tags
   (nlp))
  (conflicts libcaml-conll)
